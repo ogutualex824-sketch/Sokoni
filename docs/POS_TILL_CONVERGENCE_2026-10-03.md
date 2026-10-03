@@ -31,3 +31,13 @@
 ## Pre-existing failures (identical on base 863f0f6)
 - test-pos-architecture: 5 FAIL
 - test-pos-boot-budget: 2 FAIL
+
+## Refund and void are server operations (owner decision (b), 2026-10-03)
+
+- **Refund:** `_processRefund` calls `posProcessRefund` on `serverSaleId`. A manager or owner may refund; a cashier is refused by the server and told to use *Request manager approval*.
+- **Void:** `_processVoid` calls `posVoidSale` with the approved void request this session raised (`PosApprovalRequest.approvalIdFor`). Without one it refuses before calling.
+- **Local copy:** the device mirrors **only** the lines the server restored (`localOnly: true`). The browser writes no stock.
+- **Approval binding:** approval requests bind `serverSaleId`. They were bound to the local transaction id, which no server check could ever match.
+- **Offline:** offline means no refund and no void.
+- **Server side:** `fix/pos-restock-on-approval-on-d4a167c @ 5fe769c` ([[POS_RESTOCK_ON_APPROVAL_2026-10-03]]). This hosting change ships **with or after** those functions.
+- **Tests:** `test-pos-till-converged.js` 18/0 (T9a–T9e; the base fails T9a–T9d).

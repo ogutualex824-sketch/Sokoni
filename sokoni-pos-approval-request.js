@@ -7,8 +7,8 @@
      the server's decision
 
    APPROVAL IS NOT EXECUTION, AND THIS FILE MUST NEVER IMPLY OTHERWISE.
-   `_consumeApproval` has zero mutation call sites. A manager approving a refund has
-   not refunded anything; they have recorded a decision. So this module says
+   A manager approving a refund or void has not carried it out; they have recorded a decision. Execution is a
+   separate SERVER call that spends the approval (posVoidSale; posProcessRefund by a manager/owner) — 2026-10-03. So this module says
    "Approved by manager" and never "Refund completed" — the words are the contract.
 
    IT CREATES NOTHING NEW. One callable to raise a request, one to poll it:
@@ -231,8 +231,15 @@
     return { ok: true, approvalId: id, duplicate: false };
   }
 
+  /* The approval id this session raised for an EXACT operation, so the till can spend it on the server
+     (posVoidSale re-checks status, shop, type and binding — this is a lookup, never an authorisation). */
+  function approvalIdFor (type, binding) {
+    return _pending[type + '|' + JSON.stringify(binding || {})] || null;
+  }
+
   var api = {
     request: request,
+    approvalIdFor: approvalIdFor,
     close: _close,
     _internal: {
       describe: _describe, statusHtml: _statusHtml, detailsHtml: _detailsHtml,

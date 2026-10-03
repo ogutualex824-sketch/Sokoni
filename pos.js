@@ -3432,6 +3432,26 @@ const SPos = (function () {
       });
     },
 
+    /* REFUND / VOID ARE SERVER OPERATIONS (owner 2026-10-03, decision (b)). The browser never writes stock for them:
+       the server restores the exact quantities only on approval, exactly once, in the stock ledger. This device mirrors
+       the result locally ({ localOnly:true }) only AFTER the server has done it. Offline = no refund, no void. */
+    async _serverOp(name, payload) {
+      if ((typeof navigator !== 'undefined' && navigator.onLine === false) || !window.firebaseApp) {
+        return { ok: false, error: 'This till needs a connection — nothing was changed. Reconnect and try again.' };
+      }
+      try {
+        const fnMod = await import('https://www.gstatic.com/firebasejs/10.12.2/firebase-functions.js');
+        const r = await fnMod.httpsCallable(fnMod.getFunctions(window.firebaseApp), name)(payload);
+        return { ok: true, data: (r && r.data) || {} };
+      } catch (e) {
+        return { ok: false, code: (e && e.code) || '', error: (e && e.message) || 'The server refused it.' };
+      }
+    },
+    _shopId() {
+      return (window.firebaseAuth && window.firebaseAuth.currentUser && window.firebaseAuth.currentUser.uid)
+        || (window.currentUser && window.currentUser.uid) || '';
+    },
+
     async _processRefund(originalTxn) {
       const checkboxes = document.querySelectorAll('[id^="ref-item-"]:checked');
       if (!checkboxes.length) { toast('Select at least one item to refund', 'error'); return; }
@@ -3461,9 +3481,28 @@ const SPos = (function () {
         refundTotal += qty * price;
       });
 
-      /* Restore stock */
+      if (!originalTxn.serverSaleId) {
+        toast('This sale was not recorded on the server, so it cannot be refunded here. Nothing was changed.', 'error');
+        return;
+      }
+      /* THE SERVER REFUNDS. A manager or the owner may refund; a cashier is refused by the server and asks for approval. */
+      const _rf = await sales._serverOp('posProcessRefund', {
+        saleId: originalTxn.serverSaleId, merchantId: sales._shopId(),
+        items: refundItems.map((i) => ({ productId: i.id, qty: i.qty })),
+        reason, refundMethod: method,
+        idempotencyKey: 'till_' + originalTxn.serverSaleId,
+      });
+      if (!_rf.ok) {
+        toast(/permission|manager or owner/i.test(_rf.code + ' ' + _rf.error)
+          ? 'Only a manager or the owner can refund. Use "Request manager approval". Nothing was changed.'
+          : 'Refund NOT done: ' + _rf.error + ' Nothing was changed.', 'error');
+        return;
+      }
+      if (typeof _rf.data.refundTotal === 'number') refundTotal = _rf.data.refundTotal;   /* the server's figure, from the sale */
+      /* Mirror the server's restore on this device only — metered lines it actually restored. */
+      const _restored = new Set(((_rf.data.restock) || []).filter((r) => r.restored).map((r) => String(r.productId)));
       for (const item of refundItems) {
-        await PosDB.products.adjustStock(item.id, item.qty, 'refund:' + originalTxn.id, state.currentCashier?.id);
+        if (_restored.has(String(item.id))) await PosDB.products.adjustStock(item.id, item.qty, 'refund:' + originalTxn.id, state.currentCashier?.id, { localOnly: true });
       }
 
       /* Save refund transaction */
@@ -3509,7 +3548,7 @@ const SPos = (function () {
       if (window.PosAudit) PosAudit.log('refund', { receiptNo: refundTxn.receiptNo, total: refundTotal, reason, original: originalTxn.receiptNo });
 
       await products.reload();
-      toast(`Refund processed: KES ${_fmt(refundTotal)}`, 'success');
+      toast(`Refund done on the server: KES ${_fmt(refundTotal)}`, 'success');
 
       /* Print refund receipt */
       PosPrinter.print({
@@ -3527,8 +3566,8 @@ const SPos = (function () {
     /* ── REQUEST MANAGER APPROVAL ─────────────────────────────────────────────
        Creates a bound request and returns. It does NOT refund and does NOT void —
        `_consumeApproval` has zero mutation call sites, so an approval is a recorded
-       decision, not an authorisation to execute. _processRefund / _processVoid are
-       untouched and still run their own checks. */
+       decision. Execution is separate: _processVoid spends an APPROVED void request on the server (posVoidSale);
+       a refund is carried out on the server by a manager or the owner (posProcessRefund). */
     async requestRefundApproval(txnId) {
       const t = await PosDB.transactions.getById(txnId);
       if (!t) { toast('Transaction not found', 'error'); return; }
@@ -3540,8 +3579,10 @@ const SPos = (function () {
       });
       if (!(amount > 0)) amount = Number(t.total) || 0;
       const reason = document.getElementById('refund-reason')?.value || 'customer_request';
+      if (!t.serverSaleId) { toast('This sale was not recorded on the server, so it cannot be refunded here.', 'error'); return; }
+      /* Bound to the SERVER sale (posRetailSales id) — the id posProcessRefund checks the approval against. */
       await PosApprovalRequest.request('refund',
-        { saleId: String(txnId), amount: Math.round(amount * 100) / 100 },
+        { saleId: String(t.serverSaleId), amount: Math.round(amount * 100) / 100 },
         { reason: reason, requestedByName: state.currentCashier && state.currentCashier.name });
     },
 
@@ -3549,7 +3590,8 @@ const SPos = (function () {
       const t = await PosDB.transactions.getById(txnId);
       if (!t) { toast('Transaction not found', 'error'); return; }
       const reason = document.getElementById('void-reason')?.value || 'manager_error';
-      await PosApprovalRequest.request('void', { saleId: String(txnId) },
+      if (!t.serverSaleId) { toast('This sale was not recorded on the server, so it cannot be voided here.', 'error'); return; }
+      await PosApprovalRequest.request('void', { saleId: String(t.serverSaleId) },
         { reason: reason, requestedByName: state.currentCashier && state.currentCashier.name });
     },
 
@@ -3599,9 +3641,21 @@ const SPos = (function () {
 
       const reason = document.getElementById('void-reason')?.value || 'manager_error';
 
-      /* Restore stock for all items */
-      for (const item of (txn.items || [])) {
-        await PosDB.products.adjustStock(item.id, item.qty, 'void:' + txn.id, state.currentCashier?.id);
+      if (!txn.serverSaleId) { toast('This sale was not recorded on the server, so it cannot be voided here. Nothing was changed.', 'error'); return; }
+      /* THE SERVER VOIDS, and only on a manager-approved void request bound to this sale. */
+      const _approvalId = window.PosApprovalRequest && PosApprovalRequest.approvalIdFor
+        ? PosApprovalRequest.approvalIdFor('void', { saleId: String(txn.serverSaleId) }) : null;
+      if (!_approvalId) {
+        toast('A manager must approve this void first — tap "Request manager approval". Nothing was changed.', 'error');
+        return;
+      }
+      const _vd = await sales._serverOp('posVoidSale', { saleId: txn.serverSaleId, merchantId: sales._shopId(), approvalId: _approvalId, reason });
+      if (!_vd.ok) { toast('Void NOT done: ' + _vd.error + ' Nothing was changed.', 'error'); return; }
+      const _vRestored = new Set(((_vd.data.restock) || []).filter((r) => r.restored).map((r) => String(r.productId)));
+      if (!_vd.data.idempotent) {
+        for (const item of (txn.items || [])) {
+          if (_vRestored.has(String(item.id))) await PosDB.products.adjustStock(item.id, item.qty, 'void:' + txn.id, state.currentCashier?.id, { localOnly: true });
+        }
       }
 
       /* Mark transaction as voided */

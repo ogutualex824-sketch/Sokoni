@@ -85,6 +85,29 @@ const P = rd('pos.js'), DB = rd('pos-db.js'), STK = rd('sokoni-pos-stk.js'), MD 
     /PosDB\.products\.correctStock\(productId, qty, 'restock'/.test(P) && /state\._stockInPending/.test(P) &&
     /products\.correctStock\(item\.productId, Number\(item\.qty\), 'restock'/.test(DB) && DB.indexOf("adjustmentId: 'po_' + id + '_' + item.productId") < DB.indexOf("po.status = 'received'"));
 
+  /* T9 — refund / void are SERVER operations (owner 2026-10-03, decision (b)) */
+  const rfB = P.slice(P.indexOf('async _processRefund(originalTxn)'), P.indexOf('async requestRefundApproval('));
+  const vdB = P.slice(P.indexOf('async _processVoid(txn)'), P.indexOf('const settings = {'));
+  const browserStock = (b) => (b.match(/adjustStock\([^;]*\);/g) || []).filter((c) => !/localOnly: true/.test(c));
+  ck('T9a refund: the server refunds first (posProcessRefund on serverSaleId); the device mirrors ONLY server-restored lines, localOnly; no serverSaleId → refused',
+    browserStock(rfB).length === 0 && rfB.indexOf("_serverOp('posProcessRefund'") > -1
+    && rfB.indexOf("_serverOp('posProcessRefund'") < rfB.indexOf('adjustStock(') && rfB.indexOf('if (!originalTxn.serverSaleId)') < rfB.indexOf("_serverOp('posProcessRefund'")
+    && /_restored\.has\(String\(item\.id\)\)/.test(rfB), browserStock(rfB));
+  ck('T9b void: needs the APPROVED request this session raised, then posVoidSale; no approval → refused before any call; mirror localOnly, skipped on replay',
+    browserStock(vdB).length === 0 && vdB.indexOf("approvalIdFor('void'") < vdB.indexOf("_serverOp('posVoidSale'")
+    && vdB.indexOf('if (!_approvalId)') < vdB.indexOf("_serverOp('posVoidSale'") && /if \(!_vd\.data\.idempotent\)/.test(vdB));
+  ck('T9c approval requests bind the SERVER sale id (the id the server checks), never the local txn id',
+    /PosApprovalRequest\.request\('refund',\s*\{ saleId: String\(t\.serverSaleId\)/.test(P) && /PosApprovalRequest\.request\('void', \{ saleId: String\(t\.serverSaleId\) \}/.test(P)
+    && !/PosApprovalRequest\.request\('(refund|void)',\s*\{ saleId: String\(txnId\)/.test(P));
+  ck('T9d offline = no refund / no void (the shared server call refuses before calling)', /async _serverOp\(name, payload\) \{\s*if \(\(typeof navigator !== 'undefined' && navigator\.onLine === false\) \|\| !window\.firebaseApp\)/.test(P));
+  {
+    const AR = require(path.join(ROOT, 'sokoni-pos-approval-request.js'));
+    AR._internal.reset();
+    AR._internal.pending()['void|' + JSON.stringify({ saleId: 'S1' })] = 'AP1';
+    ck('T9e approvalIdFor returns the id raised for the EXACT operation only (other sale / other type → null)',
+      AR.approvalIdFor('void', { saleId: 'S1' }) === 'AP1' && AR.approvalIdFor('void', { saleId: 'S2' }) === null && AR.approvalIdFor('refund', { saleId: 'S1' }) === null);
+  }
+
   console.log(`\n${pass} passed, ${fail} failed`);
   process.exit(fail ? 1 : 0);
 })().catch((e) => { console.log('CRASH', e && e.stack); process.exit(1); });

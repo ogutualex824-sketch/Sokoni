@@ -1,3 +1,8 @@
+## 2026-10-03 — Till refund/void go through the server (posProcessRefund / posVoidSale); no browser stock write; approvals bind the server sale (NOT deployed)
+
+- **Files:** pos.js, sokoni-pos-approval-request.js (approvalIdFor), scripts/test-pos-till-converged.js (18/0).
+- **Pairing:** pairs with functions fix/pos-restock-on-approval-on-d4a167c @ 5fe769c.
+
 ## 2026-10-03 — POS till convergence: pos.html sales complete on the server; restocks via the server stock tool; M-PESA settles under the paid prompt's key (till + merchant-v2) (NOT deployed)
 
 - **Changes:** pos.js / pos-db.js / sokoni-pos-stk.js / sokoni-merchant-sell.js / sokoni-merchant-data.js / pos.html.
