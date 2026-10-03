@@ -231,6 +231,7 @@ window.SokoniAOS = (() => {
       "payout-approvals": () => _loadPayoutApprovals(),
       "partner-registrations": () => _loadPartnerRegistrations(),
       foundation:    () => _loadFoundation(),
+      commercial:    () => _loadCommercial(),
     };
     loaders[s]?.();
   }
@@ -2456,6 +2457,19 @@ window.SokoniAOS = (() => {
       return;
     }
     window.SokoniAdminFoundation.mount(body, { console: "aos", call: (name, data) => _call(name, data) });
+  }
+
+  /* Partner plans & promotions. ONE implementation (sokoni-admin-commercial.js) shared with super-admin.html.
+     financialPartnerDispatch checks the admin claim server-side; results are shown only after ok:true.
+     Prices/plans are read-only here (server catalogue). */
+  function _loadCommercial() {
+    const body = document.getElementById("commercialBody");
+    if (!body) return;
+    if (!window.SokoniAdminCommercial) {
+      body.innerHTML = _emptyMsg("The Partner plans & promotions module did not load. Reload the page to try again.");
+      return;
+    }
+    window.SokoniAdminCommercial.mount(body, { console: "aos", call: (name, data) => _call(name, data) });
   }
 
   async function _loadHubs() {

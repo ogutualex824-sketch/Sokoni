@@ -435,6 +435,9 @@
     <button class="nav-item" data-section="foundation" data-label="SOKONI Foundation" type="button" onclick="SA.nav('foundation');_closeSidebar()">
       <span class="nav-icon">&#x1F49A;</span><span class="nav-label">SOKONI Foundation</span>
     </button>
+    <button class="nav-item" data-section="commercial" data-label="Partner plans &amp; promotions" type="button" onclick="SA.nav('commercial');_closeSidebar()">
+      <span class="nav-icon">&#x1F4E3;</span><span class="nav-label">Partner plans &amp; promotions</span>
+    </button>
   </div>
 
   <!-- ADMINOS WORKSPACES. LINKS, not a second implementation: AdminOS is the canonical
@@ -939,6 +942,10 @@
     <section class="sa-panel" id="panel-foundation" hidden>
       <div id="saFoundationBody"><div class="sa-spinner"><div></div></div></div>
     </section>
+    <!-- ══ Partner plans & promotions ══ ONE module (sokoni-admin-commercial.js) shared with admin-os.html. -->
+    <section class="sa-panel" id="panel-commercial" hidden>
+      <div id="saCommercialBody"><div class="sa-spinner"><div></div></div></div>
+    </section>
 
     <!-- ══ SECTION 8: Secrets Checklist ══ -->
     <section class="sa-panel" id="panel-secrets" hidden>
@@ -1040,6 +1047,7 @@
 <script src="sokoni-admin-payout-approvals.js"></script>
 <script src="sokoni-admin-partner-registrations.js"></script>
 <script src="sokoni-admin-foundation.js"></script>
+<script src="sokoni-admin-commercial.js"></script>
 
 <!-- Confirm Modal (for role/suspend actions) -->
 <div class="sa-modal" id="saModal">
@@ -1223,6 +1231,7 @@ const SA={
     else if(section==='payout-approvals')this.loadPayoutApprovals();
     else if(section==='partner-registrations')this.loadPartnerRegistrations();
     else if(section==='foundation')this.loadFoundation();
+    else if(section==='commercial')this.loadCommercial();
   },
 
   // Failures ── the shared module, mounted into this console's panel ──
@@ -1269,6 +1278,17 @@ const SA={
     }
     const fns=this._fns||firebase.functions();
     window.SokoniAdminFoundation.mount(body,{console:'sa',call:(name,data)=>fns.httpsCallable(name)(data||{}).then(r=>r&&r.data)});
+  },
+  // Partner plans & promotions ── the shared module; catalogue read-only, server decides every action ──
+  loadCommercial(){
+    const body=document.getElementById('saCommercialBody');
+    if(!body)return;
+    if(!window.SokoniAdminCommercial){
+      body.innerHTML='<p style="color:var(--muted);font-size:13px">The Partner plans &amp; promotions module did not load. Reload the page to try again.</p>';
+      return;
+    }
+    const fns=this._fns||firebase.functions();
+    window.SokoniAdminCommercial.mount(body,{console:'sa',call:(name,data)=>fns.httpsCallable(name)(data||{}).then(r=>r&&r.data)});
   },
 
   // Sign Out ────────────────────────────────────────────────

@@ -456,6 +456,7 @@ body:not(.is-super) [data-requires-superadmin]{display:none !important;}
       <button class="nav-item" type="button" data-section="payout-approvals" data-label="Payout approvals" onclick="SokoniAOS.navigate('payout-approvals');_closeSidebar()"><span class="nav-icon">&#x2705;</span><span class="nav-label">Payout approvals</span></button>
       <button class="nav-item" type="button" data-section="partner-registrations" data-label="Partner registrations" onclick="SokoniAOS.navigate('partner-registrations');_closeSidebar()"><span class="nav-icon">&#x1F3E6;</span><span class="nav-label">Partner registrations</span></button>
       <button class="nav-item" type="button" data-section="foundation" data-label="SOKONI Foundation" onclick="SokoniAOS.navigate('foundation');_closeSidebar()"><span class="nav-icon">&#x1F49A;</span><span class="nav-label">SOKONI Foundation</span></button>
+      <button class="nav-item" type="button" data-section="commercial" data-label="Partner plans &amp; promotions" onclick="SokoniAOS.navigate('commercial');_closeSidebar()"><span class="nav-icon">&#x1F4E3;</span><span class="nav-label">Partner plans &amp; promotions</span></button>
     </div>
     <div class="nav-group">
       <div class="nav-group-label">Intelligence</div>
@@ -776,6 +777,12 @@ body:not(.is-super) [data-requires-superadmin]{display:none !important;}
         <div id="foundationBody"><div class="aos-spinner"><div></div></div></div>
       </div>
 
+      <!-- Partner plans & promotions: ONE module (sokoni-admin-commercial.js) shared with super-admin.html.
+           Entitlements / campaigns / fulfilments (read-only catalogue), Stop campaign, promotion requests. -->
+      <div class="aos-panel" id="panel-commercial" hidden>
+        <div id="commercialBody"><div class="aos-spinner"><div></div></div></div>
+      </div>
+
       <!-- Hub Registry panel -->
       <div class="aos-panel" id="panel-hubs" hidden>
         <div class="panel-toolbar">
@@ -818,6 +825,7 @@ body:not(.is-super) [data-requires-superadmin]{display:none !important;}
   <script src="sokoni-admin-payout-approvals.js"></script>
   <script src="sokoni-admin-partner-registrations.js"></script>
   <script src="sokoni-admin-foundation.js"></script>
+  <script src="sokoni-admin-commercial.js"></script>
   <script src="sokoni-admin-failures.js"></script>
   <script src="sokoni-aos.js"></script>
   <script>
