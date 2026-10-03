@@ -93,7 +93,7 @@ Out of scope here:
 adds the storage quarantine (`unboxing-pending/{uid}/` owner-only, `unboxing/{uid}/` server-written).
 
 **RULE RELEASE = BLOCKED until every item is true:**
-- [ ] sokoni-5b functions live: `submitReview` with `property` + `sports_venue` (eligibility: `propertyViewings.buyerUid`,
+- [ ] sokoni-5b functions **`fix/review-authority-on-76436b1` @ `51d3947`** live (tests 48/0, sabotage 10/10 on their tree): `submitReview` with `property` + `sports_venue` (eligibility: `propertyViewings.buyerUid`,
       `sportsVenueBookings.uid`, a cancelled booking does not count), `getReviews` with targetType + authorName,
       `submitUnboxing`, and the approve photo copy
 - [ ] adminOsDispatch review queue live (`3684b64`)
@@ -104,3 +104,5 @@ adds the storage quarantine (`unboxing-pending/{uid}/` owner-only, `unboxing/{ui
 - [ ] compiled-size measurement authorized and within limit
 - [ ] re-fetch of live rules; the candidate re-based if live moved
 - [ ] then `--only firestore:rules` → verify pointer → probes → live browser proof per surface; rollback `f259c0b5`
+
+**`b6f9cee` (2026-10-03):** `propertyViewings` browser create closed. Viewings make a buyer review-eligible, so `scheduleViewing` (server) is the only writer. sokoni-5b found the forgeable create; tests H-6/H-6b/H-6c. **Open owner question:** `sportsVenueBookings` is still browser-created (claimsOwner), so for sports, "has a booking" means "asked for one".
