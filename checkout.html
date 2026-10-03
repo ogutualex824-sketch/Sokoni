@@ -1727,7 +1727,7 @@ cart.forEach((item, _idx) => {
   const safePrice = lineTotal.toLocaleString();
   _itemsHTML.push(`
     <div class="os-item">
-      <img loading="lazy" src="${safeImg}" alt="${safeName}" onerror="this.src='assets/default-product.png'">
+      <img loading="lazy" src="${safeImg}" alt="${safeName}" onerror="this.onerror=null;this.src='assets/default-product.png'">
       <div class="os-item-info">
         <div class="os-item-name">${safeName}</div>
         ${safeCat ? `<div class="os-item-cat">${safeCat}</div>` : ``}

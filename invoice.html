@@ -409,14 +409,19 @@ function generateInvoice(orderId){
 
   /* Items */
   const items = o.items || [];
+  /* Order item fields are copied at sale time and may be client-supplied:
+     escape before innerHTML, and only allow known-safe image schemes (same
+     guard as checkout.html safeImg). A held product's photo 404s -> placeholder. */
+  const _invEsc = s => String(s == null ? "" : s).replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;","'":"&#39;"})[c]);
+  const _invImg = s => /^(https?:\/\/|assets\/|data:image\/)/.test(s||"") ? _invEsc(s) : "assets/default-product.png";
   document.getElementById("invItemsBody").innerHTML = items.length ? items.map((p,i)=>`
     <tr>
       <td>${i+1}</td>
       <td>
-        <img loading="lazy" src="${p.image||'assets/default-product.png'}" class="inv-item-img" onerror="this.style.display='none'">
-        <span class="inv-item-name">${p.name}</span>
+        <img loading="lazy" src="${_invImg(p.image)}" class="inv-item-img" onerror="this.onerror=null;this.src='assets/default-product.png'">
+        <span class="inv-item-name">${_invEsc(p.name)}</span>
       </td>
-      <td style="color:#888;">${p.category||"—"}</td>
+      <td style="color:#888;">${_invEsc(p.category||"—")}</td>
       <td>KES ${Number(p.price).toLocaleString()}</td>
       <td>1</td>
       <td>KES ${Number(p.price).toLocaleString()}</td>

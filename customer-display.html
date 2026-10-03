@@ -813,7 +813,7 @@ html, body {
     list.innerHTML = items.map(item => {
       const emoji = item.emoji || item.icon || '🛍️';
       const imgHtml = item.image
-        ? `<img src="${_esc(item.image)}" alt="" loading="lazy" onerror="this.style.display='none'">`
+        ? `<img src="${_esc(item.image)}" alt="" loading="lazy" onerror="this.onerror=null;this.src='assets/default-product.png'">`
         : emoji;
       return `<div class="cd-item">
         <div class="cd-item-img">${imgHtml}</div>
