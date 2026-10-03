@@ -94,6 +94,26 @@
        founder's canonical 17 and promoting a row into it is a product decision, not an
        integration detail — so Offers lands in the more tier, fully reachable, and promotion
        stays available as a one-line change later. */
+    /* FOOD HUB GATE 2 (2026-10-03) — a food business's Menu, Drinks and Kitchen. Native surfaces mounted from
+       sokoni-merchant-food.js; every fact and every change goes through the foodMenu server authority. The shell shows
+       them ONLY when that authority says this shop's approved food workspace has the module (foodMenu op 'modules');
+       for any other merchant they stay hidden, and a typed #menu URL renders the server's own explanation. */
+    { id:'menu', name:'Menu', icon:'🍽️', tier:'more',
+      kind:'native',
+      role:['seller','merchant','cashier'], ctx:[CTX.SELLER_UID, CTX.SHOP_ID],
+      mobile:true, desktop:true, activeKey:'menu',
+      note:'Food menu: sections, items, prices, availability, photos. Canonical products/{id} via foodMenu.' },
+    { id:'drinks', name:'Drinks', icon:'🥤', tier:'more',
+      kind:'native',
+      role:['seller','merchant','cashier'], ctx:[CTX.SELLER_UID, CTX.SHOP_ID],
+      mobile:true, desktop:true, activeKey:'drinks',
+      note:'The drinks sections of the SAME menu (one product per drink, never a copy).' },
+    { id:'kitchen', name:'Kitchen', icon:'👨‍🍳', tier:'more',
+      kind:'native',
+      role:['seller','merchant','cashier'], ctx:[CTX.SELLER_UID, CTX.SHOP_ID],
+      mobile:true, desktop:true, activeKey:'kitchen',
+      note:'Kitchen board. NOT live until food orders exist (Gate 3); shows the dependency, never invented orders.' },
+
     { id:'offers', name:'Offers', icon:'🎁', tier:'more',
       kind:'native',
       role:['seller','merchant'], ctx:[CTX.SELLER_UID, CTX.SHOP_ID],
@@ -481,6 +501,9 @@
      This is grouping only. No destination is added, removed, renamed or re-targeted —
      the sidebar renders exactly the same 13 routes it did before, under headings. */
   var MORE_GROUPS = [
+    /* Food business — shown only to a shop whose approved workspace has the modules (merchant-v2 hides it otherwise). */
+    { key:'food',       label:'Food business',
+      ids:['menu','drinks','kitchen'] },
     { key:'main',       label:'Main',
       ids:['reports','availability','shop','fulfilment','verification'] },
     { key:'growth',     label:'Growth',

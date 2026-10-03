@@ -209,6 +209,8 @@ a{color:inherit;text-decoration:none}
 /* The scrolling region. min-height:0 is what makes it scroll instead of clip. */
 .side-scroll{flex:1 1 auto;min-height:0;overflow-y:auto;overscroll-behavior:contain;padding:8px 8px 4px}
 .side-group{margin:10px 6px 4px;font-size:10.5px;font-weight:800;letter-spacing:.09em;text-transform:uppercase;color:var(--txt3)}
+/* [hidden] must win over display:flex — the Food business routes are hidden until the server says so. */
+.nav-item[hidden],.side-group[hidden]{display:none!important}
 .nav-item{
   width:100%;display:flex;align-items:center;gap:11px;
   padding:10px 11px;border-radius:11px;margin-bottom:2px;
@@ -748,6 +750,7 @@ input[type=date].search{color:var(--txt);font:inherit;font-size:13px;min-width:0
 <!-- B1. The offer ARITHMETIC lives in the model; the studio only edits it. -->
 <script src="sokoni-promotion-model.js"></script>
 <script src="sokoni-merchant-offers.js"></script>
+<script src="sokoni-merchant-food.js"></script>
 <script src="sokoni-merchant-staff.js"></script>
 <script src="sokoni-merchant-team.js"></script>
 <script src="sokoni-merchant-campaigns.js"></script>
@@ -846,11 +849,15 @@ input[type=date].search{color:var(--txt);font:inherit;font-size:13px;min-width:0
     (typeof CONTRACT.moreGroups === 'function' ? CONTRACT.moreGroups() : []).forEach(function (g) {
       var h = document.createElement('div');
       h.className = 'side-group';
+      h.dataset.group = g.key || '';
       h.textContent = g.label || g.key || 'More';
       frag.appendChild(h);
       (g.routes || g.items || []).forEach(function (r) { frag.appendChild(navItem(r)); });
     });
     nav.appendChild(frag);
+    /* Food business routes start hidden; _applyFoodNav reveals them from the server's answer. */
+    ['menu', 'drinks', 'kitchen'].forEach(function (id) { nav.querySelectorAll('.nav-item[data-route="' + id + '"]').forEach(function (b) { b.hidden = true; }); });
+    nav.querySelectorAll('.side-group[data-group="food"]').forEach(function (h) { h.hidden = true; });
 
     /* The exit lives in the footer, visually separated, because it is the ONE control
        that leaves the application. */
@@ -1524,6 +1531,7 @@ input[type=date].search{color:var(--txt);font:inherit;font-size:13px;min-width:0
           S.shop = ownShop || d.shop || null;
           S.activeShopId = shopId;
           S.capabilities = d.capabilities;
+          try { _applyFoodNav(); } catch (_) {}
           S.servedBy = d.servedBy || null;
           S.shopError = null;
           return;
@@ -2291,6 +2299,49 @@ input[type=date].search{color:var(--txt);font:inherit;font-size:13px;min-width:0
     return snap.docs.map(function (d) { return Object.assign({ id: d.id }, d.data()); });
   }
 
+  /* ── FOOD BUSINESS (Gate 2) ─────────────────────────────────────────────────────
+     The shop-scoped answer comes from foodMenu {op:'modules'} — the shop OWNER's approved workspace, readable by any
+     of the shop's staff — never from a category the browser holds. Memoised per shop; a failure is not cached. */
+  var _foodMods = { shopId: null, p: null };
+  function _foodModules () {
+    var sid = S.activeShopId;
+    if (!sid) return Promise.resolve(null);
+    if (_foodMods.shopId === sid && _foodMods.p) return _foodMods.p;
+    _foodMods.shopId = sid;
+    _foodMods.p = _callable('foodMenu')({ op: 'modules', shopId: sid }).then(function (r) { return r && r.data; })
+      .catch(function (e) { _foodMods.p = null; throw e; });
+    return _foodMods.p;
+  }
+  function _foodCtx (view) {
+    return {
+      view: view, scope: _scope(), onToast: toast, go: go,
+      workspace: _foodModules,
+      foodMenu: _callable('foodMenu'),
+      adjustStock: function (payload) { return _callable('merchantAdjustStock')(payload).then(function (r) { return r.data; }); },
+      /* Photos: the ONE product media entry point (SokoniMerchantData.attachProductImages — ownership, Storage, record). */
+      attachImages: function (productId, files) {
+        return window.SokoniMerchantData.attachProductImages({ scope: _scope(), db: _mdb, media: window.SokoniMerchantMedia, storage: _mdb, id: productId, files: files });
+      },
+    };
+  }
+  /* Show the Food business group only when the server says this shop has the modules. Hidden by default, so a
+     non-food merchant never sees it flash. */
+  var FOOD_ROUTES = ['menu', 'drinks', 'kitchen'];
+  function _applyFoodNav () {
+    var show = function (mods) {
+      var mm = (mods && mods.merchantModules) || {};
+      var any = false;
+      FOOD_ROUTES.forEach(function (id) {
+        var on = !!mm[id];
+        any = any || on;
+        document.querySelectorAll('.nav-item[data-route="' + id + '"]').forEach(function (b) { b.hidden = !on; });
+      });
+      document.querySelectorAll('.side-group[data-group="food"]').forEach(function (h) { h.hidden = !any; });
+    };
+    show(null);
+    _foodModules().then(show, function () { show(null); });
+  }
+
   function _scope () {
     if (!window.SokoniMerchantData) return { ok: false, reason: 'data-module-missing' };
     /* THREE ANSWERS, NOT TWO. resolveScope knows "no uid" and "no shop"; it cannot
@@ -2395,6 +2446,10 @@ input[type=date].search{color:var(--txt);font:inherit;font-size:13px;min-width:0
                     go: go,
                     onToast: toast }; } },
     inventory:  { global: 'SokoniMerchantInventoryUI', ctx: _ctx },
+    /* Food Hub Gate 2 — Menu / Drinks / Kitchen: one module, three views; every fact from the foodMenu authority. */
+    menu:       { global: 'SokoniMerchantFood', ctx: function () { return _foodCtx('menu'); } },
+    drinks:     { global: 'SokoniMerchantFood', ctx: function () { return _foodCtx('drinks'); } },
+    kitchen:    { global: 'SokoniMerchantFood', ctx: function () { return _foodCtx('kitchen'); } },
     offers:     { global: 'SokoniMerchantOffers',      ctx: function () { return {
                     scope: _scope(), shopName: _shopName(), onToast: toast,
                   }; } },
