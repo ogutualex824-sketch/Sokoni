@@ -52,8 +52,8 @@ The buyer starts a purchase from a gym's published offer. The only input is `ser
 | `membershipId` | string | `providerMemberships/{id}`; pass it to `createPaymentIntent({ purpose:'fitness_membership', membershipId })` |
 | `reused` | boolean | `true` = the existing pending membership was returned, and nothing new was written |
 | `priceCents` | integer | snapshot from the offer, immutable on the membership |
-| `periodCount` | integer 1–60 | months |
-| `periodUnit` | `"month"` | |
+| `periodCount` | integer | number of `periodUnit`s: day 1–31, week 1–8, month 1–60 |
+| `periodUnit` | `"day"` \| `"week"` \| `"month"` | snapshotted from the offer (an offer with no unit = `"month"`). Day / week passes settle as ONE slice "at first visit or expiry" (owner 2026-10-03, [[MEMBERSHIP_SETTLEMENT]]) |
 | `title` | string | the offer name, snapshotted |
 | `payBy` | ISO string \| `null` | creation + 5 min. After it, the pricer refuses a NEW intent. `null` only if unreadable (never in practice) |
 
@@ -75,8 +75,9 @@ The buyer starts a purchase from a gym's published offer. The only input is `ser
 
 - **The document.** `featureFlags/fitness_membership_sales`. Sales are open **only** when `enabled === true`, the boolean.
   - These all refuse with `SALES_DISABLED`: a missing doc, a missing field, `false`, the string `"true"`, `1`, or any other value.
-  - **A read error also refuses** (fail closed, logged).
-- **The UI is not the gate.** The hosting lane reads the same doc to hide the buy button; that read is only a convenience. Suite row C18 covers this check, with negative controls NC-g (check removed) and NC-h (truthy comparison).
+  - **A read error also refuses** (fail closed).
+- **ONE predicate.** The check is `salesEnabled(db)` from `functions/shared/fitness-sales-switch.js` (sokoni-2f, fe33bcc). `fitnessCreateMembership` and `payment-purposes` purpose `fitness_membership` both call it; `fitness-membership-create.js` keeps no copy and exports none (the e3 copy was removed 2026-10-03).
+- **The UI is not the gate.** The hosting lane reads the same doc to hide the buy button; that read is only a convenience. Suite rows C18 (behaviour) and C19 (single reader) cover this check. Negative controls mutate only the call site: NC-g (check removed), NC-h (db handle dropped), NC-i (private truthy copy), NC-j (exact private copy).
 - **Who can change it.** This was verified on this tree:
   - **Read:** the rules (`firestore.rules`, `match /featureFlags/{flagId}`) allow `read: if true` and `write: if isAdmin()`.
   - **Write from AdminOS:** `adminUpdateFeatureFlag` (`functions/admin-os.js`) is reached through `adminOsDispatch` (op `adminUpdateFeatureFlag`, `_requireSuperAdmin`). The AdminOS UI calls it from `sokoni-aos.js`.
@@ -84,22 +85,9 @@ The buyer starts a purchase from a gym's published offer. The only input is `ser
 - **Operator caveat 2.** The handler does not type-check `enabled`. A string `"true"` would be stored, and the server would treat it as OFF (fail closed), so the UI and the server could disagree.
 - **Collection sharing.** `business-bootstrap.js` also keeps per-merchant flag docs in `featureFlags/{merchantId}`. The key `fitness_membership_sales` cannot collide with a generated merchant id in practice, but the collection is shared.
 
-### Hand-off to sokoni-2f (defence in depth; NOT applied, their file)
+### Payment-side check (sokoni-2f — APPLIED in fe33bcc, merged here)
 
-> **sokoni-2f — `functions/payment-purposes.js`, purpose `fitness_membership`.** Please also refuse a NEW intent while membership sales are off, so a membership created before the flag was turned off, or a hand-crafted `membershipId`, cannot be paid.
->
-> In `price(uid, data)`, insert this after the `already-exists` check and before the `payBy` check:
->
-> ```js
-> if (!(await require('./fitness-membership-create').salesEnabled(db())))
->   fail('failed-precondition', "Memberships aren't on sale yet.", { reason: 'SALES_DISABLED' });
-> ```
->
-> - `salesEnabled(db)` is exported by e3 (`functions/fitness-membership-create.js`) and takes your Firestore handle. It is the ONE reader of `featureFlags/fitness_membership_sales`: `enabled === true` only, and it fails closed on a read error.
-> - Do not copy the predicate.
-> - A payment already in flight (an intent minted while sales were on) is unaffected, because the webhook path does not price.
-> - Suggested suite row: flag missing, `false`, `"true"` or a read error → the purpose refuses `SALES_DISABLED`; flag `true` → it prices; plus a negative control that removes the line.
-> - Any suite that drives the purpose end to end needs `featureFlags/fitness_membership_sales: { enabled: true }` in its seed. e3's `scripts/test-fitness-membership-create.js` (C12/C13 call your pricer) already seeds it on this branch, so it will keep passing once you add the line.
+The earlier hand-off is closed. `payment-purposes.fitness_membership` refuses a NEW intent with `SALES_DISABLED` while sales are off, using the same shared predicate. A payment already in flight is unaffected, because the webhook path does not price. 2f's `scripts/test-membership-settlement.js` (section F) covers it.
 
 ---
 
@@ -225,7 +213,7 @@ The gym is resolved from the caller: owner → own gym; staff → the ONE gym wh
 | `member.displayName` | string \| null | null = no name on file. No uid, phone or email |
 | `title` | string \| null | |
 | `periodCount` | integer \| null | |
-| `periodUnit` | string \| null | `"month"` |
+| `periodUnit` | string \| null | `"day"` \| `"week"` \| `"month"` |
 | `startAt` | ISO \| null | **null until paid**: before payment the start is only requested |
 | `endsAt` | ISO \| null | null until paid (`membership-settlement.endsAt`) |
 | `sessionsIncluded` | positive integer \| null | null = Unlimited |
@@ -281,9 +269,9 @@ The `reason` key is **absent** when `canScan` is `true`.
 
 | Key | Contents |
 |---|---|
-| `fitnessCreateMembership` | `created`, `reused`, `errors.{SALES_DISABLED, unauthenticated, invalid_serviceId, missing, self_purchase, provider_not_active, not_fitness, not_membership, inactive}` |
+| `fitnessCreateMembership` | `created`, `reused`, `created_day_pass`, `created_week_pass`, `errors.{SALES_DISABLED, unauthenticated, invalid_serviceId, missing, self_purchase, provider_not_active, not_fitness, not_membership, inactive, bad_unit, bad_period}` |
 | `fitnessMembershipQr` | `success`, `errors.{not_found, not_covered, expired}` |
-| `fitnessCheckIn` | `success_first`, `duplicate`, `success_staff_named_session`, `success_unlimited`, and `errors` for every reason in §3, plus `unauthenticated`, `invalid_sessionRef` and `unavailable` |
+| `fitnessCheckIn` | `success_first`, `duplicate`, `success_staff_named_session`, `success_unlimited`, `success_day_pass`, `day_pass_at_end` (a Daily Pass scanned at its end → `expired`), and `errors` for every reason in §3, plus `unauthenticated`, `invalid_sessionRef` and `unavailable` |
 | `fitnessCompleteSession` | `success`, `duplicate`, `errors.{invalid_ids, attendance_not_found, other_gym, not_checked_in}` |
 | `fitnessCorrectAttendance` | `success`, `duplicate`, `errors.{no_permission, reason_required}` |
 | `fitnessGymMemberships` | `success_all` (capped / unlimited / pending / unknown rows), `success_page1_limit2`, `success_page2`, `success_tab_pending`, `errors` |

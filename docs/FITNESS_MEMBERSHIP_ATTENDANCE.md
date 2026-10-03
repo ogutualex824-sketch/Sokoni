@@ -225,7 +225,7 @@ Otherwise it returns **`BUSINESS_LINK_MISSING`**.
 - `_ensureBusinessForOwner` and `tenant-identity` would then trust that doc.
 - Served rules (create false) are safe. The tree's rule must not ship as written.
 
-## 7. Security matrix (`scripts/test-fitness-attendance.js`: 47/0, controls 9/9)
+## 7. Security matrix (`scripts/test-fitness-attendance.js`: 48/0, controls 10/10)
 
 | Row | Case |
 |---|---|
@@ -243,6 +243,7 @@ Otherwise it returns **`BUSINESS_LINK_MISSING`**.
 | A12, A12b | pending_payment / payment_review / refund_requested / refunded / expired / cancelled / suspended / disputed refused with nothing written; no QR issued when not active |
 | A13 | Active but unpaid (pending / refund_requested / missing / unpaid) refused |
 | A14 | Before startAt → not_covered; at the end → expired |
+| A23 | Short passes (owner 2026-10-03): the window is `membership-settlement.endsAt` (read-only) — day pass = start + 24 h, week pass = start + 7 d. Check-in inside OK; the same day again is idempotent (membership byte-identical); week day 6 OK; scanned exactly at the end → `expired`; after the end no QR is issued (`expired`); nothing written on refusal |
 | A15 | Session cap → entitlement_exhausted; malformed sessionRef refused |
 | A16 | Client attendedSessions / refundEligible / timestamps / ownership / status ignored |
 | A17, A17b, A17c | Correction is admin-only, needs a reason, appends and voids, is idempotent; **never resets the refund lock** (2f `isUsed` and `refundDecision` still say used); restores entitlement only |
@@ -283,6 +284,7 @@ Otherwise it returns **`BUSINESS_LINK_MISSING`**.
 | NC-g | Client providerId accepted by fitnessGymMemberships | G1 |
 | NC-h | Duplicate-scan idempotency dropped | A10 (and N1) |
 | NC-i | membershipId dropped from the check-in response | A22 |
+| NC-j | Period end computed as a month regardless of `periodUnit` | A23 |
 
 The suite loads the REAL `workforce-identity.js`. Its `admin.firestore()` is bound to the fake db, so `_assertBusinessPermission` itself decides every staff row.
 
@@ -376,10 +378,14 @@ These fields are added to the EXISTING record. Nothing else changes.
 | Field | Value |
 |---|---|
 | `serviceKind` | `'membership'`. This is a new field, because there was no existing kind field to reuse. |
-| `periodCount` | integer 1..60 (months) |
-| `periodUnit` | `'month'` |
+| `periodUnit` | `'day'` \| `'week'` \| `'month'`; absent = `'month'` (records written before 2026-10-03) |
+| `periodCount` | integer; day 1..31, week 1..8, month 1..60 |
 | `price` | The EXISTING field, in integer cents. It must be **whole shillings** (`% 100 === 0`) within KES 1..150,000. The reason: `priceFor` rounds to KES, and `holdMembershipPayment` requires paid KES × 100 === `priceCents`. A cents remainder would park every payment in `payment_review`. |
 | `priceType` | `'fixed'`. The hook forces it, because `providerAddService` defaults to `'quotation'`. A rate-card `pricing{}` is refused. |
+
+**Period units (owner 2026-10-03, via sokoni-2f fe33bcc).** Short passes settle "at first visit or expiry": `membership-settlement.slicesOf` makes a day or week pass ONE slice ending at the pass end, held until the first check-in and paid then (or at expiry if never used); a month membership pays a slice per month. The offer module's per-unit bounds are **exactly** settlement's own (day 1..31, week 1..8, month 1..60). Decision: the task allowed `periodCount` exactly 1 for day/week *unless* settlement supports more; it does, so the module accepts settlement's range — anything accepted here can be sliced, and nothing settlement can slice is refused. The SOKONI defaults use day×1 and week×1. Suite row C21 pins the bounds against `slicesOf` (limit accepted by both, limit + 1 refused by both).
+
+**SOKONI defaults (owner: "Defaults gyms can edit").** `functions/shared/fitness-offer-defaults.js` (2f) — Daily Pass KES 500 (day×1), Weekly Pass 1,500 (week×1), Monthly 5,000, 3 Months 14,000, 6 Months 26,000, Annual 48,000 — pre-fills the gym's offer form; the member always pays the gym's PUBLISHED offer. Every entry validates as a published offer (C22, module test M7).
 
 `validateMembershipOffer(doc)` returns `{ok, providerId, priceCents, periodCount, periodUnit, title}` or `{ok:false, reason, message}`. It **refuses rather than coerces**: a missing, zero, negative, string, fractional or out-of-range price is not an offer. The price "conversion" is the booking one (`price` is already integer cents). It is validated as an integer and never rounded.
 
@@ -401,7 +407,7 @@ These fields are added to the EXISTING record. Nothing else changes.
 
 **Created doc (EXACT; the suite asserts the key set):**
 ```
-{ providerId, buyerUid, priceCents, periodCount, periodUnit:'month', startAt, payBy, category:'fitness', title,
+{ providerId, buyerUid, priceCents, periodCount, periodUnit /* from the offer */, startAt, payBy, category:'fitness', title,
   paymentStatus:'pending', status:'pending_payment', serviceId, createdAt }
 ```
 
@@ -424,7 +430,7 @@ The double-tap reuse (30 min) applies only while `now < payBy`. Reuse never retu
 
 ### 10.4 Hook for sokoni-5b's providerDispatch reconciliation release (NOT applied on this branch)
 
-`provider-ops.js` / `booking-service.js` are NOT edited here. The release must also ship `functions/shared/membership-offer.js`. Each hook is a call into the pure module:
+`provider-ops.js` / `booking-service.js` are NOT edited here. The release must also ship `functions/shared/membership-offer.js`, **byte-identical**: sha256 `a15598d13284b6e8d384fc78659da240273c434bac82057600a17184bde4583f` (2026-10-03, day/week units; supersedes `f6fabf69…`). `scripts/test-membership-offer-module.js` M0 pins it; run it on the release tree with `FN_DIR=<tree>/functions` (add `SKIP_DEFAULTS=1` only if that tree lacks 2f's `fitness-offer-defaults.js` — M7 then prints NOT ATTEMPTED, never PASS). Each hook is a call into the pure module:
 
 ```js
 // providerAddService: build the object first (const doc = { providerId: uid, name, … }), then before .add(doc):
@@ -449,7 +455,7 @@ if (require('./shared/membership-offer').isMembershipOffer(svc)) throw new Https
 **Why the booking hook matters.** Without it, a membership offer is slot-bookable at the membership price.
 
 **What the writer hook does** (suite row C14):
-- It forces `priceType:'fixed'` and `periodUnit:'month'`.
+- It forces `priceType:'fixed'`. `periodUnit` is the request's if given, else the existing record's (update) / the source's (duplicate), else `'month'`; an unknown unit is refused `bad_unit`, and a unit switch is validated against the NEW unit's bound (C14b).
 - It validates the RESULTING record, so an edit cannot leave an unsellable offer listed.
 - It refuses `periodCount` on a non-membership service and refuses unknown kinds.
 - A duplicate keeps the kind.
@@ -465,7 +471,7 @@ if (require('./shared/membership-offer').isMembershipOffer(svc)) throw new Https
 
 ### 10.6 Still open
 
-- **Provider dashboard form (hosting).** `provider-dashboard.html` needs a "Membership" kind and a months field that send `serviceKind:'membership', periodCount` to `providerAddService` / `providerUpdateService`. It also needs a member-facing "Buy membership" button that calls `fitnessCreateMembership`, then `createPaymentIntent`. Not built.
+- **Provider dashboard form (hosting).** `provider-dashboard.html` needs a "Membership" kind, a unit (day / week / month) and a count field, pre-filled from 2f's `OFFER_DEFAULTS` (gyms edit), that send `serviceKind:'membership', periodUnit, periodCount` to `providerAddService` / `providerUpdateService`. It also needs a member-facing "Buy membership" button that calls `fitnessCreateMembership`, then `createPaymentIntent`. Not built.
 - **Abandoned pending memberships.**
   - A pending membership older than 30 min is not reused, but it stays `pending_payment` and payable by its id. The 2f pricer has no age limit.
   - The status fields belong to 2f, so this module never writes them.
@@ -476,14 +482,14 @@ if (require('./shared/membership-offer').isMembershipOffer(svc)) throw new Https
   - the toggle re-activation cap.
   - Neither affects the hook, but 5b ports the hook onto the live text.
 
-### 10.7 Tests: `scripts/test-fitness-membership-create.js` (18/0, negative controls 8/8)
+### 10.7 Tests: `scripts/test-fitness-membership-create.js` (23/0, negative controls 14/14)
 
 | Row | What it covers |
 |---|---|
 | C1 | unauthenticated |
 | C2 | missing / malformed serviceId |
 | C3 | non-membership / inactive / deleted / wrong-case kind |
-| C4 | periodCount 0 / 61 / 2.5 / "3" / null / -1 / NaN, and unit week |
+| C4 | periodCount 0 / 61 / 2.5 / "3" / null / -1 / NaN; unit year / Week / "" / toString / 7 → bad_unit; week×3 valid |
 | C5 | price missing / negative / string / 0 / cents remainder / fraction / > max / NaN, and quotation / rate card |
 | C6 | provider pending / rejected / suspended (status or flag) / not selling / missing; active accepted |
 | C7 | salon, and unclassified free-text "gym" |
@@ -494,10 +500,15 @@ if (require('./shared/membership-offer').isMembershipOffer(svc)) throw new Https
 | C12 | offer edit after creation changes neither the doc nor the charge |
 | C13 | end to end: create → 2f `priceFor` → 2f `holdMembershipPayment` (real; `initialSettlementFields`) → QR check-in locks the refund (`refundDecision` → `used`) |
 | C14 | writer hook |
+| C14b | writer hook, short units: week×1 kept; week×9 / year refused; update without unit keeps it; unit switch re-validated; duplicate keeps it |
 | C15 | payBy is set server-side (creation + 5 min); a client payBy is ignored; 2f's purpose refuses a new intent after it |
 | C16 | reused 1 ms before payBy; a new one AT payBy (inside 30 min); a record without payBy is never reused |
 | C17 | PAY_BY_MS equals booking-service `HOLD_MS` (drift fails) |
-| C18 | Sales flag: `featureFlags/fitness_membership_sales` missing / no field / false / `'true'` / 1 / read error → `SALES_DISABLED`, nothing written; `enabled === true` → created; `salesEnabled(db)` agrees with an explicit db |
+| C18 | Sales flag: `featureFlags/fitness_membership_sales` missing / no field / false / `'true'` / 1 / read error → `SALES_DISABLED`, nothing written; `enabled === true` → created; 2f's shared predicate agrees with an explicit db |
+| C19 | ONE predicate: create imports `shared/fitness-sales-switch` `salesEnabled` and passes its db; no local `featureFlags` read or copy; no `salesEnabled` export; payment-purposes calls the same module |
+| C20 | the membership snapshots the offer's `periodUnit` (day / week / month; client value ignored); one settlement slice for ×1; no unit → month |
+| C21 | per-unit bounds = `membership-settlement.slicesOf` bounds (day 31, week 8, month 60) |
+| C22 | all six `OFFER_DEFAULTS` validate as published offers; a cents remainder is still refused; `withSavings` computes |
 
 **Negative controls.** Each one fails its named row:
 
@@ -510,12 +521,22 @@ if (require('./shared/membership-offer').isMembershipOffer(svc)) throw new Https
 | NC-e | reuse ignores payBy | C16 |
 | NC-f | payBy not written | C15 |
 | NC-g | sales-flag check removed | C18 |
-| NC-h | sales flag compared truthy (`'true'` / 1 accepted) | C18 |
+| NC-h | call site drops the db handle (sales could never open) | C18 |
+| NC-i | shared import replaced by a private truthy copy | C18 (and C19) |
+| NC-j | an exact private copy of the predicate (second reader) | C19 |
+| NC-k | `periodUnit` hard-coded `'month'` at creation | C20 |
+| NC-l | week bound widened beyond settlement (8 → 52) | C21 |
+| NC-m | `'day'` unit dropped from the offer module | C22 |
+| NC-n | whole-shilling rule removed | C22 |
+
+Flag controls (NC-g..j) mutate only the CALL SITE in `fitness-membership-create.js`, never 2f's file, and are judged on rows C18/C19 alone (NC-h refuses every creation, which would otherwise crash the rows that need a created membership).
 
 **Regression (after merging 2f df88d4b):**
 - test-fitness-attendance 47/0 (9/9)
 - test-membership-settlement 53/0
 - test-membership-offer-module 6/0
+
+**Regression (2026-10-03, after merging 2f fe33bcc):** test-fitness-attendance 48/0 (10/10); test-fitness-membership-create 23/0 (14/14); test-membership-offer-module 8/0; test-membership-settlement 77/0; test-commission-schedule 25/0; `gen-fitness-api-fixtures.js --check` OK.
 - C12/C13 run on the real clock, because the purpose's payBy check reads `Date.now()`.
 
 **Emulator:** QUEUED.
@@ -652,4 +673,4 @@ Do not add it to any `ROLE_PERMISSIONS` entry there. `owner` is `Object.values(P
 
 Notifications (§12).
 
-**Sales flag, defence in depth (2026-10-03):** `payment-purposes.fitness_membership` should ALSO refuse a new intent while `featureFlags/fitness_membership_sales` is not `enabled === true`, by calling e3's exported `salesEnabled(db())`. The exact insertion text is in [[FITNESS_MEMBERSHIP_API]] §1 "Hand-off to sokoni-2f". It is NOT applied here, because that file belongs to 2f.
+**Sales flag, defence in depth: CLOSED (2f fe33bcc, merged 2026-10-03).** The ONE predicate is 2f's `functions/shared/fitness-sales-switch.js`; `payment-purposes.fitness_membership` and `fitnessCreateMembership` both call it, and e3's copy was deleted (C19). Day / week passes and the default catalogue (fe33bcc) are wired on the offer side (§10.2).

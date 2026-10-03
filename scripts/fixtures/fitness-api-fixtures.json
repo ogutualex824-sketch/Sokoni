@@ -27,6 +27,24 @@
       "title": "Gold 3-month",
       "payBy": "2026-03-20T07:35:00.000Z"
     },
+    "created_day_pass": {
+      "membershipId": "mem_new001",
+      "reused": false,
+      "priceCents": 50000,
+      "periodCount": 1,
+      "periodUnit": "day",
+      "title": "Daily Pass",
+      "payBy": "2026-03-20T07:35:00.000Z"
+    },
+    "created_week_pass": {
+      "membershipId": "mem_new001",
+      "reused": false,
+      "priceCents": 150000,
+      "periodCount": 1,
+      "periodUnit": "week",
+      "title": "Weekly Pass",
+      "payBy": "2026-03-20T07:35:00.000Z"
+    },
     "errors": {
       "SALES_DISABLED": {
         "httpsErrorCode": "failed-precondition",
@@ -94,6 +112,22 @@
         "message": "This membership offer is not available.",
         "details": {
           "reason": "inactive"
+        }
+      },
+      "bad_unit": {
+        "httpsErrorCode": "failed-precondition",
+        "clientErrorCode": "functions/failed-precondition",
+        "message": "Memberships are sold by the day, week or month.",
+        "details": {
+          "reason": "bad_unit"
+        }
+      },
+      "bad_period": {
+        "httpsErrorCode": "failed-precondition",
+        "clientErrorCode": "functions/failed-precondition",
+        "message": "A membership must run for a whole number of periods: 1–31 days, 1–8 weeks or 1–60 months.",
+        "details": {
+          "reason": "bad_period"
         }
       }
     }
@@ -199,6 +233,22 @@
       "sessionsIncluded": null,
       "checkedInAt": "2026-03-20T07:30:00.000Z",
       "title": "Gold 3-month",
+      "member": {
+        "displayName": "Alex bM/b"
+      }
+    },
+    "success_day_pass": {
+      "ok": true,
+      "correlationId": "cid-1",
+      "duplicate": false,
+      "membershipId": "mem_000001",
+      "attendanceId": "d_2026-03-20",
+      "status": "checked_in",
+      "firstCheckIn": true,
+      "attendedSessions": 1,
+      "sessionsIncluded": null,
+      "checkedInAt": "2026-03-20T07:30:00.000Z",
+      "title": "Daily Pass",
       "member": {
         "displayName": "Alex bM/b"
       }
@@ -343,6 +393,14 @@
         "details": {
           "correlationId": "cid-1"
         }
+      }
+    },
+    "day_pass_at_end": {
+      "httpsErrorCode": "failed-precondition",
+      "clientErrorCode": "functions/failed-precondition",
+      "message": "This membership has expired.",
+      "details": {
+        "reason": "expired"
       }
     }
   },
