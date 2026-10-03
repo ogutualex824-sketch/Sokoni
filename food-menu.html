@@ -165,9 +165,14 @@ const _menu = SokoniFood.MENUS[_id];
 let _selRating = 0;
 let _activeCat = '';
 
-if (!_rest || !_menu) {
+/* CONTAINMENT (owner 2026-10-03): this page showed a made-up restaurant and took a real M-Pesa payment for it.
+   Nothing is rendered as a real restaurant and nothing can be paid for until the real Food Hub ships. */
+document.getElementById('pageTitle').textContent = 'Food Hub';
+document.getElementById('menuBody').innerHTML = "<div class=\"food-opening-soon\" style=\"max-width:560px;margin:28px auto;padding:26px 22px;text-align:center;background:rgba(249,115,22,0.06);border:1px solid rgba(249,115,22,0.22);border-radius:20px;\">\n  <div style=\"font-size:34px;margin-bottom:8px;\">🍽️</div>\n  <div style=\"font-size:18px;font-weight:900;color:white;margin-bottom:8px;\">Ordering opens soon</div>\n  <div style=\"font-size:13px;color:rgba(255,255,255,0.6);line-height:1.6;margin-bottom:16px;\">Food Hub ordering and payment are not open yet. No restaurant on SOKONI can take a food order or a payment right now.</div>\n  <a href=\"food.html\" style=\"display:inline-block;padding:11px 22px;background:#f97316;border-radius:14px;color:#060b06;font-weight:900;font-size:13px;text-decoration:none;\">← Back to Food Hub</a>\n</div>";
+(function(){ const b=document.getElementById('cartBar'); if(b) b.style.display='none'; })();
+if (false) {
   document.getElementById('menuBody').innerHTML = '<div style="padding:40px;text-align:center;color:rgba(255,255,255,0.4);">Restaurant not found. <a href="food.html" style="color:#22c55e;">← Back</a></div>';
-} else {
+} else if (false) {   /* CONTAINMENT: the made-up restaurant is never rendered */
   document.getElementById('pageTitle').textContent = _rest.name;
   document.title = _rest.name + ' — SOKONI Food';
   _activeCat = _menu.cats[0];
@@ -352,6 +357,11 @@ function _foodDeliveryFee(){
 }
 
 function openCheckout(){
+  /* CONTAINMENT: no checkout — the payment path is closed until the real Food Hub ships. */
+  if (window.SokoniUI && SokoniUI.toast) SokoniUI.toast('Food Hub ordering opens soon. Nothing has been charged.', 'info');
+  return;
+}
+function _openCheckoutRetired(){
   const cart = SokoniFood.getCart().filter(c => c.restaurantId === _id);
   if(!cart.length){ return; }
   const subtotal   = cart.reduce((s,c)=>s+c.price*c.qty,0);
@@ -367,6 +377,11 @@ function openCheckout(){
 function closeCheckout(){ document.getElementById('checkoutModal').classList.remove('open'); }
 
 function placeOrder(){
+  /* CONTAINMENT: no payment is ever started from this page (defence in depth; the button is unreachable). */
+  const msg = document.getElementById('checkoutMsg'); if (msg) msg.textContent = 'Food Hub ordering opens soon. Nothing has been charged.';
+  return;
+}
+function _placeOrderRetired(){
   const name    = document.getElementById('coName')?.value.trim();
   const phone   = document.getElementById('coPhone')?.value.trim();
   const addr    = document.getElementById('coAddr')?.value.trim();
@@ -451,19 +466,7 @@ function placeOrder(){
 <script defer src="sokoni-observability.js"></script>
 <script defer src="sokoni-gateway.js"></script>
 
-<script type="module">
-import { db, auth } from './firebase.js';
-import { collection, doc, setDoc, serverTimestamp } from 'https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js';
-
-window._saveFoodOrderFS = async function(order) {
-  try {
-    await setDoc(doc(db,'foodOrders',order.id), {
-      ...order,
-      placedAt: serverTimestamp(),
-      updatedAt: serverTimestamp()
-    }, {merge:true});
-  } catch(e) { console.warn('[Food] Order save failed:', e); }
-};
-</script>
+<!-- CONTAINMENT (owner 2026-10-03): the browser foodOrders writer (_saveFoodOrderFS) is REMOVED — an order is never
+     written by the browser. Orders return through the server order authority with the real Food Hub. -->
 </body>
 </html>
