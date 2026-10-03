@@ -114,10 +114,14 @@ ck('CONTROL a valid week passes', M.validate(week).length === 0);
 head('4 · the chain reads and writes one document');
 ck('the server resolves from providerAvailability/{ownerUid}',
    /collection\('providerAvailability'\)\.doc\(ownerUid\)/.test(KASS));
-ck('the merchant editor WRITES that same document',
-   SHELL.indexOf("doc(f.db, 'providerAvailability', S.uid)") > -1);
-ck('...and writes `hours` and `overrides`, the fields the resolver reads',
-   /hours: AV\.hours/.test(SHELL) && /overrides: AV\.overrides/.test(SHELL));
+/* 2026-10-03: the editor SAVES through kasshop.setShopAvailability (server-authoritative); the
+   server writes this document and the browser keeps only the READ. Full proof, with a negative
+   control: scripts/test-merchant-availability-server-save.js. */
+ck('the merchant editor READS that same document',
+   SHELL.indexOf("getDoc(f.m.doc(f.db, 'providerAvailability', S.uid))") > -1);
+ck('...and SAVES `hours` and `overrides` through the server callable, the fields the resolver reads',
+   /_callable\('setShopAvailability'\)\(payload\)/.test(SHELL) &&
+   /\{ schedule: \{ hours: hours, overrides: overrides \} \}/.test(SHELL));
 ck('CONTROL no second availability collection was introduced',
    !/collection\(.(shopAvailability|minishopAvailability|availability).\)/.test(SHELL + MSJS),
    'a MiniShop-specific copy is exactly what must not exist');
@@ -128,7 +132,8 @@ ck('both surfaces load the SAME model',
 /* ── 5 · the overrides map — the silently-ignored-holiday defect ──────────── */
 head('5 · overrides reach the field the resolver actually reads');
 ck('the resolver reads the MAP field', /overrides: d\.overrides/.test(KASS));
-ck('the merchant editor writes the map', /overrides: AV\.overrides/.test(SHELL));
+ck('the merchant editor sends the map (the server writes it)',
+   /overrides\[d\] = v;/.test(SHELL) && /schedule: \{ hours: hours, overrides: overrides \}/.test(SHELL));
 ck('availability-manager now writes the map TOO',
    /overrides: \{ \[date\]: \{ closed:/.test(AVMGR),
    'it wrote only the subcollection, which the resolver never read');
@@ -161,7 +166,7 @@ ck('...and states the real reason',
    'a switch that silently fails is worse than an explained absence');
 ck('CONTROL the owner genuinely may write the schedule',
    /match \/providerAvailability\/\{uid\}[\s\S]{0,200}allow update: if isAuthed\(\) && request\.auth\.uid == uid/.test(RULES),
-   'so the editor needs no Functions deploy — unlike the live toggle');
+   'the rule still permits it; the merchant-v2 editor no longer uses it — it saves through setShopAvailability since 2026-10-03, which DOES need that function live');
 
 console.log(NL + '  ' + pass + ' passed, ' + fail + ' failed');
 process.exit(fail ? 1 : 0);

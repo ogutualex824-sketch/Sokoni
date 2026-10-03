@@ -3765,12 +3765,14 @@ input[type=date].search{color:var(--txt);font:inherit;font-size:13px;min-width:0
            functions/availability.js but never re-exported in functions/index.js and
            has no dispatcher — so it is not deployed.
 
-     A switch here would therefore fail every time. It is not built. What IS writable
-     is `hours`/`openingHours`, which the allowlist does permit, so the schedule is a
-     real editor. */
+     A switch here would therefore fail every time. It is not built. The schedule is a
+     real editor — saved since 2026-10-03 through kasshop.setShopAvailability, never
+     from the browser (availability is server-authoritative). */
   /* ══ PREMIUM AVAILABILITY ══════════════════════════════════════════════════
-     Writes providerAvailability/{uid} — the document functions/kasshop.js already
-     reads for the storefront's open/closed decision. There is no second collection
+     SAVES THROUGH THE SERVER (2026-10-03): kasshop.setShopAvailability writes
+     providerAvailability/{ownerUid} (see avSave below) — this page holds NO write path
+     to it. The load is still a direct getDoc (rules govern reads). That document is
+     what functions/kasshop.js reads for the storefront's open/closed decision. There is no second collection
      and no MiniShop-specific copy: the merchant edits the canonical timetable, and
      the storefront reflects it because the server resolves from the same place.
 
@@ -3783,7 +3785,7 @@ input[type=date].search{color:var(--txt);font:inherit;font-size:13px;min-width:0
      shop document as state.online / acceptingOrders, the rules do not let an owner
      write it, and setLiveStatus is not deployed. A switch that silently fails is
      worse than an explained absence. */
-  var AV = { hours: null, overrides: {}, loaded: false, err: null, saving: false, dirty: false };
+  var AV = { hours: null, overrides: {}, loaded: false, err: null, saving: false, dirty: false, saveErr: null };
 
   function avModel () {
     return (typeof window !== 'undefined') && window.SokoniAvailabilityModel;
@@ -3938,7 +3940,10 @@ input[type=date].search{color:var(--txt);font:inherit;font-size:13px;min-width:0
         '<button class="act" data-av="save"' + (AV.saving ? ' disabled' : '') + '>' +
           (AV.saving ? 'Saving…' : '💾 Save availability') + '</button>' +
         (AV.dirty ? '<span class="note" style="margin-left:10px">Unsaved changes</span>' : '') +
-      '</div>' : '');
+      '</div>' +
+      /* the last save's refusal stays on screen (role=alert), not only in a 3.6s toast */
+      (AV.saveErr ? '<div class="note" role="alert" data-av-err style="margin-top:10px">⚠️ ' +
+        esc(AV.saveErr) + '</div>' : '') : '');
   }
 
   document.addEventListener('click', function (e) {
@@ -3991,50 +3996,127 @@ input[type=date].search{color:var(--txt);font:inherit;font-size:13px;min-width:0
     }
   });
 
+  /* ══ SAVE — SERVER-AUTHORITATIVE (2026-10-03) ═════════════════════════════
+     Availability is server-authoritative (owner rule). The schedule is saved through
+     ONE callable, kasshop.setShopAvailability — never a browser write. The server
+     validates the shape, resolves WHICH shop from auth (owner) or from shopId + the
+     `manageAvailability` capability (employee), writes providerAvailability/{ownerUid}
+     AND shops/{id}.openingHours (the SAME structured object) in one transaction,
+     REPLACES the overrides map (a date removed here stops applying), and returns the
+     verdict it read back after the commit.
+
+     There is NO client-write fallback, by design and for good. If the callable is not
+     there (not-found / internal / offline), or is the pre-schedule build (it answers
+     "No availability fields supplied." because it ignores `schedule`), the merchant is
+     told plainly that nothing was changed, and the form stays UNSAVED. "Saved" is shown
+     only after the server has resolved with success.
+
+     DEPLOY PRECONDITION: requires functions: setShopAvailability live (verify with a
+     functions list before the hosting deploy) — and it must be the schedule-capable
+     build (2f, convergence/commercial-fn-on-ef1e992). The 2026-09-09 build that is
+     listed today refuses a schedule-only payload; this page then says so honestly. */
+  var AV_UNAVAILABLE = 'Couldn\'t save — the schedule service isn\'t available yet. Nothing was changed.';
+  /* the server's own limits (kasshop._cleanPeriods / _cleanOverrides), checked first so
+     the merchant gets the reason before a round trip. The server re-checks all of them. */
+  var AV_MAX_PERIODS = 6, AV_MAX_DATES = 120, AV_PAST_DAYS = 31, AV_AHEAD_DAYS = 400;
+
+  function avPreflight (M, at) {
+    var errs = M.validate(AV.hours);
+    if (errs.length) return errs[0];
+    for (var d = 0; d < M.DAYS.length; d++) {
+      var c = AV.hours && AV.hours[M.DAYS[d]];
+      if (c && !c.closed && Array.isArray(c.periods) && c.periods.length > AV_MAX_PERIODS) {
+        return M.LABEL[M.DAYS[d]] + ': at most ' + AV_MAX_PERIODS + ' periods a day.';
+      }
+    }
+    var keys = Object.keys(AV.overrides || {}).sort();
+    if (keys.length > AV_MAX_DATES) return 'At most ' + AV_MAX_DATES + ' closed dates. Remove some first.';
+    var lo = new Date(at - AV_PAST_DAYS * 86400000).toISOString().slice(0, 10);
+    var hi = new Date(at + AV_AHEAD_DAYS * 86400000).toISOString().slice(0, 10);
+    for (var k = 0; k < keys.length; k++) {
+      /* NOT pruned silently: the server REPLACES the map, so dropping a date here would
+         delete it. The merchant removes it with ✕, knowingly. */
+      if (!/^\d{4}-\d{2}-\d{2}$/.test(keys[k]) || keys[k] < lo || keys[k] > hi) {
+        return 'Remove the closed date ' + keys[k] + ' first — saved dates must be between ' +
+          AV_PAST_DAYS + ' days ago and ' + AV_AHEAD_DAYS + ' days ahead. Nothing was changed.';
+      }
+    }
+    return null;
+  }
+
+  /* The EXACT shape setShopAvailability reads: { schedule: { hours, overrides } } (+ shopId
+     for an employee). Only the field names the server keeps are sent — the editor edits
+     nothing else. */
+  function avPayload (M) {
+    var hours = {};
+    M.DAYS.forEach(function (k) {
+      var c = AV.hours && AV.hours[k];
+      hours[k] = (!c || c.closed === true)
+        ? { closed: true, periods: [] }
+        : { closed: false, periods: (c.periods || []).map(function (p) { return { open: p.open, close: p.close }; }) };
+    });
+    var overrides = {};
+    Object.keys(AV.overrides || {}).forEach(function (d) {
+      var o = AV.overrides[d] || {};
+      var v = (o.closed === true) ? { closed: true }
+        : (Array.isArray(o.periods) && o.periods.length)
+          ? { closed: false, periods: o.periods.map(function (p) { return { open: p.open, close: p.close }; }) }
+          : { closed: false };
+      if (typeof o.label === 'string' && o.label) v.label = o.label;
+      overrides[d] = v;
+    });
+    var payload = { schedule: { hours: hours, overrides: overrides } };
+    /* An employee names the shop; the server checks manageAvailability. An owner sends
+       nothing — the server resolves their own shop from auth, never from the client. */
+    if (S.servedBy && S.servedBy.role && S.servedBy.role !== 'owner' && S.activeShopId) payload.shopId = S.activeShopId;
+    return payload;
+  }
+
+  function avSaveError (e) {
+    var code = String((e && e.code) || '').replace(/^functions\//, '');
+    var msg = String((e && e.message) || '');
+    if (typeof navigator !== 'undefined' && navigator.onLine === false) return AV_UNAVAILABLE;
+    /* the pre-schedule build ignores `schedule` and refuses an empty patch */
+    if (code === 'invalid-argument' && /No availability fields supplied/i.test(msg)) return AV_UNAVAILABLE;
+    if (code === 'not-found' && /No shop found|Shop not found/i.test(msg)) return 'Couldn\'t save — no shop was found for your account. Nothing was changed.';
+    if (code === 'not-found' || code === 'internal' || code === 'unavailable' || code === 'deadline-exceeded' ||
+        code === 'unknown' || code === '') return AV_UNAVAILABLE;
+    if (code === 'unauthenticated') return 'Couldn\'t save — please sign in again. Nothing was changed.';
+    /* invalid-argument / permission-denied / failed-precondition carry a message written
+       for the merchant (kasshop.js); shown as text, never as markup. */
+    if (code === 'permission-denied' || code === 'invalid-argument' || code === 'failed-precondition') {
+      return 'Couldn\'t save — ' + (msg || 'the server refused that change.') + ' Nothing was changed.';
+    }
+    return AV_UNAVAILABLE;
+  }
+
   async function avSave (btn) {
     var M = avModel();
     if (!M || AV.saving) return;
-    /* Validate BEFORE writing: the resolver reads a malformed period as 'no hours',
+    /* Validate BEFORE calling: the resolver reads a malformed period as 'no hours',
        which would quietly close the shop. */
-    var errs = M.validate(AV.hours);
-    if (errs.length) { toast(errs[0]); return; }
+    var pre = avPreflight(M, Date.now());
+    if (pre) { AV.saveErr = pre; toast(pre); return renderAvailability(nativePanel('availability')); }
 
-    AV.saving = true; renderAvailability(nativePanel('availability'));
+    var payload = avPayload(M);
+    AV.saving = true; AV.saveErr = null; renderAvailability(nativePanel('availability'));
     try {
-      var f = await firestore();
-      await f.m.setDoc(f.m.doc(f.db, 'providerAvailability', S.uid), {
-        /* The canonical field names effectiveForShop reads. `overrides` is a MAP,
-           deliberately — the subcollection is invisible to the resolver. */
-        hours: AV.hours,
-        overrides: AV.overrides,
-        uid: S.uid,
-        updatedAt: new Date(),
-      }, { merge: true });
-      /* AND the denormalised copy on the shop record. effectiveForShop falls back to
-         shops/{uid}.openingHours when no structured schedule exists, and other surfaces
-         render it as text — so writing only providerAvailability would leave the shop
-         document describing hours the seller no longer keeps.
-
-         Only allowlisted keys: the rule uses hasOnly(), so one stray field fails the
-         entire write. A failure here is NOT fatal — the canonical schedule is already
-         saved — but it is reported rather than swallowed. */
-      var human = M.formatWeek(AV.hours);
-      try {
-        await f.m.updateDoc(f.m.doc(f.db, 'shops', S.uid), {
-          openingHours: human, hours: human, updatedAt: new Date(),
-        });
-        if (S.shop) { S.shop.openingHours = human; S.shop.hours = human; }
-      } catch (e2) {
-        toast(e2 && e2.code === 'permission-denied'
-          ? 'Saved, but the server refused to update your shop record.'
-          : 'Saved, but the shop record was not updated (' + ((e2 && e2.code) || 'unknown') + ').');
+      var res = await _callable('setShopAvailability')(payload);
+      var d = (res && res.data) ? res.data : null;
+      if (!d || d.success !== true) {
+        /* resolved but did not confirm — never announce a save the server did not state */
+        AV.saveErr = 'The server did not confirm the save. Reload to see what is stored.';
+        toast(AV.saveErr);
+      } else {
+        /* the server wrote shops/{id}.openingHours as this SAME object */
+        if (S.shop) S.shop.openingHours = payload.schedule.hours;
+        AV.dirty = false; AV.saveErr = null;
+        toast('Availability saved. Customers see this on your shop page.');
       }
-      AV.dirty = false;
-      toast('Availability saved. Customers see this on your shop page.');
     } catch (e) {
-      toast(e && e.code === 'permission-denied'
-        ? 'The server refused that change.'
-        : 'Could not save: ' + ((e && e.code) || e.message || 'unknown'));
+      /* NO fallback write. The form stays unsaved (AV.dirty untouched). */
+      AV.saveErr = avSaveError(e);
+      toast(AV.saveErr);
     }
     AV.saving = false;
     renderAvailability(nativePanel('availability'));

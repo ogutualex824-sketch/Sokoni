@@ -202,3 +202,21 @@ Begin **only** when the official `docs/kra-etims-spec-v2.0.pdf` is available. Va
 | 📋 Follow-up | Production payout limit (`maxPayoutsPerDay`) · SMS invite verification |
 
 Engineering is complete; the only open critical-path item is the operational RC exit. Once v1.0.0 is tagged and the baseline archived, the platform moves from candidate to a certified foundation and the versioned roadmap proceeds in order.
+
+---
+
+## Release record — availability → paid service bookings (owner, 2026-10-03)
+
+Availability is a **locked prerequisite** for certifying paid service bookings. Full sequence, each step gating the next:
+
+| # | Step | Owner | State (2026-10-03) |
+|---|---|---|---|
+| 1 | Merchant V2 schedule editor saves via `kasshop.setShopAvailability` (no browser write, no fallback) | merchant chain `hosting/chain-on-3e8dd53` | BUILT, statically + VM certified, NOT deployed; browser cert QUEUED |
+| 2 | Functions release carrying the **schedule-capable** `setShopAvailability` | sokoni-2f (`convergence/commercial-fn-on-ef1e992`) | NOT deployed — live `setShopAvailability` is the 2026-09-09 pre-schedule build (`00003-fab`); lineage gate + owner go-ahead required |
+| 3 | Hosting deploy of step 1 — precondition: requires functions: setShopAvailability live (verify with a functions list before the hosting deploy) | release assembler | blocked on 2 |
+| 4 | Verify server-authoritative: f3's rules deny on client `providerAvailability` writes, deployed after 2 and 3 | f3 | blocked on 2–3 |
+| 5 | `scripts/test-availability-booking-regression.js` (R1–R5 + positive control; demo-* emulators only; R2 BLOCKED until 4) | queued | written, NOT run |
+| 6 | Paid service booking certification | — | blocked on 5 |
+
+Paid Education and electronics receipts stay **OFF** (owner); nothing in this sequence enables or test-enables them.
+Detail: [[MERCHANT_V2_TARGET_ARCHITECTURE]] (Availability sections).

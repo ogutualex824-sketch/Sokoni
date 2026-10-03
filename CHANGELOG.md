@@ -1,3 +1,50 @@
+## [2026-10-03] - setShopAvailability — Merchant V2 schedule saves through the server (no browser write; NOT deployed)
+
+**DEPLOY PRECONDITION (hard):** requires functions: setShopAvailability live (verify with a functions list before the hosting deploy).
+The listed function must be the **schedule-capable** build from sokoni-2f's functions release
+(`convergence/commercial-fn-on-ef1e992`, `functions/kasshop.js` `setShopAvailability` reading `data.schedule`). Measured
+read-only 2026-10-03: production lists `setShopAvailability` ACTIVE, revision `setshopavailability-00003-fab`, updated
+2026-09-09 — its source archive is the pre-schedule vintage (live switches only), which answers a schedule-only payload
+with `invalid-argument: No availability fields supplied.` So the name being listed is necessary, not sufficient. If this
+hosting change ships first, the live editor **loses saving** (it fails closed and says so — nothing is written).
+Order: 2f functions release (lineage gate + owner go-ahead) → this hosting change → f3's rules deny on client writes.
+
+- **What changed:** `merchant-v2.html` availability SAVE (`avSave`) — the browser `setDoc(providerAvailability/{uid})`
+  and `updateDoc(shops/{uid}, {openingHours, hours})` from `6775b09` are replaced by
+  `_callable('setShopAvailability')({ schedule: { hours, overrides } })` (+ `shopId` for an employee session; the server
+  checks `manageAvailability`). UI unchanged. No client-write fallback. "Saved" only after `success: true`. Not
+  available / offline / pre-schedule build → "Couldn't save — the schedule service isn't available yet. Nothing was
+  changed.", form stays unsaved, refusal shown inline (`role=alert`). Client preflight mirrors the server limits
+  (6 periods/day, 120 dates, −31/+400 days); an out-of-range date blocks the save by name (never silently pruned —
+  the server REPLACES the overrides map).
+- **Reads:** unchanged — `getDoc(providerAvailability/{S.uid})` (rules govern it). For an employee session this is
+  the employee's own uid document (pre-existing gap; `getShopAvailability` settings mode is the server read).
+- **Field gaps for 2f:** `shops/{id}.hours` (human string) is no longer written by any merchant save — the server writes
+  structured `openingHours` only; override fields other than `closed`/`periods`/`label` are not kept (the editor edits none).
+- **Out of scope, still browser writers:** `availability-manager.html`, `provider-dashboard.html` (provider surfaces).
+- **Tests:** new `scripts/test-merchant-availability-server-save.js` 39/0 (registered in `predeploy-browser-suites.js`) —
+  token-aware scan (`scripts/lib/js-tokens.js`) of 40 merchant files for any write to `providerAvailability` (direct,
+  member chain, ref-in-variable); VM run of the real save code (exact callable + shape, saved-only-after-resolve,
+  9-case failure matrix, zero Firestore use); contract cross-check against 2f's source; precondition text asserted in
+  this entry. Negative control `--control=reinsert-setdoc` → `NO-CLIENT-AVAILABILITY-WRITE` FAILS (exit 1).
+  Updated rows that pinned the old browser write: `test-availability-convergence.js` 34/0 → 34/0,
+  `test-merchant-v2-persistence.js` 28/0 (2 unproven) → 28/0 (2 unproven).
+- **Database / API / security:** no schema change; uses the existing `setShopAvailability` callable. Security: removes a
+  client write path on an availability authority (server validates shape, ownership, healthcare ownership).
+- **Files:** `merchant-v2.html`, `scripts/test-merchant-availability-server-save.js` (new),
+  `scripts/test-availability-convergence.js`, `scripts/test-merchant-v2-persistence.js`,
+  `scripts/predeploy-browser-suites.js`, `scripts/test-availability-booking-regression.js` (new, queued),
+  `docs/MERCHANT_V2_TARGET_ARCHITECTURE.md`, `docs/RELEASE_ROADMAP.md`, `CHANGELOG.md`.
+- **Browser certification QUEUED** (RAM floor; not run): save success, not-found, offline in a real browser.
+- **Availability is a locked prerequisite for paid service bookings (owner, 2026-10-03).** Sequence: this editor change →
+  2f functions release → this hosting deploy → f3 rules deny verified → booking regression → paid booking certification.
+  Recorded in `docs/RELEASE_ROADMAP.md` (release record) and the merchant doc. New QUEUED runtime suite
+  `scripts/test-availability-booking-regression.js` (written, NOT run — needs emulators; REFUSES unless all emulator
+  hosts are localhost and the project is `demo-*`): R1 cross-provider `setShopAvailability` rejected · R2 browser write
+  rejected (BLOCKED until f3's deny — never a pass) · R3 concurrent same-slot bookings → exactly one · R4 closed date /
+  temporary closure refused · R5 the callable-saved schedule is what `verdictFor` gates on · PC positive control.
+  Paid Education and electronics receipts stay OFF; not enabled or test-enabled.
+
 ## [2026-10-03] - test infra: secondary-Firebase-app detector rebuilt on a tokenizer — electrical 'elc-write' was a false "fixed" (no product change)
 
 `scripts/test-secondary-firebase-apps.js` reported 8/1 on this chain: "electrical.html no longer has elc-write — remove it

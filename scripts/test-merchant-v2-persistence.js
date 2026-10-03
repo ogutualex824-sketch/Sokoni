@@ -65,33 +65,27 @@ head('3 · settings are saved to the authoritative shop record');
 ck('the shell READS the shop document at start',
    /getDoc\(m\.fs\.doc\(m\.db, 'shops', S\.uid\)\)/.test(SHELL) ||
    /doc\(m\.db, 'shops', S\.uid\)/.test(SHELL));
-ck('and WRITES settings back to that same document',
-   /updateDoc\(f\.m\.doc\(f\.db, 'shops', S\.uid\)/.test(SHELL));
-/* Assert the write SHAPE, not a comment or a variable name. The old surface wrote
-   openingHours/hours/updatedAt from a textarea; the availability editor writes the same
-   three keys derived from the saved schedule. Pinning the prose failed a correct rewrite. */
-ck('only allowlisted keys are sent',
+/* 2026-10-03 — availability is SERVER-AUTHORITATIVE. The schedule save (the only writer of
+   shops/{uid}.openingHours/hours in this shell) moved to kasshop.setShopAvailability, which
+   writes shops/{id}.openingHours in the same transaction as providerAvailability. The
+   browser updateDoc on shops/{uid} is GONE; these rows assert the server path instead.
+   Full proof + negative control: scripts/test-merchant-availability-server-save.js. */
+ck('settings (the schedule) reach the shop record through the server, not a browser write',
+   /_callable\('setShopAvailability'\)\(payload\)/.test(SHELL) &&
+   !/updateDoc\(f\.m\.doc\(f\.db, 'shops', S\.uid\)/.test(SHELL));
+ck('only the server\'s field names are sent ({ schedule: { hours, overrides } })',
+   /var payload = \{ schedule: \{ hours: hours, overrides: overrides \} \};/.test(SHELL),
+   'the server validates the shape and writes the allowlisted fields itself');
+ck('local state is updated only AFTER the server resolves with success',
    (function () {
-     var K = "updateDoc(f.m.doc(f.db, 'shops', S.uid), {";
-     var at = SHELL.indexOf(K);
-     if (at === -1) return false;
-     var body = SHELL.slice(at + K.length, SHELL.indexOf('}', at + K.length));
-     var m = [null, body];
-     if (!m) return false;
-     var keys = m[1].split(',').map(function (x) { return x.split(':')[0].trim(); })
-       .filter(Boolean).sort();
-     return JSON.stringify(keys) === JSON.stringify(['hours', 'openingHours', 'updatedAt']);
-   })(),
-   'the rule uses hasOnly(), so one stray field fails the entire write');
-ck('local state is updated only AFTER the write resolves',
-   (function () {
-     var w = SHELL.indexOf("await f.m.updateDoc(f.m.doc(f.db, 'shops', S.uid),");
-     var a = SHELL.indexOf('S.shop.openingHours =');
-     return w > -1 && a > w;
+     var w = SHELL.indexOf("var res = await _callable('setShopAvailability')(payload);");
+     var ok = SHELL.indexOf('d.success !== true', w);
+     var a = SHELL.indexOf('S.shop.openingHours = payload.schedule.hours', w);
+     return w > -1 && ok > w && a > ok;
    })(),
    'updating first would show a saved value the server had refused');
 ck('a refusal is reported as a refusal',
-   /permission-denied[\s\S]{0,80}The server refused that change/.test(SHELL));
+   /code === 'permission-denied'[\s\S]{0,200}the server refused that change\./.test(SHELL));
 ck('CONTROL the client cannot set ownership or status on the shop',
    /shops\/\{uid\}/.test(RULES) && /status. is deliberately NOT in the owner/.test(RULES),
    'status is the approval flag a CF sets; an owner writing it would be self-approval');

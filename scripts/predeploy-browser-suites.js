@@ -51,6 +51,7 @@ const REQUIRED = [
   { f: 'test-pos-print-delegation.js',           why: 'a receipt reports what actually happened',              browser: false, ms: 120000 },
   { f: 'test-merchant-shell-callables.js',       why: 'every callable the shell names exists',                 browser: false, ms: 120000 },
   { f: 'test-availability-convergence.js',       why: 'one canonical schedule governs both surfaces',          browser: false, ms: 120000 },
+  { f: 'test-merchant-availability-server-save.js', why: 'the schedule saves only through setShopAvailability — no browser write', browser: false, ms: 120000 },
   { f: 'test-inshell-chrome.js', why: 'framed modules must not paint shell chrome — the black layer', browser: false, ms: 120000 },
   { f: 'test-tenant-convergence-handler-surface.js', why: '_requireSeller moves the tenant key for 20 handlers', browser: false, ms: 120000 },
   { f: 'test-pos-entry-setup-first.js', why: 'the shell opens POS setup before selling, once', browser: false, ms: 120000 },
