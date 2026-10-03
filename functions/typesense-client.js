@@ -905,7 +905,7 @@ const TRANSFORMERS = {
     hub:             _str(data.hub, 'shopping'),
     sellerId:        _str(data.sellerId)     || undefined,
     sellerName:      _str(data.sellerName)   || undefined,
-    sellerVerified:  data.sellerVerified === true || undefined,
+    /* sellerVerified is NOT indexed: no server writes it and the products rule does not block it (client-forgeable). */
     sellerRating:    _float(data.sellerRating) || undefined,
     rating:          _float(data.rating)       || undefined,
     reviewCount:     _int32(data.reviewCount)  || undefined,
@@ -920,7 +920,9 @@ const TRANSFORMERS = {
     keywords:        _strArr(data.keywords).slice(0, 20),
     isFeatured:      data.isFeatured === true  || undefined,
     featuredLevel:   _int32(data.featuredLevel)|| undefined,
-    verified:        Boolean(data.verified || data.sellerVerified) || undefined,
+    /* Admin-granted `verified` only. `sellerVerified` on a product is written by nobody on the server and the products
+       rule (noAdminFields) does not block it — a seller could set it on their own listing and appear verified. */
+    verified:        data.verified === true || undefined,
     tags:            _strArr(data.tags).slice(0, 30),
     status:          _str(data.status, 'active'),
     createdAt:       _unix(data.createdAt),
@@ -944,7 +946,9 @@ const TRANSFORMERS = {
     deliveryOptions: _strArr(data.deliveryOptions),
     isFeatured:      data.isFeatured === true   || undefined,
     featuredLevel:   _int32(data.featuredLevel) || undefined,
-    verified:        Boolean(data.verified || data.isVerified),
+    /* Admin-granted `verified` only — see the note in algolia-indexer.js.
+       `isVerified` is client-writable and must not become a trust signal. */
+    verified:        data.verified === true,
     tags:            _strArr(data.tags).slice(0, 20),
     status:          _str(data.status, 'active'),
     joinedAt:        _unix(data.createdAt || data.joinedAt),
@@ -1175,7 +1179,7 @@ const TRANSFORMERS = {
       bio:            _trunc(_str(data.bio), 250) || undefined,
       avatar:         _str(data.photoURL || data.avatar) || undefined,
       role:           _str(data.role, 'buyer'),
-      sellerVerified: data.sellerVerified === true || undefined,
+      /* sellerVerified is NOT indexed: no server writes it and the users rule does not block it (client-forgeable). */
       rating:         _float(data.rating)        || undefined,
       followerCount:  _int32(data.followerCount) || undefined,
       skills:         _strArr(data.skills).slice(0, 15),
