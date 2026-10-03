@@ -1560,7 +1560,7 @@ service cloud.firestore {
   match /invoices/{invoiceId} {
   allow read:  if isAdmin()
   || (isAuthed() && resource.data.sellerUid == request.auth.uid);
-  allow write: if isAdmin();
+  allow write: if false;
   }
   match /sellerBilling/{sellerUid}/monthly/{period} {
   allow read:  if isAdmin() || (isAuthed() && request.auth.uid == sellerUid);
