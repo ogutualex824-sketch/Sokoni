@@ -41,7 +41,8 @@
     buyer: { label: 'Customer', tone: 'muted', caps: ['Own account & orders'] },
   };
   const accessOf = (role) => ACCESS[role] || { label: role ? String(role) : DASH, tone: 'muted', caps: [] };
-  const statusOf = (u) => { const s = String(u.status || '').toLowerCase(); if (u.suspended === true || s === 'suspended') return 'suspended'; if (s === 'banned') return 'banned'; if (s === 'pending' || s === 'invited') return 'pending'; if (s === 'inactive' || s === 'deactivated') return 'inactive'; return s || 'active'; };
+  /* a BAN is its own state (owner 2026-10-04) — checked first, never shown as a suspension */
+  const statusOf = (u) => { const s = String(u.status || '').toLowerCase(); if (s === 'banned') return 'banned'; if (u.suspended === true || s === 'suspended') return 'suspended'; if (s === 'pending' || s === 'invited') return 'pending'; if (s === 'inactive' || s === 'deactivated') return 'inactive'; return s || 'active'; };
 
   const CSS = `
 .aus{--aus-bg:#0b0d14;--aus-card:#121522;--aus-card2:#171a2a;--aus-bor:#23273a;--aus-txt:#e7e9f4;--aus-sub:#8b90ad;--aus-acc:#5b5bf7;--aus-acc2:#7c6cff;--aus-green:#22c55e;--aus-amber:#f59e0b;--aus-red:#ef4444;--aus-blue:#3b82f6;color:var(--aus-txt);font-family:inherit;position:relative}
@@ -116,7 +117,7 @@
 
   function mount(root, config) {
     if (!root || !config || typeof config.call !== 'function') throw new Error('SokoniAdminUsers.mount(root, {call, actions})');
-    const cfg = Object.assign({ pageSize: 10, roles: ['buyer', 'seller', 'provider', 'driver', 'moderator', 'admin'], canChangeRole: true, canSuspend: true }, config);
+    const cfg = Object.assign({ pageSize: 10, roles: ['buyer', 'seller', 'driver', 'moderator', 'admin'], canChangeRole: true, canSuspend: true }, config);
     if (!document.getElementById('aus-style')) { const st = document.createElement('style'); st.id = 'aus-style'; st.textContent = CSS; document.head.appendChild(st); }
     const S = { users: [], total: null, cursors: [null], page: 1, nextCursor: null, hasMore: false, mode: 'list', filter: { q: '', role: '', status: '' }, sort: 'joined', view: 'list', sel: new Set(), stats: null, loading: false, error: null };
 
@@ -139,7 +140,7 @@
   <div class="aus-bar" role="search">
     <label class="aus-search"><span aria-hidden="true">&#x1F50D;</span><input type="search" data-f="q" placeholder="Search by name, email, phone or UID" aria-label="Search users"></label>
     <select class="aus-sel" data-f="role" aria-label="Filter by role"><option value="">Role: All</option>${cfg.roles.concat(['superAdmin']).map((r) => `<option value="${esc(r)}">${esc(r)}</option>`).join('')}</select>
-    <select class="aus-sel" data-f="status" aria-label="Filter by status"><option value="">Status: All</option><option value="active">Active</option><option value="suspended">Suspended</option><option value="inactive">Inactive</option><option value="pending">Pending</option></select>
+    <select class="aus-sel" data-f="status" aria-label="Filter by status"><option value="">Status: All</option><option value="active">Active</option><option value="suspended">Suspended</option><option value="banned">Banned</option><option value="inactive">Inactive</option><option value="pending">Pending</option></select>
     <select class="aus-sel" data-f="sort" aria-label="Sort"><option value="joined">Sort by: Newest joined</option><option value="name">Sort by: Name</option></select>
     <div class="aus-view"><button type="button" data-view="list" aria-pressed="true" aria-label="List view">&#x2630;</button><button type="button" data-view="grid" aria-pressed="false" aria-label="Grid view">&#x25A6;</button></div>
   </div>
@@ -263,6 +264,8 @@
           <div class="aus-kv"><span>SSO sign-in</span><span>${sso == null ? DASH : sso.length ? esc(sso.join(', ')) : 'None'}</span></div>
           <div class="aus-kv"><span>Email verified</span><span>${ar ? (ar.emailVerified ? '<span class="aus-up">Yes</span>' : 'No') : DASH}</span></div>
           <div class="aus-kv"><span>Account status</span><span>${sec ? statusPill(sec.accountStatus || 'active') : DASH}</span></div>
+          ${s === 'suspended' ? `<div class="aus-kv"><span>Suspended until</span><span>${esc(sec && sec.suspendedUntil ? fmtDate(sec.suspendedUntil) : DASH)}</span></div>` : ''}
+          ${s === 'banned' ? `<div class="aus-kv"><span>Ban</span><span>Permanent${sec && sec.banReason ? ' &mdash; ' + esc(sec.banReason) : ''}</span></div>` : ''}
           <div class="aus-kv"><span>Sign-in</span><span>${sec && sec.signInEnabled != null ? (sec.signInEnabled ? 'Enabled' : '<span class="aus-warn">Disabled</span>') : DASH}</span></div>
           <div class="aus-kv"><span>Sessions revoked at</span><span>${esc(ar && ar.tokensValidAfter ? fmtDate(ms(ar.tokensValidAfter)) : DASH)}</span></div>
           <h3>Suspension history</h3>${hist(sec && sec.suspensionHistory, (h) => `<div class="aus-kv"><span>${esc(h.action)} ${h.reason ? '&mdash; ' + esc(h.reason) : ''}</span><span>${esc(fmtDate(h.at))}</span></div>`)}
@@ -270,8 +273,10 @@
           <h3>Security events</h3>${hist(sec && sec.events, (h) => `<div class="aus-kv"><span>${esc(h.action)}</span><span>${esc(fmtDate(h.at))}</span></div>`)}`)}
         <div class="aus-chips" style="margin-top:22px">
           <button class="aus-btn" type="button" data-d="role" ${cfg.canChangeRole ? '' : 'disabled'}>&#x270E; Change role</button>
-          ${s === 'suspended' || s === 'banned'
-            ? `<button class="aus-btn" type="button" data-d="restore" ${cfg.canSuspend && cfg.actions && cfg.actions.restore ? '' : 'disabled'}>Restore</button>`
+          ${s === 'banned'
+            ? `<button class="aus-btn" type="button" data-d="unban" ${cfg.canSuspend && cfg.actions && cfg.actions.unban ? '' : 'disabled'}>Lift ban</button>`
+            : s === 'suspended'
+            ? `<button class="aus-btn" type="button" data-d="restore" ${cfg.canSuspend && cfg.actions && cfg.actions.restore ? '' : 'disabled'}>Reinstate early</button>`
             : `<button class="aus-btn danger" type="button" data-d="suspend" ${cfg.canSuspend ? '' : 'disabled'}>Suspend</button>`}
         </div>`;
       dr.querySelector('.aus-x').addEventListener('click', close);
@@ -281,7 +286,8 @@
       }));
       const r = dr.querySelector('[data-d="role"]'); if (r) r.addEventListener('click', () => roleDialog([uid]));
       const su = dr.querySelector('[data-d="suspend"]'); if (su) su.addEventListener('click', () => suspendDialog([uid]));
-      const re = dr.querySelector('[data-d="restore"]'); if (re) re.addEventListener('click', () => runAction('restore', [uid], {}));
+      const re = dr.querySelector('[data-d="restore"]'); if (re) re.addEventListener('click', () => liftDialog('restore', [uid]));
+      const ub = dr.querySelector('[data-d="unban"]'); if (ub) ub.addEventListener('click', () => liftDialog('unban', [uid]));
       dr.querySelector('.aus-x').focus();
     }
     function escClose(e) { if (e.key === 'Escape') closeDrawer(); }
@@ -303,11 +309,15 @@
       });
       const f = bg.querySelector('input,select,textarea'); if (f) f.focus();
     }
-    async function runAction(kind, uids, extra) {
+    /* one requestId per user per dialog — a retry of the SAME dialog is the same request (server idempotency) */
+    let ridSeq = 0;   /* fallback is unique per page session; the server scopes the event id by caller + target */
+    const newRid = () => (window.crypto && crypto.randomUUID ? crypto.randomUUID() : 'rid-' + Date.now().toString(36) + '-' + (++ridSeq));
+    const ridsFor = (uids) => uids.reduce((m, u) => { m[u] = newRid(); return m; }, {});
+    async function runAction(kind, uids, extra, rids) {
       const act = cfg.actions && cfg.actions[kind];
       if (!act) throw new Error('This action is not available on this page.');
       let ok = 0; const fails = [];
-      for (const uid of uids) { try { await cfg.call(act.fn, act.payload(uid, extra)); ok++; } catch (e) { fails.push((e && e.message) || 'failed'); } }
+      for (const uid of uids) { try { await cfg.call(act.fn, act.payload(uid, Object.assign({ requestId: rids && rids[uid] }, extra))); ok++; } catch (e) { fails.push((e && e.message) || 'failed'); } }
       await loadUsers(); loadStats(); closeDrawer();
       if (fails.length) throw new Error(`${ok} done, ${fails.length} failed: ${fails[0]}`);
       return `${ok} user${ok === 1 ? '' : 's'} updated.`;
@@ -315,10 +325,18 @@
     function roleDialog(uids) {
       modal(`Change role (${uids.length})`, `<label>New role</label><select data-role>${cfg.roles.map((r) => `<option value="${esc(r)}">${esc(r)}</option>`).join('')}</select>
         <div class="aus-kpi-sub" style="margin-top:8px">Applied by the server (${esc(cfg.actions && cfg.actions.role ? cfg.actions.role.fn : DASH)}); audited.</div>`,
-      (bg) => runAction('role', uids, { role: bg.querySelector('[data-role]').value }), 'Change role');
+      ((rids) => (bg) => runAction('role', uids, { role: bg.querySelector('[data-role]').value }, rids))(ridsFor(uids)), 'Change role');
+    }
+    /* lifting is an explicit, reasoned decision; lifting a BAN is separate from lifting a suspension (owner 2026-10-04) */
+    function liftDialog(kind, uids) {
+      const ban = kind === 'unban';
+      modal(`${ban ? 'Lift ban' : 'Reinstate'} (${uids.length})`, `<label>Reason (required)</label><textarea data-reason rows="3" maxlength="300" placeholder="${ban ? 'Why is this ban being lifted?' : 'Why is this suspension ending early?'}"></textarea>
+        <div class="aus-kpi-sub" style="margin-top:8px">Applied by the server (${esc(cfg.actions && cfg.actions[kind] ? cfg.actions[kind].fn : DASH)}); audited.</div>`,
+      (bg) => { const reason = bg.querySelector('[data-reason]').value.trim(); if (reason.length < 3) throw new Error('A reason is required.'); return runAction(kind, uids, { reason }); }, ban ? 'Lift ban' : 'Reinstate', ban);
     }
     function suspendDialog(uids) {
       modal(`Suspend ${uids.length} user${uids.length === 1 ? '' : 's'}`, `<label>Reason (required)</label><textarea data-reason rows="3" maxlength="300" placeholder="Why is this account being suspended?"></textarea>
+        <div class="aus-kpi-sub" style="margin-top:8px">The server sets the end date and reinstates the account automatically when it passes. It can be lifted early.</div>
         <div class="aus-kpi-sub" style="margin-top:8px">Applied by the server (${esc(cfg.actions && cfg.actions.suspend ? cfg.actions.suspend.fn : DASH)}); audited.</div>`,
       (bg) => { const reason = bg.querySelector('[data-reason]').value.trim(); if (reason.length < 3) throw new Error('A reason is required.'); return runAction('suspend', uids, { reason }); }, 'Suspend', true);
     }

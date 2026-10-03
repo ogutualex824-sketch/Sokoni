@@ -116,22 +116,31 @@ exports.tsReviewReport = onCall(OPT, async (req) => {
   const report = snap.data();
 
   const newStatus = validActions[action];
+
+  /* Ban the reported entity (user) if requested — only superAdmin can auto-ban. LIVE wrote status:'banned' directly
+     (no Auth lockout, no history, no audit — a second ban semantic). It now goes through the ONE account-lock contract
+     (kind 'ban': Auth disabled + sessions revoked + history + adminAudit + auditLog + trustSafetyAudit), and BEFORE the
+     report is marked reviewed, so a refused ban (e.g. a super admin target) leaves the report open. */
+  if (banUser && req.auth?.token?.superAdmin && report.entityType === 'user') {
+    const { HttpsError } = require('firebase-functions/v2/https');
+    try {
+      await require('./shared/account-suspension').setSuspension({
+        db, auth: require('firebase-admin/auth').getAuth(), serverTs: () => FieldValue.serverTimestamp(),
+        actor: { uid: req.auth.uid, superAdmin: true }, uid: report.entityId, suspend: true, kind: 'ban',
+        reason: String(resolution || '').trim() || `Report actioned: ${report.reason || reportId}`, source: 'trust_safety_report',
+      });
+    } catch (e) {
+      if (e && e.code && typeof e.code === 'string') throw new HttpsError(e.code, e.message);
+      throw e;
+    }
+  }
+
   await ref.update({
     status: newStatus,
     reviewedBy: req.auth.uid,
     resolution: (resolution || '').slice(0, 500),
     reviewedAt: FieldValue.serverTimestamp(),
   });
-
-  // Ban the reported entity (user) if requested — only superAdmin can auto-ban
-  if (banUser && req.auth?.token?.superAdmin && report.entityType === 'user') {
-    await db.collection('users').doc(report.entityId).update({
-      status: 'banned',
-      bannedAt: FieldValue.serverTimestamp(),
-      bannedBy: req.auth.uid,
-      banReason: resolution || `Report actioned: ${report.reason}`,
-    });
-  }
 
   await db.collection('trustSafetyAudit').add({
     action: 'report_reviewed',
@@ -157,15 +166,21 @@ exports.tsReviewReport = onCall(OPT, async (req) => {
 exports.tsBanUser = onCall(OPT, async (req) => {
   const { HttpsError } = require('firebase-functions/v2/https');
   const { uid, action, reason, durationDays } = req.data || {};
-  if (!['ban', 'suspend', 'restore'].includes(action)) throw new HttpsError('invalid-argument', 'action must be ban|suspend|restore');
-  if (durationDays) throw new HttpsError('invalid-argument', 'Timed suspension is not supported; reinstate explicitly.');
+  if (!['ban', 'suspend', 'restore', 'unban'].includes(action)) throw new HttpsError('invalid-argument', 'action must be ban|suspend|restore|unban');
+  /* live contract kept: a reason is required for every action, incl. restore */
+  if (!uid || !reason || !String(reason).trim()) throw new HttpsError('invalid-argument', 'uid, action, reason required');
+  /* The suspension length is SERVER-FIXED (shared/account-suspension.js SUSPENSION_DAYS; owner 2026-10-04) —
+     a client-chosen duration is refused. A ban is permanent. */
+  if (durationDays != null && durationDays !== '') throw new HttpsError('invalid-argument', 'The suspension length is fixed by the platform (' + require('./shared/account-suspension').SUSPENSION_DAYS + ' days).');
   try {
     const r = await require('./shared/account-suspension').setSuspension({
       db: getFirestore(), auth: require('firebase-admin/auth').getAuth(), serverTs: () => FieldValue.serverTimestamp(),
       actor: req.auth ? { uid: req.auth.uid, superAdmin: req.auth.token && req.auth.token.superAdmin === true } : null,
-      uid, suspend: action !== 'restore', reason, source: 'trust_safety',
+      uid, suspend: action === 'ban' || action === 'suspend', kind: (action === 'ban' || action === 'unban') ? 'ban' : 'suspend',
+      reason, source: 'trust_safety',
     });
-    return Object.assign({ success: true, newStatus: r.suspended ? 'suspended' : 'active' }, r);
+    /* the trustSafetyAudit record (live trail) is written by the contract itself, once per real change */
+    return Object.assign({ success: true, newStatus: r.resultingState ? r.resultingState.status : (r.suspended ? (r.kind === 'ban' ? 'banned' : 'suspended') : 'active') }, r);
   } catch (e) {
     if (e && e.code && typeof e.code === 'string') throw new HttpsError(e.code, e.message);
     throw e;

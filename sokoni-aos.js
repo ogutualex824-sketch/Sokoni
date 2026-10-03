@@ -359,7 +359,8 @@ window.SokoniAOS = (() => {
   /* Users workspace (sokoni-admin-users.js, shared with super-admin.html). Data comes from the server only; actions use
      ONE suspension contract (owner 2026-10-04): suspend / restore → suspendUser — the same callable Super Admin uses
      (Auth account disabled + sessions revoked + status + history + audit; super-admin-only on the server). Role →
-     adminUpdateUserRole (super-admin-only). Buttons are enabled only for a super admin; the server decides regardless. */
+     setUserRole — the ONE role authority (Authority Core: unrelated claims preserved, requestId idempotent, audited).
+     Buttons are enabled only for a super admin; the server decides regardless. */
   let _ausApi = null;
   async function _loadUsers(query = "") {
     const root = document.getElementById("ausRootAos");
@@ -369,12 +370,13 @@ window.SokoniAOS = (() => {
       _ausApi = window.SokoniAdminUsers.mount(root, {
         surface: "adminos",
         call: (name, data) => _call(name, data),
-        roles: ["buyer", "seller", "provider", "driver", "moderator", "admin"],
+        roles: ["buyer", "seller", "driver", "moderator", "admin"],
         canChangeRole: isSuper, canSuspend: isSuper, canExport: isSuper,
         actions: {
-          role:    { fn: "adminUpdateUserRole", payload: (uid, x) => ({ uid, role: x.role }) },
+          role:    { fn: "setUserRole", payload: (uid, x) => ({ uid, role: x.role, requestId: x.requestId }) },
           suspend: { fn: "suspendUser", payload: (uid, x) => ({ uid, suspend: true, reason: x.reason, source: "adminos" }) },
-          restore: { fn: "suspendUser", payload: (uid) => ({ uid, suspend: false, reason: "Reinstated from AdminOS Users", source: "adminos" }) },
+          restore: { fn: "suspendUser", payload: (uid, x) => ({ uid, suspend: false, reason: x.reason, source: "adminos" }) },
+          unban:   { fn: "suspendUser", payload: (uid, x) => ({ uid, suspend: false, kind: "ban", reason: x.reason, source: "adminos" }) },
         },
       });
       if (query) _ausApi.search(query);
@@ -404,18 +406,21 @@ window.SokoniAOS = (() => {
   }
 
   async function banUser(uid, currentStatus) {
-    const action = currentStatus === "banned" ? "restore" : "ban";
+    /* legacy row helper: a ban is lifted only through the explicit "Lift ban" action in the Users workspace */
+    if (currentStatus === "banned") { _toast("This account is banned. Open it in Users and use “Lift ban”.", "error"); return; }
+    const action = currentStatus === "suspended" ? "restore" : "ban";
     if (!(await SK.dialog.confirm(`${_titleCase(action)} this user?`, null, null, { title: `${_titleCase(action)} user`, variant: 'danger', confirmLabel: _titleCase(action) }))) return;
     try {
       /* ONE suspension contract (owner 2026-10-04): suspendUser — Auth disabled + sessions revoked + status + audit */
-      const reason = action === "restore" ? "Reinstated from AdminOS" : (prompt("Reason for suspending this account (required):") || "").trim();
-      if (action !== "restore" && reason.length < 3) { _toast("A reason is required to suspend an account.", "error"); return; }
-      await _call("suspendUser", { uid, suspend: action !== "restore", reason, source: "adminos" });
+      const reason = (prompt(action === "restore" ? "Reason for reinstating this account (required):" : "Reason for suspending this account (required):") || "").trim();
+      if (reason.length < 3) { _toast("A reason is required.", "error"); return; }
+      var res = await _call("suspendUser", { uid, suspend: action !== "restore", reason, source: "adminos" });
     } catch (e) {
       _toast(_actionFailure(e, "Moderation action"), "error");
       return;
     }
-    _toast("User " + action + "ned successfully", "success");
+    var until = res && res.resultingState && res.resultingState.suspendedUntilMs;
+    _toast(action === "restore" ? "Account reinstated" : "Account suspended until " + (until ? new Date(until).toLocaleDateString() : "—") + " (sign-in disabled)", "success");
     _panelCache.users = false; _loadUsers();
   }
 
@@ -423,7 +428,7 @@ window.SokoniAOS = (() => {
     const role = prompt("Enter new role:\nbuyer, seller, provider, driver, agent, doctor, lawyer, hotel, freelancer, employee, moderator, admin");
     if (!role) return;
     try {
-      await _call("adminUpdateUserRole", { uid, role });
+      await _call("setUserRole", { uid, role, requestId: (crypto.randomUUID ? crypto.randomUUID() : String(Date.now())) });
     } catch (e) {
       _toast(_actionFailure(e, "Role update"), "error");
       return;

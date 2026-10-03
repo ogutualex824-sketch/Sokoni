@@ -123,7 +123,7 @@ const now = Date.now(), recent = { _ms: now - 2 * 86400000 }, old = { _ms: now -
     && /setK\('total', av\('totalUsers'\) \? num\(st\.totalUsers\) : DASH\)/.test(src) && !/\.filter\(\(u\) => statusOf\(u\) === S\.filter\.status\)/.test(src),
     'KPIs only from adminUserStats (per-figure availability → "—"); the browser does no status filtering / counting of a partial list', metricSources);
   const aosJs = fs.readFileSync(path.join(ROOT, 'sokoni-aos.js'), 'utf8'), aosHtml = fs.readFileSync(path.join(ROOT, 'admin-os.html'), 'utf8'), sa = fs.readFileSync(path.join(ROOT, 'super-admin.html'), 'utf8');
-  ck('U8', /id="panel-users"[\s\S]{0,300}id="ausRootAos"/.test(aosHtml) && /sokoni-admin-users\.js/.test(aosHtml) && /fn: "adminUpdateUserRole"/.test(aosJs) && /fn: "suspendUser", payload: \(uid, x\) => \(\{ uid, suspend: true/.test(aosJs) && !/tsBanUser/.test(aosJs)
+  ck('U8', /id="panel-users"[\s\S]{0,300}id="ausRootAos"/.test(aosHtml) && /sokoni-admin-users\.js/.test(aosHtml) && /fn: "setUserRole", payload: \(uid, x\) => \(\{ uid, role: x\.role, requestId: x\.requestId \}\)/.test(aosJs) && !/fn: "adminUpdateUserRole"/.test(aosJs) && /fn: "suspendUser", payload: \(uid, x\) => \(\{ uid, suspend: true/.test(aosJs) && !/tsBanUser/.test(aosJs)
     && /id="panel-users"[\s\S]{0,300}id="ausRootSa"/.test(sa) && /fn:'setUserRole'/.test(sa) && /fn:'suspendUser',\s+payload:\(uid,x\)=>\(\{uid,suspend:true/.test(sa) && /canExport:true/.test(sa) && /canExport: isSuper/.test(aosJs)
     && /data-section="users"/.test(aosHtml) && /data-section="users"/.test(sa), 'both pages mount in their Users panel (sidebar nav intact) and call the SAME suspendUser contract; export gated to super admins');
   console.log('\nRESULT: ' + pass + ' passed, ' + fail + ' failed');

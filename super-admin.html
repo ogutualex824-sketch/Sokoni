@@ -1122,13 +1122,16 @@ const SA={
       call:(name,data)=>(['adminSearchUsers','adminGetUser','adminUserStats','adminExportUsers'].includes(name)
         ? this._fns.httpsCallable('adminOsDispatch')(Object.assign({op:name},data||{}))
         : this._fns.httpsCallable(name)(data||{})).then(r=>r.data),
-      roles:['buyer','seller','driver','provider','admin'],
+      roles:['buyer','seller','driver','moderator','admin'],
       canChangeRole:true, canSuspend:true, canExport:true,
       actions:{
-        role:   {fn:'setUserRole',   payload:(uid,x)=>({uid,role:x.role})},
+        /* setUserRole = the ONE role authority (Authority Core: unrelated claims preserved; requestId = idempotent retry) */
+        role:   {fn:'setUserRole',   payload:(uid,x)=>({uid,role:x.role,requestId:x.requestId})},
         /* live suspendUser (super-admin.js): { uid, suspend, reason } — disables / re-enables the Auth account */
         suspend:{fn:'suspendUser',   payload:(uid,x)=>({uid,suspend:true,reason:x.reason,source:'super_admin'})},
-        restore:{fn:'suspendUser',   payload:(uid)=>({uid,suspend:false,reason:'Reinstated from Super Admin Users',source:'super_admin'})},
+        restore:{fn:'suspendUser',   payload:(uid,x)=>({uid,suspend:false,reason:x.reason,source:'super_admin'})},
+        /* lifting a BAN is a separate, explicit decision (owner 2026-10-04) */
+        unban:  {fn:'suspendUser',   payload:(uid,x)=>({uid,suspend:false,kind:'ban',reason:x.reason,source:'super_admin'})},
       },
     });
   },

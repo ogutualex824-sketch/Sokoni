@@ -11947,6 +11947,8 @@ exports.ageVerifyStatus = _ageVerify.ageVerifyStatus;
 const superAdmin = require('./super-admin');
 exports.setUserRole            = superAdmin.setUserRole;
 exports.suspendUser            = superAdmin.suspendUser;
+/* Suspension auto-expiry (owner 2026-10-04): 14-day suspensions lifted through the ONE contract; bans never */
+exports.expireSuspensions      = require('./account-suspension-expiry').expireSuspensions;
 exports.sendPlatformBroadcast  = superAdmin.sendPlatformBroadcast;
 
 /* ── SOKONI Impact Enterprise Platform v1.0 ────────────────────── */
