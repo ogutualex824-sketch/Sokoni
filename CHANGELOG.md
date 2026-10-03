@@ -1,3 +1,21 @@
+## [2026-10-03] — Tech Hub slice 4L (server): booking conversations reach the engine's providerBookings — NOT deployed
+
+- functions/messages.js:
+  - TX_COLLECTIONS.service_booking → `providerBookings` (bookingCreateService writes there). It used to be `bookings`, so
+    every engine booking answered "not found" and no customer / provider could open its conversation.
+  - Legacy service bookings in `bookings` stay reachable (TX_FALLBACK, read after the primary).
+  - PARTY_FIELDS.service_booking gains `customerUid` (the engine's customer field).
+  - getConversationContext reads the same way.
+  - The not-found error no longer names the collection.
+- Tests: test-messages-service-booking 6/0, executing the real createConversation / getConversationContext:
+  - customer and provider seated, a stranger refused, a legacy booking still opens, context read;
+  - BASE=5dc505e fails 5/6 ("not found in bookings").
+  - test-messages-participant-authority 51/0.
+- NOT built: booking-status system messages for engine bookings. onBookingStatusChanged watches `bookings/{id}`; a
+  providerBookings trigger is a NEW deploy unit and needs its own decision.
+- Deploy unit: messagesDispatch (+ the standalone createConversation / getConversationContext if live). NOT providerDispatch. The
+  functions lineage gate applies: diff each function's LIVE archive before release.
+
 ## [2026-10-03] — Provider dashboard: modules with no backing are NOT_IMPLEMENTED (sokoni-5b decision) — NOT deployed
 
 - business-workspace MODULES: `enquiries` and `calls` were implemented:true with no collection, callable or screen behind them (census

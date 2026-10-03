@@ -25,7 +25,7 @@ function _union(v) { return admin.firestore.FieldValue.arrayUnion(v); }
 /* ── Transaction type → Firestore collection ──────────────────── */
 const TX_COLLECTIONS = {
   order:                    'orders',
-  service_booking:          'bookings',
+  service_booking:          'providerBookings',   /* Tech slice 4L: bookingCreateService writes providerBookings; legacy service bookings in `bookings` stay reachable (TX_FALLBACK) */
   food_order:               'foodOrders',
   pharmacy_order:           'pharmacyOrders',
   property_inquiry:         'propertyInquiries',
@@ -42,6 +42,17 @@ const TX_COLLECTIONS = {
   support_ticket:           'supportTickets',
   rfq:                      'rfqs',
 };
+
+/* Older collections a transaction type may still live in, read in order after TX_COLLECTIONS (Tech slice 4L). */
+const TX_FALLBACK = { service_booking: ['bookings'] };
+async function _txSnap(db, type, id) {
+  for (const col of [TX_COLLECTIONS[type]].concat(TX_FALLBACK[type] || [])) {
+    if (!col) continue;
+    const snap = await db.collection(col).doc(id).get().catch(() => null);
+    if (snap && snap.exists) return { snap, col };
+  }
+  return { snap: null, col: TX_COLLECTIONS[type] };
+}
 
 /* ── Spam / fraud detection patterns ─────────────────────────── */
 const SPAM_PATTERNS = [
@@ -112,7 +123,7 @@ async function _sendFcm(token, title, body, data) {
    refused. Nine of the seventeen accepted types have no rules block at all. */
 const PARTY_FIELDS = {
   order:               ['buyerId', 'buyerUid', 'uid', 'userId', 'sellerUid', 'assignedDriverUid'],
-  service_booking:     ['buyerId', 'uid', 'userId', 'ownerId', 'customerId', 'providerId'],
+  service_booking:     ['customerUid', 'buyerId', 'uid', 'userId', 'ownerId', 'customerId', 'providerId'],   /* customerUid = the booking engine's customer field (4L) */
   food_order:          ['buyerUid', 'restaurantId'],
   property_inquiry:    ['uid'],
   job_application:     ['uid'],
@@ -184,8 +195,8 @@ exports.createConversation = onCall({ region: REGION, timeoutSeconds: 30 }, expo
   }
 
   /* Verify transaction exists */
-  const txSnap = await db.collection(TX_COLLECTIONS[transactionType]).doc(transactionId).get().catch(() => null);
-  if (!txSnap?.exists) throw new HttpsError('not-found', `Transaction ${transactionId} not found in ${TX_COLLECTIONS[transactionType]}`);
+  const { snap: txSnap } = await _txSnap(db, transactionType, transactionId);
+  if (!txSnap?.exists) throw new HttpsError('not-found', 'Transaction not found.');
 
   /* THE CHECK THAT WAS MISSING. Parties come from the transaction itself, and the
      caller must be one of them — being able to name yourself is not entitlement. */
@@ -626,7 +637,7 @@ exports.getConversationContext = onCall({ region: REGION, timeoutSeconds: 20 }, 
   const col = TX_COLLECTIONS[conv.transactionType];
   if (!col || !conv.transactionId) return { context: conv.metadata || {} };
 
-  const txSnap = await db.collection(col).doc(conv.transactionId).get().catch(() => null);
+  const { snap: txSnap } = await _txSnap(db, conv.transactionType, conv.transactionId);
   if (!txSnap?.exists) return { context: conv.metadata || {} };
 
   const tx = txSnap.data();
