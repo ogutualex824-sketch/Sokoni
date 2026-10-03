@@ -265,21 +265,14 @@ exports.enrollCourse = onCall(CF_OPTS, async (request) => {
     const price = Number(course.price || 0);
     const now   = admin.firestore.Timestamp.now();
 
+    if (!(price >= 0) || !Number.isFinite(price)) _deny('failed-precondition', 'Course price is invalid');
     if (price > 0) {
-      /* ── Paid course: check wallet balance ──────────────── */
-      const walletSnap = await tx.get(db.collection('wallets').doc(uid));
-      const balance    = walletSnap.exists ? Number(walletSnap.data().balance || 0) : 0;
-
-      if (balance < price) {
-        /* Signal to client that payment is required */
-        return { paymentRequired: true, price, courseId };
-      }
-
-      /* Sufficient balance — deduct and enrol */
-      tx.update(db.collection('wallets').doc(uid), {
-        balance: FieldValue.increment(-price),
-        updatedAt: now,
-      });
+      /* ── OWNER DECISION 2026-10-03: paid enrolment is OFF until it runs through IntaSend (Education E4) ──
+         This branch debited wallets/{uid}.balance with FieldValue.increment and wrote NO ledger row, credited NO
+         instructor and took NO commission; the wallet is also frozen. Refuse BEFORE any wallet read or write.
+         Existing enrolments are untouched (the idempotent return above). */
+      log.warn('paid enrolment refused (pending IntaSend)', { courseId, price });
+      throw new HttpsError('failed-precondition', 'Paid enrolment is coming soon.', { reason: 'PAID_ENROLMENT_UNAVAILABLE', price });
     }
 
     /* ── Create enrolment ─────────────────────────────────── */
