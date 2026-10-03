@@ -1410,19 +1410,3 @@ exports.posCheckPaymentStatus = onCall(cfg, async ({ data, auth }) => {
   /* Still waiting for webhook */
   return { status: 'pending' };
 });
-
-/* ══════════════════════════════════════════════════════════════════════════════
-   _internal — the sell authority, shared with functions/index.js
-   ══════════════════════════════════════════════════════════════════════════════
-   `darajaSTKPush` (index.js) accepted a client-supplied `sellerUid` and checked
-   only that SOMEONE was signed in, so an authenticated outsider could initiate
-   an M-Pesa STK prompt against another merchant's shortcode. Closing that needs
-   the SAME authority POS checkout already enforces — not a second one. A copy
-   would drift, and the union-of-two-models reasoning above is exactly the part
-   that must not be re-derived by hand.
-
-   Exported as `_internal`, mirroring merchant-identity.js. It is NOT a callable:
-   firebase-functions discovers endpoints from index.js's exports, and index.js
-   re-exports the eight posZF callables by name — never this object — so nothing
-   here is deployed as a function. */
-exports._internal = { _assertSellAuthority, _assertRefundAuthority };

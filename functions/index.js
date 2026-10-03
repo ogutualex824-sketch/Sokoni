@@ -3546,56 +3546,6 @@ exports.darajaSTKPush = onCall(
       throw new HttpsError("invalid-argument", "sellerUid, phone, and amount are required.");
     }
 
-    /* ── Sell authority — `sellerUid` is a CLAIM until it is bound ────────────
-       Everything below this line spends `sellerUid` as if it named the caller's
-       own merchant: it prices that merchant's catalogue, writes auditLogs rows
-       stamped `merchantId: sellerUid`, reads shopSettings/{sellerUid} for live
-       Daraja credentials, and finally sends an M-Pesa prompt to a phone number
-       the caller also chose, collecting into that merchant's shortcode.
-
-       The only prior check was `if (!request.auth)` — authentication, not
-       authorisation. Any signed-in user could therefore name ANY merchant and
-       drive that merchant's collection rail: STK prompts to arbitrary phones
-       under a shortcode they do not own, plus audit rows attributed to a
-       merchant who never acted. That is the cross-tenant hole this closes.
-
-       Deliberately the SAME authority POS checkout enforces (_assertSellAuthority
-       in pos-zero-friction.js), not a second copy: it accepts platform admins,
-       the shops/shopEmployees `sell` capability, businesses/{id}.ownerId, or an
-       active posStaff row — the union that already ships, because ordinary
-       cashiers live in shopEmployees while POS-native merchants live in
-       businesses/posStaff. Requiring `sellerUid === auth.uid` instead would have
-       locked out every employee-operated till.
-
-       Required lazily so pos-zero-friction keeps loading AFTER admin
-       initialisation (it calls getFirestore() at module scope); the module is
-       already in cache by request time, so this costs nothing.
-
-       Placed before the rate-limit and pricing work so an outsider is refused
-       before ANY read or write is attributed to the merchant they named.
-
-       WHAT THIS COSTS IS NOT YET SETTLED. sokoni-mpesa.js is a SHARED helper, not
-       a POS file: bnb, car-rental, delivery, digital, healthcare, landlord and
-       legal-hub all reach this callable through SokoniMpesa.pay(), where the
-       caller is a BUYER paying a different seller and therefore has no sell
-       authority over them. Those buyers are refused here.
-
-       That is the rail separation the platform wants — Daraja for POS, IntaSend
-       for marketplace/services/subscriptions — but it arrives as a side effect,
-       so the two must ship together with the consumer surfaces migrated.
-
-       Whether it regresses anything LIVE depends on a fact recorded only as a
-       code comment below: the 2026-07-22 audit found shopSettings holding 0
-       documents and posPayments 0 rows, which would mean those buyers already
-       fail with "credentials not configured" and this only changes the message.
-       That has NOT been re-verified. Count both collections before deploying.
-       Its successor, payment-config.js resolveCollectionRoute (CENTRAL_MOR),
-       inherits the same binding. */
-    const { _assertSellAuthority: _assertDarajaSellAuthority } =
-      require('./pos-zero-friction')._internal;
-    await _assertDarajaSellAuthority(request.auth, String(sellerUid),
-      'initiate an M-Pesa payment for this merchant');
-
     /* Rate limit: max 20 STK pushes per caller per hour (prevents phone-spam abuse) */
     const _rl_cutoff = new Date(Date.now() - 3600000);
     const _rl_snap   = await db.collection("auditLogs")
