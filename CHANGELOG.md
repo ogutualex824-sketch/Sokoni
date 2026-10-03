@@ -1,3 +1,41 @@
+## [2026-10-03] - Merchant V2 provider session + group gate — one shell for merchants AND providers (SHELL half; NOT deployed)
+
+**Owner decision (2026-10-03, via sokoni-b2): "Provider mode in merchant-v2".** This is the shell half; the Marketing
+module (`sokoni-merchant-mktpro.js`, `mkt-*` routes, group *Marketing services*) is sokoni-b2's separate branch.
+
+**DEPLOY DEPENDENCIES:** (1) sokoni-5b's P0 approval fix (*approval needs server evidence*, `0cb93bd` with `7db4c76`,
+`hotfix/approval-authority-on-c7e26b6`) must be LIVE before `businessWorkspace` is relied on for anything security-
+relevant; (2) the `marketing` / `marketingCategories` keys exist only on b2's server line (`e4f9b7d`,
+`feat/tech-taxonomy-on-13f74f3`) — until deployed the key is absent and the marketing group stays hidden (fail closed).
+Merchant sessions do not depend on either.
+
+- **Provider session (`merchant-v2.html`):** shop (owner or employee) → merchant session, unchanged (`S.session='merchant'`).
+  No shop + `providers/{uid}` → provider session: ONE `providerDispatch {op:'businessWorkspace'}` via `_callable`
+  (App Check); `S.capabilities` from the server answer only (`sokoni-merchant-session.js`): `marketing` iff
+  `answer.marketing === true` (strict), `module:<k>` for AVAILABLE modules only on a routed answer with
+  `approval.state === 'VALID_APPROVAL'`. Refused/malformed → `[]` + "Your provider workspace isn't available yet —
+  <server reason>." Header name from `providers/{uid}` (read-only) or the email; never a placeholder.
+  `S.workspace.marketingCategories` exposed read-only. Neither → existing no-shop state.
+- **Route key `sessions`** (`sokoni-merchant-routes.js`): absent = `['merchant']`. Provider-capable: `messages`, `home`,
+  `signout` only. Navigation to a non-mounted route → named refusal panel, no fallback. `validate()` learns the key.
+- **Group key `requires`** on MORE_GROUPS: group shown/navigable only when `can(requires)`; fails closed; both
+  sessions. `validate()`: non-empty string; a gated route may not appear ungated elsewhere (group, bottom nav,
+  Settings links). New pure `mountRefusal(id, session, can)` is the one decision for sidebar, bottom nav, palette, go().
+- **Gaps (left merchant-only, for b2/2f):** Payments/Financial Center, Plan, Settings, Disputes, KRA Tax, Reviews (no
+  route), Dashboard — each needs a shop or is merchant-shaped. Details: `docs/MERCHANT_V2_TARGET_ARCHITECTURE.md`.
+- **Tests:** new `scripts/test-merchant-provider-session.js` 75/0 — VM over the real shell source + fake Firestore/
+  callables/DOM; negative controls X-a (merchant-only route mounted for provider → N3 red), X-b (marketing from client
+  providers fields → S6 red), X-c (gate fails open on error → G4 red), X-d (truthy non-boolean marketing → M3 red).
+  Re-run unchanged: test-merchant-routes 65/0, test-mv2-1-sidebar 14/0, test-merchant-v2-panels 20/0,
+  test-merchant-entry 59/0, test-merchant-exit-contract 18/0, test-merchant-greeting 34/0, test-merchant-identity-chain
+  23/0 (3 unproven), test-merchant-capability 44/2 (the 2 failures are PRE-EXISTING on e81d80a, identical before/after).
+- **Browser certification QUEUED** (RAM floor): provider-only sign-in, notice, refusal panel, phone layout;
+  `test-merchant-v2-modules` (browser-only).
+- **Database / API / security:** no schema, rules or functions change; hosting only. Security: a provider can mount
+  no shop tool; capability never derived from client-writable fields; group gate fails closed.
+- **Files:** `merchant-v2.html`, `sokoni-merchant-routes.js`, `sokoni-merchant-session.js` (new),
+  `scripts/test-merchant-provider-session.js` (new), `docs/MERCHANT_V2_TARGET_ARCHITECTURE.md`, `CHANGELOG.md`.
+
 ## [2026-10-03] - setShopAvailability — Merchant V2 schedule saves through the server (no browser write; NOT deployed)
 
 **DEPLOY PRECONDITION (hard):** requires functions: setShopAvailability live (verify with a functions list before the hosting deploy).

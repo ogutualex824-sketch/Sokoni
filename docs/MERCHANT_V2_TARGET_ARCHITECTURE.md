@@ -169,3 +169,87 @@ Functions emulators). It **refuses** (exit 2) unless every emulator host is loca
 
 Exit: 0 pass · 1 fail · 2 refused · 3 blocked rows only. Fixture is a salon with a fee-0 service. **Paid Education and
 electronics receipts stay OFF** (owner) — the suite never enables or test-enables them.
+
+## Session model: one shell for merchants AND providers (owner, 2026-10-03)
+
+Owner decision: **"Provider mode in merchant-v2"** — one shell, two session kinds. This section is the SHELL half;
+the Marketing module (`sokoni-merchant-mktpro.js`, `mkt-*` routes, group *Marketing services*) is sokoni-b2's, on a
+separate branch. Related: [[NAVIGATION_CONTRACT]], [[MERCHANT_ROUTE_MATRIX]], [[CAPABILITY_AUTHORITY_READ_MODEL]].
+
+### Resolution order (`resolveShop` → `resolveProviderSession`, `merchant-v2.html`)
+
+1. **Shop resolves** (`shops/{uid}`, else `shopEmployees/{uid}.shopOwnerId`) → `merchantIdentity({shopId})` →
+   **merchant session**, exactly as before (`S.session = 'merchant'`; capabilities = merchantIdentity's list).
+   A shop always wins — `providers/{uid}` is never read and `businessWorkspace` is never called.
+2. **No shop, `providers/{uid}` exists** → **provider session** (`S.session = 'provider'`). The doc is read ONLY to
+   learn that the account is a provider and its display name (`name` / `businessName` / `displayName`). Its fields are
+   owner-writable and are **never** a source of capability. One call: `providerDispatch {op:'businessWorkspace'}`
+   through the shell's `_callable` path (App Check attested). The answer is mapped by `sokoni-merchant-session.js`.
+3. **Neither** → the existing no-shop state, unchanged (`S.session = null`, `S.shopError = 'no-shop-document'`).
+   A failed `providers/{uid}` read also stays here (`S.providerError`) — never a provider session on a guess.
+
+`S.session` is `null` while resolving and in the no-shop state; the contract treats `null` as the merchant shell, so
+nothing about a resolving, merchant, or no-shop session changed.
+
+### Server answer contract → `S.capabilities` (`SokoniMerchantSession.mapWorkspace`)
+
+`businessWorkspace` (functions/business-workspace.js `workspaceFor` + the handler) answers
+`{ found, state, reason, message, label, category, route, modules:{key:{state,reason}}, approval:{state}, serviceCapabilities, marketing, marketingCategories }`.
+
+| Answer | Capability | Condition |
+|---|---|---|
+| `marketing === true` | `marketing` | **strict boolean only** — missing, `'true'`, `1`, `{}` grant nothing. Computed by sokoni-b2's server (`e4f9b7d`): `applicationDecisions/marketing_{uid}.approvedCategories` ∩ the provider listing, fail closed; a self-written `providers.marketing*` yields `false`. |
+| `modules[k].state === 'AVAILABLE'` | `module:<k>` | only when `state === 'AVAILABLE'` (a routed answer) **and** `approval.state === 'VALID_APPROVAL'`. A holding answer's AVAILABLE overview/settings grant nothing. |
+| `capabilities: [...]` (future) | each well-formed string | same approval gate; `'marketing'` in this list is ignored — only the boolean grants it. |
+| `marketingCategories` | — | exposed read-only as `S.workspace.marketingCategories` (frozen; empty unless `marketing === true`). |
+
+`module:` is a namespace so a provider module key (`modules.marketing` is the provider's OWN promotion module,
+AVAILABLE for every approved provider) can never collide with a merchant capability (`sell`) or a group gate
+(`marketing` = approved to SELL marketing services). Refused / malformed / unavailable → `S.capabilities = []` and
+`S.sessionNotice = "Your provider workspace isn't available yet — <server reason>."`, shown above every surface
+(`#session-notice`, `role=status`). Header: provider display name, else the account email — never a placeholder.
+
+**Trust dependency.** The approval half is trustworthy only once sokoni-5b's P0 (*approval needs SERVER evidence*,
+`0cb93bd`, shipped with `7db4c76` on `hotfix/approval-authority-on-c7e26b6`) is live. Until then nothing security-
+relevant may rely on it — every operation behind a module is still refused by its own server gate (C2b
+`assertModule`). The `marketing` key exists only on b2's server line; until it deploys the key is absent and the
+marketing group stays hidden (fails closed).
+
+### Route key `sessions` (sokoni-merchant-routes.js)
+
+`sessions: ['merchant'] | ['provider'] | ['merchant','provider']` — **absent = `['merchant']`**, so every route that
+predates provider mode stays merchant-only without being edited (POS, Sell, Inventory, Products, Devices, Staff,
+Orders, Settings, Plan, Payments, Dashboard… can never mount for a provider by omission). `validate()` accepts only a
+non-empty array of `'merchant'|'provider'` without repeats. Provider-capable today (inspected, conservative):
+
+| Route | Why |
+|---|---|
+| `messages` | participant-scoped through `messagesDispatch`; ctx SELLER_UID only; the module refuses only `not_signed_in` and never reads `S.activeShopId`. |
+| `home` (exit) | leaving for the marketplace needs no shop. |
+| `signout` (exit) | every session must be able to end itself. |
+
+**Left merchant-only (gaps for b2/2f):** Payments/Financial Center (ledger is `sellerPayments`; wallet withdraw is
+`requestSellerPayout` + merchant entitlements — providers use `providerGetEarnings`/`providerRequestPayout`);
+Plan (`plans.html` = merchant `subGetStatus/subActivate`; providers use `providerSelectPlan`); Settings (a shop hub:
+business profile, devices, delivery); Disputes (`getSellerDisputes`, order-scoped, bookings not covered); KRA Tax
+(account-scoped and would work, but `etimsRegisterSeller` is seller-shaped — needs an owner decision); Reviews (no
+merchant-v2 route exists; providers have `providerGetReviews`); Dashboard (shop KPIs).
+
+### Group key `requires` (MORE_GROUPS)
+
+`{ key, label, requires:'<capability>', ids:[...] }` — the group's heading and routes appear, and its routes are
+navigable, only when `can(requires)` is `true`. Fails **closed**: no capabilities (resolving, refused, error) → hidden.
+Works in both sessions. `validate()`: `requires` must be a non-empty string; a gated route must not also appear
+ungated elsewhere (another group, the bottom nav, the Settings hub links; PRIMARY_ORDER is excluded by tier).
+
+### One mount decision
+
+`SokoniMerchantRoutes.mountRefusal(id, session, can)` → `null` or `'unknown-route' | 'session:<s>' | 'requires:<cap>'`.
+The shell's sidebar, bottom nav, palette AND `go()` all ask it. A refused navigation renders a named refusal panel
+(`data-why`) — never another destination. Exception, by design: when the shell's own DEFAULT route (no hash asked for)
+is not mountable once a provider session lands, it lands on the first mountable sidebar destination — a default is not
+a request. A gated deep link refused while capabilities were `[]` is re-evaluated when the session lands. The nav is
+re-projected on session events but rebuilt only when the mountable set changed, so a merchant's nav is never touched.
+
+Tests: `scripts/test-merchant-provider-session.js` (VM over the real shell source; negative controls X-a…X-d).
+Browser certification (real sign-in as a provider-only account; notice rendering; phone layout) is **QUEUED** (RAM floor).
