@@ -16,7 +16,7 @@ if (process.env.SABOTAGE) {
     ['D2', 'application-lifecycle.js', 'if (outside.length) throw', 'if (false) throw'],
     ['D4', 'application-lifecycle.js', 'marketingCategories: approvedCats,', 'marketingCategories: requested,'],
     ['R1', 'application-lifecycle.js', "} else if (app.hub === 'marketing' && app.applicationType === 'marketing') {", "} else if (false) {"],
-    ['R2', 'application-lifecycle.js', '&& !_mktRetract) {', ') {'],
+    ['R2', 'application-lifecycle.js', "const _mktRetract = app.hub === 'marketing' && app.applicationType === 'marketing' && !approved;", 'const _mktRetract = false;'],
     ['L1', 'marketing-hub.js', 'uid: id, name: _s(p.name, 160),', 'uid: id, phone: p.phone, name: _s(p.name, 160),'],
     ['A2', 'shared/marketing-taxonomy.js', "specialist: { label: 'Specialist (one service)', minCategories: 1, maxCategories: 1 }", "specialist: { label: 'Specialist (one service)', minCategories: 1, maxCategories: 12 }"],
     ['A6', 'marketing-hub.js', 'if (c && LIVE.indexOf(st) >= 0) throw', 'if (false) throw'],
