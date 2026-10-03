@@ -150,3 +150,7 @@ Admin raw writes are unchanged: everything except `business`, which stays server
 
 Suite: `scripts/zz-test-provider-trust.js` (PT-R1/R2, PT-C*, PT-D-* one row per key, PT-S*, PT-R6a–c, PT-X1). **EMULATOR PENDING.** Baseline run against served f259c0b5: the PT-D rows must fail there.
 **Open for 5b's slice:** the owner `businesses` update `hasOnly([...,'category',...])` still lets an owner relabel `businesses.category`. Capability reads `business`, which is server-only. Whether the label must also be locked is 5b's call under item 1.
+
+## 2026-10-03: Car Hub C2, `trackingSubscriptions` admin-only
+
+The owner could write their own `plan` / `vehicleLimit` (sokoni-tracking.js `saveSubscription`), which meant free self-activation of paid tracking tiers. Now `allow write: if isAdmin()`; owner read is unchanged. No server writer exists yet: a plan activates only through a verified IntaSend payment plus canonical subscription activation (sub-billing, Car Hub C6). The Car Hub page stops calling `saveSubscription` (C1b). Suite `scripts/zz-test-tracking-subscription.js` (TS-*), **EMULATOR PENDING**. Baseline f259c0b5: the TS-D rows must fail there.

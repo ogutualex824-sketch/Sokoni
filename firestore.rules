@@ -2873,8 +2873,9 @@ service cloud.firestore {
   }
   match /trackingSubscriptions/{uid} {
   allow read:   if isAuthed() && (request.auth.uid == uid || isAdmin());
-  allow write:  if isAuthed() && request.auth.uid == uid
-  && !request.resource.data.keys().hasAny(['adminOverride','freeTrial']);
+  /* 2026-10-03 Car Hub C2: the owner wrote their OWN plan / vehicleLimit (sokoni-tracking.js saveSubscription) — free
+     self-activation of paid tracking tiers. No server writer exists yet; a plan becomes active only through a verified
+     IntaSend payment + canonical subscription activation (sub-billing, C6). Until then admin-only. */
   allow write:  if isAdmin();
   }
   match /vehicleServiceHistory/{recordId} {

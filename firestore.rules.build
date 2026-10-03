@@ -2774,8 +2774,6 @@ service cloud.firestore {
   }
   match /trackingSubscriptions/{uid} {
   allow read:   if isAuthed() && (request.auth.uid == uid || isAdmin());
-  allow write:  if isAuthed() && request.auth.uid == uid
-  && !request.resource.data.keys().hasAny(['adminOverride','freeTrial']);
   allow write:  if isAdmin();
   }
   match /vehicleServiceHistory/{recordId} {
