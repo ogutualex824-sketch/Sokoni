@@ -346,3 +346,19 @@ authority. The combined candidate already locked `business`, `approvedAt` and `s
 `_noIndex`, and the marketing category fields. The owner update path now also calls `noAdminFields()`. PT-D rows exist per
 key, and PT-C rows cover the create path. **EMULATOR PENDING.** Like the applications P0, this could join the served-based
 hotfix if the owner rates it P0; today it rides the combined release.
+
+## 2026-10-03 P0-4: provider approval fields in the SERVED-based HOTFIX (owner: "treat this as P0")
+
+The hotfix file now carries FIVE narrow fixes as ONE rules release: Jobs ×3, the construction open-RFQ PII fix, the
+application decision fields (P0-1) and this one. Its `providers` block:
+- **Create:** none of `providerApprovalKeys()`: `approvalDecision`, `approvedBy`, `approvedAt`, `adminApproved`, `commissionRate`,
+  `business`, `education`, `discovery`, `_noIndex`, the marketing categories, `verified`, `suspended`, `approved`. Status may be
+  only `pending`.
+- **Owner update:** now calls `noAdminFields()` and touches none of those keys (status included).
+
+The fuller provider trust lock (ratings, badges, healthcare / legal fallbacks…) stays in the combined release. The diff
+against served is 74 lines. Suite `scripts/zz-test-provider-approval-hotfix.js` (PA-C-*, PA-U-* per key, PA-X1 refusal
+overwrite, PA-X2 self-commission, PA-X3 role, controls PA-C0 / PA-P1 / PA-A1); run it against BOTH files. **EMULATOR PENDING.**
+Owner release order: P0-1 application lock → P0-2 authoritative approval record → P0-3 provider service-function check
+(sokoni-5b, server) → P0-4 these locks → P0-5 focused break regression → deploy → verify the active ruleset → replay
+the forged approvals → audit existing provider records.

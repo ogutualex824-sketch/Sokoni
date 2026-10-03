@@ -225,19 +225,29 @@ service cloud.firestore {
   match /invitations/{inviteId} {
   allow read:   if isAdmin();
   }
+  /* P0-4 PROVIDER APPROVAL FIELDS (owner 2026-10-03; sokoni-5b found, sokoni-e3 traced): live providerDispatch
+     approval-remediation trusts approvalDecision with no admin check, and the owner path never called noAdminFields —
+     a provider could forge an approval, overwrite an admin's refusal, or set its own commission / category. Locked on
+     create AND update; the owner keeps every unrelated profile edit. (The fuller trust lock rides the combined release.) */
+  function providerApprovalKeys() {
+  return ['status','verified','suspended','approved','approvalDecision','approvedBy','approvedAt','adminApproved','commissionRate',
+  'business','education','discovery','_noIndex','marketingApprovedCategories','marketingDeclinedCategories'];
+  }
   match /providers/{providerId} {
   allow read:   if resource.data.status == 'active' || resource.data.status == 'approved'
   || isAuthed();
   allow create: if isActive() && isAuthed() && request.resource.data.uid == request.auth.uid && noAdminFields()
   && (!request.resource.data.keys().hasAny(['status'])
-  || request.resource.data.status == 'pending');
+  || request.resource.data.status == 'pending')
+  && !request.resource.data.keys().hasAny(providerApprovalKeys().removeAll(['status']));
   allow update: if isAdmin()
   || (isAuthed()
   && resource.data.uid == request.auth.uid
   && uidUnchanged()
+  && noAdminFields()
   && !request.resource.data.diff(resource.data)
   .affectedKeys()
-  .hasAny(['status', 'verified', 'suspended', 'approved']));
+  .hasAny(providerApprovalKeys()));
   allow delete: if isAdmin();
   }
   match /bookings/{bookingId} {
