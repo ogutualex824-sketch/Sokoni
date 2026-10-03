@@ -1,3 +1,17 @@
+## [2026-10-04] — Invoices page on THE canonical invoice; merchant page submits payment CLAIMS
+
+**Owner:** confirmed money only from verified payments; merchant references are claims; read-only admin page; server-side, audited export.
+**Admin page** (`sokoni-invoices-console.js`, AdminOS + Super Admin): reads the canonical `adminInvoicesList` (functions/admin-invoices-list-on-main @ 91ad504).
+- Tabs: all, draft, issued, partially paid, overdue, paid, void, unverified claims, unclassified.
+- Cards: total invoiced, **confirmed paid (verified)**, open balance, overdue balance, **unverified payment claims (not counted as paid)**.
+- Excluded docs (unclassified / not migrated) are reported, never summed. The aging uses open balances.
+- Rows show source, payment (verified vs "Unverified claim — awaiting verification"), balance in cents.
+- The drawer shows the source, transaction link, verified paid, claim reference ("not a verified payment"), audit (created / updated / migrated / pre-migration status) and review flag.
+- **Export calls `adminInvoicesExport`**: complete, audited, no phone or items, and never a dump of the browser's rows.
+**Merchant page** (`finance-invoices.html`): every op now goes through `financeSprintDispatch` (the standalone names it called do not exist in production, so the page could not work). "Mark Paid" is now **"Submit payment reference"**, which records a claim and shows "Payment reference submitted — awaiting verification". Void is offered only while no verified money is held. Statuses: draft / issued / partially paid / paid (verified) / void. The status badge is escaped.
+**Tests:** test-invoices-console 12/0 (SABOTAGE: claims added to confirmed paid → V2 fails); products 18/0; AdminOS honesty 28 · 59 · 147; admit 9; nav 5 / 11 / 62. Browser render NOT run (RAM).
+**Deployment:** NOT deployed. Ships after the server units (financeSprintDispatch 58a7eb8; admin-invoices 91ad504 + indexes + migration).
+
 ## [2026-10-04] — One Invoices page for AdminOS and Super Admin (merchant invoices only)
 
 **Owner:** "same here" (the invoices design). **Scope decision (owner 2026-10-04):** merchant invoices only, the `invoices` store.

@@ -52,7 +52,9 @@
     .inv-total{font-size:20px;font-weight:900;flex-shrink:0}
     .status-badge{display:inline-block;padding:3px 9px;border-radius:20px;font-size:11px;font-weight:800;text-transform:uppercase;letter-spacing:.4px;margin-left:6px}
     .status-draft{background:rgba(255,255,255,.08);color:var(--muted)}
-    .status-sent{background:rgba(0,188,212,.12);color:var(--info)}
+    .status-sent,.status-issued{background:rgba(0,188,212,.12);color:var(--info)}
+    .status-partially_paid{background:rgba(255,193,7,.12);color:#ffc107}
+    .claim-badge{display:inline-block;margin-left:6px;font-size:11px;padding:2px 8px;border-radius:6px;background:rgba(255,193,7,.12);color:#ffc107}
     .status-paid{background:rgba(113,255,0,.12);color:var(--accent)}
     .status-void{background:rgba(244,67,54,.08);color:var(--danger)}
     .overdue-badge{background:rgba(244,67,54,.15);color:var(--danger);border:1px solid rgba(244,67,54,.2);border-radius:20px;font-size:10px;font-weight:800;padding:2px 8px;margin-left:6px}
@@ -126,8 +128,9 @@
     <select id="listStatus">
       <option value="">All Status</option>
       <option value="draft">Draft</option>
-      <option value="sent">Sent</option>
-      <option value="paid">Paid</option>
+      <option value="issued">Issued</option>
+      <option value="partially_paid">Partially paid</option>
+      <option value="paid">Paid (verified)</option>
       <option value="void">Void</option>
     </select>
     <button onclick="_loadInvoices()">Load</button>
@@ -181,7 +184,9 @@
 'use strict';
 (function(){
 var _uid = null, _lineCount = 0;
-function _cf(n){ return firebase.functions().httpsCallable(n); }
+/* The invoice ops live in the financeSprintDispatch service (there are no standalone invoiceSend / invoiceMarkPaid
+   functions in production — calling those names failed). Every op goes through the dispatcher with {op}. */
+function _cf(n){ return function(data){ return firebase.functions().httpsCallable('financeSprintDispatch')(Object.assign({ op: n }, data || {})); }; }
 function _esc(s){ return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
 function _fmt(n){ return 'KES ' + Number(n||0).toLocaleString('en-KE'); }
 function _toast(msg, type){
@@ -293,11 +298,14 @@ window._loadInvoices = function(){
         var overdue = inv.isOverdue ? '<span class="overdue-badge">OVERDUE</span>' : '';
         var actions = '';
         if (inv.status==='draft') actions += '<button class="inv-btn send" onclick="_sendInv(\''+_esc(inv.id)+'\',\''+_esc(shopId)+'\',this)">Send</button>';
-        if (inv.status!=='paid'&&inv.status!=='void') actions += '<button class="inv-btn pay" onclick="_payInv(\''+_esc(inv.id)+'\',\''+_esc(shopId)+'\',this)">Mark Paid</button>';
-        if (inv.status!=='paid'&&inv.status!=='void') actions += '<button class="inv-btn void" onclick="_voidInv(\''+_esc(inv.id)+'\',\''+_esc(shopId)+'\',this)">Void</button>';
+        /* A reference the customer gave is a CLAIM: SOKONI marks an invoice paid only from a verified payment. */
+        if (inv.status!=='paid'&&inv.status!=='void') actions += '<button class="inv-btn pay" onclick="_payInv(\''+_esc(inv.id)+'\',\''+_esc(shopId)+'\',this)">Submit payment reference</button>';
+        /* void only while no verified money is held (the server refuses otherwise) */
+        if (inv.status==='draft'||inv.status==='issued'||inv.status==='sent') actions += '<button class="inv-btn void" onclick="_voidInv(\''+_esc(inv.id)+'\',\''+_esc(shopId)+'\',this)">Void</button>';
+        var claim = (inv.paymentClaim && inv.paymentClaim.status==='unverified') ? '<span class="claim-badge">Payment reference submitted — awaiting verification</span>' : '';
         return '<div class="inv-card'+(inv.isOverdue?' overdue':'')+'">'+
           '<div class="inv-hdr"><div class="inv-info">'+
-          '<div class="inv-num">'+_esc(inv.invoiceNumber)+'<span class="status-badge status-'+inv.status+'">'+inv.status+'</span>'+overdue+'</div>'+
+          '<div class="inv-num">'+_esc(inv.invoiceNumber)+'<span class="status-badge status-'+_esc(String(inv.status||'').replace(/[^a-z_]/g,''))+'">'+_esc(String(inv.status||'').replace(/_/g,' '))+'</span>'+overdue+claim+'</div>'+
           '<div class="inv-client">'+_esc(inv.clientName)+(inv.clientEmail?' &bull; '+_esc(inv.clientEmail):'')+'</div>'+
           '<div class="inv-meta">'+(dueStr?'Due '+dueStr:'No due date')+'</div>'+
           '</div><span class="inv-total">'+_fmt(inv.total)+'</span></div>'+
@@ -314,11 +322,11 @@ window._sendInv = function(id, shopId, btn){
     .catch(function(e){ _toast(e.message,'error'); btn.disabled=false; btn.textContent='Send'; });
 };
 window._payInv = function(id, shopId, btn){
-  var ref = prompt('Payment reference (M-Pesa transaction ID, etc.):');
+  var ref = prompt('Payment reference the customer gave you (e.g. an M-Pesa code).\n\nThis is recorded as a claim — SOKONI marks the invoice paid only once the payment is verified.');
   if (!ref) return;
   btn.disabled=true;
-  _cf('invoiceMarkPaid')({ invoiceId:id, shopId:shopId, paymentRef:ref, paymentMethod:'mpesa' })
-    .then(function(){ _toast('Marked as paid!','success'); _loadInvoices(); })
+  _cf('invoiceSubmitPaymentClaim')({ invoiceId:id, shopId:shopId, paymentRef:ref, paymentMethod:'mpesa' })
+    .then(function(r){ _toast((r && r.data && r.data.message) || 'Payment reference submitted — awaiting verification','success'); _loadInvoices(); })
     .catch(function(e){ _toast(e.message,'error'); btn.disabled=false; });
 };
 window._voidInv = function(id, shopId, btn){
