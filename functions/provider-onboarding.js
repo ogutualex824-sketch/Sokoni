@@ -451,8 +451,10 @@ exports._h.providerPublish = _h.providerPublish = async (req) => {
     /* Booking fee projected onto the flat rate/rateType the directory card reads. */
     ...(_pubRate || {}),
     /* Verification and featuring are admin decisions and are never granted by
-       the act of publishing. merge:true leaves an existing admin value alone. */
-    rating: 0, reviewCount: 0, jobsCompleted: 0,
+       the act of publishing. merge:true leaves an existing admin value alone.
+       Tech Hub 4N (2026-10-03): the counters are seeded on FIRST CREATION only — a re-publish used to overwrite a
+       provider's real rating / reviewCount / jobsCompleted with 0. */
+    ...(pubSnap.exists ? {} : { rating: 0, reviewCount: 0, jobsCompleted: 0 }),
     publishedAt: _ts(), updatedAt: _ts(),
   }, { merge: true });
 
@@ -482,6 +484,32 @@ exports._h.providerPublish = _h.providerPublish = async (req) => {
      is idempotent and re-stamps providerId, for everyone else claims are left untouched. */
   if (approved) {
     await _auth().setCustomUserClaims(uid, { ...(await _auth().getUser(uid)).customClaims, provider: true, providerId });
+  }
+
+  /* ── Tech Hub 4N: the wizard submits an APPLICATION to the ONE review queue ─────────────────────────────────────
+     After OB-1 a first publish creates the registry row CLOSED (pending_approval) — but nothing put it in front of AdminOS,
+     so an onboarded provider could wait forever. Publishing now creates / refreshes applications/{uid}--provider (the
+     deterministic id business-apply uses), carrying the job title AND the existing intake business id it maps to
+     (shared/profession-intake.js), so approval → category → capabilities → dashboard. A DECIDED application is never
+     reopened or overwritten here (approved / rejected / suspended stay as AdminOS left them); only the descriptive fields
+     of a still-open one are refreshed. The lifecycle trigger only normalises a pending application — it grants nothing. */
+  {
+    const PI = require('./shared/profession-intake');
+    const appRef = _db().collection('applications').doc(uid + '--provider');
+    const appSnap = await appRef.get();
+    const prev = appSnap.exists ? appSnap.data() : null;
+    const OPEN = ['pending', 'draft', 'info_requested', 'submitted'];
+    if (!prev || OPEN.includes(String(prev.status || 'pending'))) {
+      const title = _san(draft.profile.subcategory || draft.profile.category, 100);
+      const businessId = PI.businessIdForProfession(draft.profile.subcategory) || PI.businessIdForProfession(draft.profile.category);
+      batch.set(appRef, {
+        uid, applicationId: uid + '--provider', role: 'provider', type: 'provider', source: 'provider-onboarding',
+        category: businessId || '', categoryLabel: title, profession: title,
+        name: _pubName, location: _pubLoc, city: _pubCity, providerId,
+        ...(prev ? {} : { status: 'pending', submittedAt: _ts() }),
+        updatedAt: _ts(),
+      }, { merge: true });
+    }
   }
 
   await batch.commit();

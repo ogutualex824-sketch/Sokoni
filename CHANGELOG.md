@@ -1,3 +1,22 @@
+## [2026-10-03] — Tech Hub slice 4N (server): provider-onboarding publishes INTO the one application queue — NOT deployed
+
+- **OB-1 hotfix ported** (c853665 from hotfix/provider-publish-selfgrant, built from the deployed archive; owner held its deploy 09-28) onto the capability
+  line as faa2dd9. Publishing writes CONTENT; a first publish creates providers/{uid} CLOSED (pending_approval); the provider claim is granted only if
+  already approved; paid plans are not self-granted. test-provider-publish-hotfix 15/0 here.
+- **Executed proof of the live defect** (BASE=e5eb1d6, the live providerDispatch lineage): a brand-new user's publish becomes status:'active', searchable:true,
+  with no application. That includes the regulated titles the wizard offers (Doctor, Nurse, Dentist, Lawyer, Notary).
+- **4N:** providerPublish now creates / refreshes `applications/{uid}--provider` (the deterministic id business-apply uses) with role provider, the job title
+  (profession / categoryLabel) and the EXISTING intake business id it maps to (new shared/profession-intake.js: Network Engineer → networking,
+  Electrician → electrical, IT Support → it-support, …; every value must be a classified FROM_BUSINESS_ID key; regulated titles unmapped).
+  - A DECIDED application is never reopened or overwritten. The lifecycle trigger only normalises a pending application.
+  - AdminOS approval → provider active → capabilities from that application. The category STAMP onto providers.business remains sokoni-5b's.
+- **Data fix:** re-publishing no longer overwrites providers.rating / reviewCount / jobsCompleted with 0. They are seeded on first creation only.
+- **Tests:** test-provider-onboarding-intake 6/0 (BASE faa2dd9 and e5eb1d6 both fail 6/6). hotfix 15/0, suspend-restore 8/0, badge 8/0, leads 12/0,
+  business-workspace 30/0, service-capabilities 15/0.
+- **Owner-facing:** this closes the self-publish bypass that is LIVE today. Providers already self-published as active before this ships keep their status.
+  A read-only census of them (no application, status active) is recommended before release; no writes.
+- **Deploy unit:** providerDispatch, inside sokoni-5b's ONE release.
+
 ## [2026-10-03] — Tech Hub slice 4P (server): the public Verified badge is a projection of admin-decided facets — NOT deployed
 ## [2026-09-28] - HOTFIX: providerDispatch self-grant — publishing no longer activates a provider; paid plans are no longer self-granted
 
