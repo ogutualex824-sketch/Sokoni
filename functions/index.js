@@ -13471,3 +13471,8 @@ exports.fitnessMembershipQr      = _fitnessAttendance.fitnessMembershipQr;
 exports.fitnessCheckIn           = _fitnessAttendance.fitnessCheckIn;
 exports.fitnessCompleteSession   = _fitnessAttendance.fitnessCompleteSession;
 exports.fitnessCorrectAttendance = _fitnessAttendance.fitnessCorrectAttendance;
+/* ── Fitness membership CREATE (owner 2026-10-03: offers live IN the gym's providerServices; NOT deployed):
+   fitnessCreateMembership({serviceId}) prices from the server-read offer (shared/membership-offer.js), requires an
+   approved, active fitness_studio provider, and snapshots price/months onto providerMemberships (single-flight per
+   buyer+service). The client then calls createPaymentIntent({purpose:'fitness_membership', membershipId}). */
+exports.fitnessCreateMembership  = require('./fitness-membership-create').fitnessCreateMembership;
