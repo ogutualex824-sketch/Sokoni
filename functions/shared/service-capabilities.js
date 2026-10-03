@@ -70,6 +70,11 @@ const FROM_BUSINESS_ID = Object.freeze({
   /* Electrical (Tech Hub slice 4, sokoni-b2): category 'trades' (business-category). Service-mode capabilities only —
      no trade vertical capability exists, and none is invented here. */
   'electrical':         ['FIELD_SERVICE', 'ONSITE_SUPPORT', 'QUOTE_REQUEST', 'DIRECT_BOOKING'],
+  /* Legal (Legal Hub L9, sokoni-b2): applications/legal_{uid} carries category 'legal'. A VALID AdminOS approval switches
+     on quotes for larger matters (leads → quote → canonical booking) and direct consultation booking. Being BOOKABLE
+     still needs the Legal Verification Authority (admin + current LSK): leadCreate / bookingCreateService refuse a
+     provider that is not active. No Legal vertical capability is invented. */
+  'legal':              ['QUOTE_REQUEST', 'DIRECT_BOOKING'],
   'restaurant':         ['FOOD_MENU', 'KITCHEN', 'DRINKS'],
   'fast-food':          ['FOOD_MENU', 'KITCHEN', 'DRINKS'],
   'cafe':               ['FOOD_MENU', 'KITCHEN', 'DRINKS'],

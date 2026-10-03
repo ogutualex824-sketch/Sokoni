@@ -32,6 +32,13 @@ if (!SC) { ck('A-0', false, 'shared/service-capabilities.js exists'); } else {
   ck('A-3', r.capabilities.includes('DEVICE_REPAIR'), 'business ids are matched exactly after normalisation (case / spacing), as business-category does');
   r = SC.compose([V('a1', 'salon'), V('a2', 'not-a-business')]);
   ck('A-4', r.capabilities.length === 0 && r.ignored.every((x) => x.why === 'no_capability_mapping'), 'an id with no capability mapping grants none (its category still routes as before)', r);
+  { /* A-8 — Legal (L9): a valid legal approval → quotes + direct booking; an invalid one → nothing */
+    const L1 = SC.compose([V('legal_u1', 'legal')]);
+    const L2 = SC.compose([Object.assign(V('legal_u2', 'legal'), { valid: false, why: 'self_decision' })]);
+    const mods = SC.modulesFor(L1.capabilities, 'provider');
+    ck('A-8', JSON.stringify(L1.capabilities) === JSON.stringify(['DIRECT_BOOKING', 'QUOTE_REQUEST']) && mods.includes('leads') && mods.includes('quotes') && mods.includes('bookings')
+      && L2.capabilities.length === 0, 'Legal: a VALID approval of a legal application switches on leads/quotes + bookings; a self/invalid decision switches on nothing', { L1, L2, mods });
+  }
   ck('A-5', Object.values(SC.FROM_BUSINESS_ID).every((caps) => caps.every(SC.isCapability)) && Object.keys(SC.MODULES_OF).every(SC.isCapability),
     'every mapped capability and every module rule names a real capability');
   ck('A-6', SC.modulesFor(['DEVICE_REPAIR', 'WORKSHOP'], 'provider').join() === 'diagnostics,repairs,supportedDevices' && SC.modulesFor(['FOOD_MENU', 'BAKERY', 'KITCHEN'], 'merchant').join() === 'kitchen,menu',

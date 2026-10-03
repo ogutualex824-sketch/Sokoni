@@ -1,3 +1,9 @@
+## [2026-10-03] — Legal Hub L9 (capability line): legal applications switch on quotes + direct booking — NOT deployed
+
+- **functions/shared/service-capabilities.js:** legal → QUOTE_REQUEST + DIRECT_BOOKING. Only a VALID AdminOS approval composes (self-decided or invalid ones are ignored). Booking or receiving leads still needs an active provider, which the Legal Verification Authority grants only with a current LSK check.
+- **Effect:** a verified lawyer can receive project requests and send quotes. An accepted quote becomes a canonical booking at the quoted amount, then IntaSend, hold, PIN and one 5%. This uses the service-leads engine (Tech 4F); no Legal quote system is built.
+- **Tests:** test-service-capabilities A-8 (16/0; BASE=ed7cde0 fails A-8), test-business-workspace 30/0, sabotage-service-capabilities 7/7.
+
 ## [2026-10-03] — Messages: B2B RFQ conversations (for sokoni-f3 b2b-rfq 38ab5a8) — NOT deployed
 
 - **functions/messages.js:**
