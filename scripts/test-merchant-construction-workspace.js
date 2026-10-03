@@ -22,8 +22,13 @@
         without shops.ownerId · buttons per booking status (active: complete only) · Unpaid copy, never M-Pesa · no pay step
         · Equipment from rentalOwnerListings (hasMore → 'first 200 — more exist', N+) · the direct read ONLY on an
         'Unknown commerce operation' refusal · HttpsError reasons verbatim · create / confirm / availability / seller cancel
-     H  honest: Projects (Work engine) · RFQs / Quotes (B2B release, or the rfqs route when present) · Services ·
-        Verification (status as recorded; "Verified" only when verified === true; staff)
+     H  honest: Projects (Work engine) · RFQs / Quotes (B2B release, or the rfqs route when present) · Services · staff
+     V  verification (owner invariant 2026-10-03): applications.status is "Application progress" workflow text only;
+        "Approved" ONLY for businessWorkspace approval.state 'VALID_APPROVAL' AND modules.services AVAILABLE;
+        verified:true / adminApproved / approvedBy / status approved alone → never approved; one call per page load
+     RO read-only (P0-F): sokoni-edit-authority.js over the same answer — claim deactivated, approval not valid,
+        editable false, editable true overriding the interim signals, every ownerState, missing answer, staff;
+        controls disabled with "Your account can't make changes right now (<reason>)" and every action refuses
      S  safety: no wa.me / tel: / mailto: / WhatsApp · escaping · no Firestore write API in the module · dispatch ops
         limited to the six seller rental ops
      G  registry + shell: ten con-* routes, Construction group appended LAST, validate() clean, MODULES wiring, no
@@ -37,6 +42,9 @@
           N6 Cancel offered on paid_held                      → R14
           N7 "Paid" derived from a non-status field           → R12
           N8 an M-PESA default payment method                 → R13
+          N9 "Approved" derived from applications.status      → V1   (control a)
+          N10 read-only fails OPEN on a missing answer        → RO6  (control b)
+          N11 a badge from verified === true                  → V3
    node scripts/test-merchant-construction-workspace.js */
 'use strict';
 const fs = require('fs'), path = require('path'), vm = require('vm'), Module = require('module');
@@ -45,6 +53,7 @@ const read = (f) => fs.readFileSync(path.join(ROOT, f), 'utf8');
 const SRC = read('sokoni-merchant-construction.js');
 const SHELL = read('merchant-v2.html');
 const SEC = read('security.js');
+const EDIT_SRC = read('sokoni-edit-authority.js');
 const escAt = SEC.indexOf('function escapeHTML(str){');
 const ESC_SRC = SEC.slice(escAt, SEC.indexOf('\n  }', escAt) + 4);
 const dec = (s) => String(s).replace(/&#x27;/g, "'").replace(/&#x2F;/g, '/').replace(/&#x60;/g, '`').replace(/&quot;/g, '"').replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&#39;/g, "'").replace(/&amp;/g, '&');
@@ -201,6 +210,7 @@ function load (src) {
   ctx.window = ctx; ctx.globalThis = ctx;
   vm.createContext(ctx);
   vm.runInContext(ESC_SRC + '\nwindow.escapeHTML = escapeHTML;', ctx, { filename: 'security.js#escapeHTML' });
+  vm.runInContext(EDIT_SRC, ctx, { filename: 'sokoni-edit-authority.js' });
   vm.runInContext(src, ctx, { filename: 'sokoni-merchant-construction.js' });
   return ctx;
 }
@@ -232,9 +242,13 @@ async function change (host, attr, value) { await host._h.change({ target: { get
 /* an empty but WORKING fixed server: no listings, no bookings */
 const EMPTY = async (p) => (p.op === 'rentalOwnerListings' ? { listings: [], hasMore: false } : { bookings: [] });
 const lead = (id, status, extra) => Object.assign({ id, buyerUid: 'buyer-' + id, sellerUid: 'owner1', productId: 'p-' + id, productName: 'Cement 50kg', buyerName: 'Wanjiru', message: 'Need 40 bags', createdAt: { seconds: 1790000000 + id.length }, status }, extra || {});
+/* businessWorkspace answers (sokoni-5b f85039a approval + 1a5c9e5 ownerState/editable) */
+const WS = (extra) => Object.assign({ found: true, state: 'AVAILABLE', approval: { state: 'VALID_APPROVAL' }, ownerState: 'active', editable: true,
+  modules: { overview: { state: 'AVAILABLE' }, services: { state: 'AVAILABLE' }, quotes: { state: 'AVAILABLE' } } }, extra || {});
+const OLD_WS = (extra) => { const a = WS(extra); delete a.ownerState; delete a.editable; return a; };
 function mkCtx (V, view, over) {
   const o = over || {};
-  const rec = { writes: [], readLeads: 0, readEquipment: 0, go: [], chat: [] };
+  const rec = { writes: [], readLeads: 0, readEquipment: 0, go: [], chat: [], ws: 0, dispatched: [] };
   const win = { SokoniInbox: o.inbox === undefined ? undefined : o.inbox };
   const ctx = {
     view, window: win,
@@ -245,7 +259,9 @@ function mkCtx (V, view, over) {
     writeLead: (id, p) => { rec.writes.push({ id, p, keys: Object.keys(p), respondedIsToken: p.respondedAt === V.SokoniMerchantConstruction.SERVER_TIME }); return o.writeErr ? Promise.reject(o.writeErr) : Promise.resolve(); },
     readEquipment: () => { rec.readEquipment++; return o.equipErr ? Promise.reject(o.equipErr) : Promise.resolve(o.equip || []); },
     readApplications: () => (o.appsErr ? Promise.reject(o.appsErr) : Promise.resolve(o.apps || [])),
-    dispatch: o.dispatch || (() => Promise.reject({ code: 'functions/internal' })),
+    dispatch: (p) => { rec.dispatched.push(p && p.op); return (o.dispatch || (() => Promise.reject({ code: 'functions/internal' })))(p); },
+    readWorkspace: o.noWorkspace ? undefined : () => { rec.ws++; return o.wsErr ? Promise.reject(o.wsErr) : Promise.resolve(o.ws === undefined ? WS() : o.ws); },
+    readClaims: () => (o.claimsErr ? Promise.reject(o.claimsErr) : Promise.resolve(o.claims === undefined ? {} : o.claims)),
     callPlans: () => (o.plansErr ? Promise.reject(o.plansErr) : Promise.resolve({ plans: o.plans || [] })),
     hasRoute: (id) => !!(o.routes || []).includes(id),
     hasModule: (g) => !!(o.modules || []).includes(g),
@@ -493,15 +509,96 @@ async function suite (src, log) {
     { id: 'A2', uid: 'owner1', hub: 'construction', categoryLabel: 'Construction Equipment Rental', status: 'pending', verified: 'yes', createdAt: 1790000001000 },
     { id: 'A3', uid: 'owner1', hub: 'shopping', categoryLabel: 'Electronics', status: 'approved', verified: true }
   ];
-  t = await mountView(V, 'verification', { apps });
-  ck('H5', 'Verification: construction applications only, status as recorded (Approved / Submitted — awaiting review)', /Contractor \/ Builder/.test(text(t.host)) && /Approved/.test(text(t.host)) && /Submitted — awaiting review/.test(text(t.host)) && !/Electronics/.test(text(t.host)), text(t.host));
-  ck('H5', '"Verified" is NOT claimed for status approved, nor for a non-boolean verified field', !/✓ Verified/.test(text(t.host)), null);
-  t = await mountView(V, 'verification', { apps: [Object.assign({}, apps[0], { verified: true })] });
-  ck('H5', '"✓ Verified" appears only when verified === true', /✓ Verified/.test(text(t.host)), null);
+  /* ── V ── the ONE approval answer; status is workflow */
+  const chipOf = (h) => { const m = /data-approval="([a-z_]+)"[\s\S]*?<span class="cw-badge">([^<]*)<\/span>/.exec(h.innerHTML); return m ? [m[1], dec(m[2])] : null; };
+  t = await mountView(V, 'verification', { apps, ws: WS({ state: 'PENDING_APPROVAL', approval: { state: 'PENDING_APPROVAL' }, message: 'Your application is with SOKONI for review.' }) });
+  ck('V1', 'status "approved" is shown ONLY as "Application progress: Review complete" — the page never says Approved while the answer is PENDING', /Application progress: Review complete/.test(text(t.host)) && /Application progress: Submitted — awaiting review/.test(text(t.host)) && !/\bApproved\b/.test(text(t.host)) && JSON.stringify(chipOf(t.host)) === '["not_approved","Not approved yet"]' && /with SOKONI for review/.test(text(t.host)) && !/Electronics/.test(text(t.host)), { chip: chipOf(t.host), tx: text(t.host) });
+  t = await mountView(V, 'verification', { apps: [Object.assign({}, apps[1], { status: 'pending' })], ws: WS() });
+  ck('V2', 'approval.state VALID_APPROVAL AND modules.services AVAILABLE → "Approved" (even with a pending application)', JSON.stringify(chipOf(t.host)) === '["approved","Approved"]', chipOf(t.host));
+  t = await mountView(V, 'verification', { apps: [Object.assign({}, apps[0], { verified: true, adminApproved: true, approvedBy: 'admin1' })], ws: WS({ approval: { state: 'NO_APPROVAL' } }) });
+  ck('V3', 'verified:true + adminApproved + approvedBy + status approved alone → NOT approved, no Verified/Approved badge', JSON.stringify(chipOf(t.host)) === '["not_approved","Not approved yet"]' && !/Verified|\bApproved\b/.test(text(t.host)), { chip: chipOf(t.host), tx: text(t.host) });
+  t = await mountView(V, 'verification', { apps, ws: WS({ modules: { overview: { state: 'AVAILABLE' }, services: { state: 'NOT_APPLICABLE' } } }) });
+  ck('V4', 'VALID_APPROVAL but the services module not AVAILABLE → not approved, says why', chipOf(t.host)[0] === 'not_approved' && /not enabled for this business \(Not Applicable\)/.test(text(t.host)), text(t.host));
+  t = await mountView(V, 'verification', { apps, ws: WS({ approval: { state: 'INVALID_LEGACY_APPROVAL' } }) });
+  ck('V4', 'services AVAILABLE but approval INVALID_LEGACY_APPROVAL → not approved ("renewed — please reapply")', chipOf(t.host)[0] === 'not_approved' && /reapply/.test(text(t.host)), text(t.host));
+  t = await mountView(V, 'verification', { apps, wsErr: { code: 'functions/unavailable' } });
+  ck('V5', 'businessWorkspace fails → approval "—" with the reason and a retry; never approved from the applications', JSON.stringify(chipOf(t.host)) === '["unreadable","—"]' && /could not be checked just now \(unavailable\)/.test(text(t.host)) && !/\bApproved\b/.test(text(t.host)), chipOf(t.host));
+  t = await mountView(V, 'verification', { apps, ws: [] });
+  ck('V5', 'a malformed answer → unreadable, not approved', chipOf(t.host)[0] === 'unreadable', chipOf(t.host));
+  t = await mountView(V, 'verification', { apps, noWorkspace: true });
+  ck('V5', 'shell without readWorkspace → unreadable (not-wired), never approved', chipOf(t.host)[0] === 'unreadable', chipOf(t.host));
+  ck('V6', 'pure approvalOf: only VALID_APPROVAL + services AVAILABLE; module key is "services"; token "VALID_APPROVAL"', M._pure.APPROVAL_MODULE === 'services' && M._pure.VALID_APPROVAL === 'VALID_APPROVAL' &&
+    M._pure.approvalOf({ answer: WS() }).kind === 'approved' && M._pure.approvalOf({ answer: WS({ approval: { state: 'valid_approval' } }) }).kind === 'not_approved' &&
+    M._pure.approvalOf({ answer: { status: 'approved', verified: true, adminApproved: true, approvedBy: 'x', modules: { services: { state: 'AVAILABLE' } } } }).kind === 'not_approved' && M._pure.approvalOf(null).kind === 'checking', null);
+  V.SokoniMerchantConstruction._reset();
+  { const host1 = mkHost(), host2 = mkHost(), host3 = mkHost(); const m1 = mkCtx(V, 'verification', { apps }); const m2 = Object.assign({}, m1.ctx, { view: 'leads' }); const m3 = Object.assign({}, m1.ctx, { view: 'rentals' });
+    M.mount(host1, m1.ctx); await flush(); M.mount(host2, m2); await flush(); M.mount(host3, m3); await flush();
+    ck('V7', 'module: ONE businessWorkspace read shared by the views of a page load', m1.rec.ws === 1, m1.rec.ws); }
+  { const memo = SHELL.slice(SHELL.indexOf('  var _conWs = { uid: null, p: null };'), SHELL.indexOf('  /* Signed ID-token claims'));
+    const calls = []; let failNext = false;
+    const sb = { S: { uid: 'owner1' }, Promise, _callable: (n) => (p) => { calls.push([n, JSON.stringify(p)]); if (failNext) { failNext = false; return Promise.reject({ code: 'functions/unavailable' }); } return Promise.resolve({ data: WS() }); } };
+    vm.createContext(sb); vm.runInContext(memo + ';this.f = _conWorkspace;', sb);
+    await sb.f(); await sb.f(); await sb.f();
+    const one = calls.length === 1 && calls[0][0] === 'providerDispatch' && calls[0][1] === '{"op":"businessWorkspace"}';
+    sb.S.uid = 'other'; failNext = true; await sb.f().catch(() => {}); await flush(); await sb.f();
+    ck('V7', 'shell: _conWorkspace memoises ONE providerDispatch {op:"businessWorkspace"} per uid per page load; a failure is forgotten (retry possible)', one && calls.length === 3, calls); }
   t = await mountView(V, 'verification', { role: 'cashier', apps });
   ck('H5', 'staff → owner-account copy, nothing listed', /belong to the owner/.test(text(t.host)) && !/Contractor/.test(text(t.host)), null);
   t = await mountView(V, 'verification', { apps: [] });
   ck('H5', 'no application → honest "No Construction application" (not a status)', /No Construction application on this account/.test(text(t.host)), null);
+
+  /* ── RO ── read-only (P0-F) */
+  const RO_MSG = /Your account can’t make changes right now \((.+?)\)(?=\s|$)/;
+  const roReason = (h) => { const m = RO_MSG.exec(text(h)); return m ? m[1] : null; };
+  const leadBtns = (h) => buttons(h).filter((b) => b['data-act'] === 'lead-move' || b['data-act'] === 'lead-note');
+  const rentBtns = (h) => buttons(h).filter((b) => /^rental-/.test(b['data-act'] || '') && b['data-act'] !== 'rental-ask-no');
+  const allDisabled = (bs) => bs.length > 0 && bs.every((b) => 'disabled' in b);
+  const noneDisabled = (bs) => bs.length > 0 && bs.every((b) => !('disabled' in b));
+  const roLeads = [lead('r1', 'pending'), lead('r2', 'quote_sent')];
+  t = await mountView(V, 'leads', { leads: roLeads, ws: OLD_WS(), claims: { deactivated: true } });
+  await t.ui._act.moveLead('r1', 'responded'); await t.ui._act.saveNote('r1');
+  ck('RO1', 'claim deactivated (old server, no editable): lead moves + note disabled, banner "(deactivated — reactivate your account)" + /profile.html link, no write reaches the shell', allDisabled(leadBtns(t.host)) && /<textarea[^>]*data-note="r2"[^>]*disabled/.test(t.host.innerHTML) && roReason(t.host) === 'deactivated — reactivate your account' && /href="\/profile\.html"/.test(dec(t.host.innerHTML)) && t.rec.writes.length === 0, { r: roReason(t.host), w: t.rec.writes.length });
+  const rentFixture = { shopId: 'owner1', dispatch: srv.dispatch };
+  t = await mountView(V, 'rentals', Object.assign({ ws: OLD_WS({ approval: { state: 'PENDING_APPROVAL' } }) }, rentFixture));
+  const rb0 = rentBtns(t.host); const firstRental = rb0[0] && rb0[0]['data-id']; const firstAct = rb0[0] && rb0[0]['data-act'];
+  const roBefore = srv.calls.length;
+  for (const k of ['accept', 'decline', 'start', 'confirm-return', 'complete', 'cancel']) await t.ui._act.rentalOp(k, firstRental);
+  await click(t.host, (b) => b['data-act'] === firstAct);
+  ck('RO2', 'approval not VALID_APPROVAL (old server): every rental button disabled (accept/decline/start/return/complete/cancel), reason names the approval, NO rental op dispatched', allDisabled(rb0) && /approval is not valid \(PENDING_APPROVAL\)/.test(roReason(t.host) || '') && srv.calls.slice(roBefore).every((x) => x.op === 'rentalList'), { n: rb0.length, r: roReason(t.host), ops: srv.calls.slice(roBefore).map((x) => x.op) });
+  t = await mountView(V, 'equipment', { shopId: 'owner1', dispatch: srv.dispatch, ws: WS({ ownerState: 'frozen', editable: false }) });
+  const eqB = buttons(t.host).filter((b) => /^(equip-new|listing-)/.test(b['data-act'] || ''));
+  await t.ui._act.createEquip();
+  ck('RO3', 'editable false (frozen): List equipment + Make available / Pause disabled, "(frozen by SOKONI)", create refuses before any dispatch', allDisabled(eqB) && eqB.some((b) => b['data-act'] === 'equip-new') && eqB.some((b) => /^listing-/.test(b['data-act'])) && roReason(t.host) === 'frozen by SOKONI' && !t.rec.dispatched.includes('rentalProductCreate'), { eq: eqB.map((b) => b['data-act'] + ('disabled' in b ? ':d' : '')), r: roReason(t.host) });
+  t = await mountView(V, 'leads', { leads: roLeads, ws: WS({ approval: { state: 'PENDING_APPROVAL' }, editable: true, ownerState: 'active' }), claims: { deactivated: true } });
+  ck('RO4', 'editable true OVERRIDES the interim signals (claim deactivated, approval PENDING): controls enabled, no banner', noneDisabled(leadBtns(t.host)) && roReason(t.host) === null, roReason(t.host));
+  const matrix = [
+    [WS({ ownerState: 'active', editable: true }), null],
+    [WS({ ownerState: 'active', editable: false }), 'your business status does not allow changes yet'],
+    [WS({ ownerState: 'deactivated', editable: false }), 'deactivated — reactivate your account'],
+    [WS({ ownerState: 'suspended', editable: false }), 'suspended'],
+    [WS({ ownerState: 'frozen', editable: false }), 'frozen by SOKONI'],
+    [WS({ ownerState: 'unknown', editable: false }), 'status unknown'],
+    [(() => { const a = WS({ ownerState: 'suspended' }); delete a.editable; return a; })(), 'suspended'],
+    [OLD_WS(), 'status unknown'],
+    [WS({ editable: 'true' }), 'your business status does not allow changes yet'],
+  ];
+  const mBad = [];
+  for (const [ws, want] of matrix) {
+    const tt = await mountView(V, 'leads', { leads: roLeads, ws });
+    const ok = want === null ? (noneDisabled(leadBtns(tt.host)) && roReason(tt.host) === null) : (allDisabled(leadBtns(tt.host)) && roReason(tt.host) === want);
+    if (!ok) mBad.push({ os: ws.ownerState, ed: ws.editable, got: roReason(tt.host) });
+  }
+  ck('RO5', 'matrix: every ownerState (active/deactivated/suspended/frozen/unknown) × editable true/false/missing/"true" → only editable === true enables; reason per ownerState', mBad.length === 0, mBad);
+  t = await mountView(V, 'rentals', Object.assign({ wsErr: { code: 'functions/unavailable' } }, rentFixture));
+  ck('RO6', 'missing answer (businessWorkspace fails): READ-ONLY, "(status unknown)" — fails closed', allDisabled(rentBtns(t.host)) && roReason(t.host) === 'status unknown', { r: roReason(t.host), b: rentBtns(t.host).length });
+  t = await mountView(V, 'rentals', Object.assign({ noWorkspace: true }, rentFixture));
+  ck('RO6', 'shell without readWorkspace: read-only', allDisabled(rentBtns(t.host)), null);
+  t = await mountView(V, 'rentals', Object.assign({ role: 'cashier' }, rentFixture));
+  ck('RO7', 'staff: read-only with the honest staff reason (the answer is the staff member\'s, not the owner\'s)', allDisabled(rentBtns(t.host)) && /not available to staff yet/.test(roReason(t.host) || ''), roReason(t.host));
+  t = await mountView(V, 'leads', { leads: roLeads, ws: WS(), claims: { deactivated: true } });
+  ck('RO8', 'server says editable (active) — the claim is only an interim signal, so controls stay enabled', noneDisabled(leadBtns(t.host)), null);
+  t = await mountView(V, 'overview', { leads: [], equip: [], dispatch: EMPTY, ws: WS({ ownerState: 'frozen', editable: false }) });
+  ck('RO9', 'read-only never touches figures: overview tiles still from the loaded data', [...t.host.innerHTML.matchAll(/<div class="cw-tile"><b>([^<]*)<\/b>/g)].map((m) => dec(m[1])).join(',') === '0,0,0,0', null);
 
   /* ── S ── */
   const XSS = '<img src=x onerror=alert(1)>';
@@ -544,7 +641,10 @@ async function suite (src, log) {
     ['N6', 'Cancel offered on paid_held', 'R14', ["paid_held: ['start'],", "paid_held: ['start', 'cancel'],"]],
     ['N7', '"Paid" derived from a non-status field (paymentStatus)', 'R12', ["    var s = rentalStatus(b);\n    if (s === 'payment_pending') return 'Awaiting payment';", "    var s = rentalStatus(b);\n    if (b && b.paymentStatus === 'paid') return 'Paid — held by SOKONI';\n    if (s === 'payment_pending') return 'Awaiting payment';"]],
     ['N8', 'an M-PESA default payment method', 'R13', ["return (m && m.toLowerCase() !== 'none') ? m : '—';", "return (m && m.toLowerCase() !== 'none') ? m : 'M-PESA';"]],
-    ['N4', "'0' rendered for an unknown count", 'O1', ["isFinite(n)) ? String(n) + (partial ? '+' : '') : '—'; }", "isFinite(n)) ? String(n) + (partial ? '+' : '') : '0'; }"]]
+    ['N4', "'0' rendered for an unknown count", 'O1', ["isFinite(n)) ? String(n) + (partial ? '+' : '') : '—'; }", "isFinite(n)) ? String(n) + (partial ? '+' : '') : '0'; }"]],
+    ['N9', '"Approved" derived from applications.status (control a)', 'V1', ["      h += approvalCard(S) + '<h3>Application progress</h3>';", "      h += ((S.apps && S.apps.rows || []).some(function (a) { return a.status === 'approved'; }) ? '<div class=\"cw-card\" data-approval=\"approved\"><div class=\"cw-row\"><b>SOKONI approval</b><span class=\"cw-badge\">Approved</span></div></div>' : approvalCard(S)) + '<h3>Application progress</h3>';"]],
+    ['N10', 'read-only fails OPEN on a missing answer (control b)', 'RO6', ["    return EA.decide(W.err ? null : W.answer, claims || null);", "    if (W.err) return { editable: true, readOnly: false }; return EA.decide(W.answer, claims || null);"]],
+    ['N11', 'a badge from verified === true', 'V3', ["<span class=\"cw-chip\">Application progress: ' + esc(appLabel(a)) + '</span></div>' +", "<span class=\"cw-chip\">Application progress: ' + esc(appLabel(a)) + '</span>' + (a.verified === true ? '<span class=\"cw-badge\">✓ Verified</span>' : '') + '</div>' +"]]
   ];
   let caught = 0;
   for (const [id, label, row, [from, to]] of mut) {
