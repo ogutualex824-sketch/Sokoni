@@ -231,17 +231,23 @@ service cloud.firestore {
   match /providers/{providerId} {
   allow read:   if resource.data.status == 'active' || resource.data.status == 'approved'
   || isAuthed();
+  function providerTrustKeys() {
+  return ['verified','suspended','approved','featured','providerVerified','isVerified','badges',
+  'rating','reviewCount','jobsCompleted','verifiedFacets','verifiedName','verificationReviewRequired',
+  'verificationProjectedAt','searchable','business','sourceApplicationId','approvedAt','suspendedAt',
+  'category','linkedBusinessId'];
+  }
   allow create: if isActive() && isAuthed() && request.resource.data.uid == request.auth.uid && noAdminFields()
   && (!request.resource.data.keys().hasAny(['status'])
   || request.resource.data.status == 'pending')
-  && !request.resource.data.keys().hasAny(['business']);
+  && !request.resource.data.keys().hasAny(providerTrustKeys());
   allow update: if (isAdmin() && !request.resource.data.diff(resource.data).affectedKeys().hasAny(['business']))
   || (isAuthed()
   && resource.data.uid == request.auth.uid
   && uidUnchanged()
   && !request.resource.data.diff(resource.data)
   .affectedKeys()
-  .hasAny(['status', 'verified', 'suspended', 'approved', 'business']));
+  .hasAny(providerTrustKeys().concat(['status'])));
   allow delete: if isAdmin();
   }
   match /bookings/{bookingId} {
@@ -3799,10 +3805,12 @@ service cloud.firestore {
   allow read:   if resource.data.status == 'active' || resource.data.status == 'published'
   || (isAuthed() && resource.data.uid == request.auth.uid)
   || isAdmin();
-  allow create: if isAuthed() && request.resource.data.uid == request.auth.uid && noAdminFields();
+  allow create: if isAuthed() && request.resource.data.uid == request.auth.uid && noAdminFields()
+  && !request.resource.data.keys().hasAny(['providerVerified','isVerified','badges','rating','reviewCount']);
   allow update: if isAdmin()
   || (isAuthed() && resource.data.uid == request.auth.uid
-  && uidUnchanged() && noAdminFields());
+  && uidUnchanged() && noAdminFields()
+  && !request.resource.data.diff(resource.data).affectedKeys().hasAny(['providerVerified','isVerified','badges','rating','reviewCount']));
   allow delete: if isAdmin() || (isAuthed() && resource.data.uid == request.auth.uid);
   }
   match /vehicles/{vehicleId} {

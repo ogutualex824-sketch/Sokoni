@@ -135,3 +135,18 @@ None of them is a Fitness defect.
 - [ ] sokoni-e3 **F0 hosting** live first. Otherwise live `72dca56` fitness-hub.html listeners on classes, clubs and bookings get permission-denied.
 - [ ] Fitness functions live (the `providerMemberships` writers).
 - [ ] Emulator: `RULES_FILE=firestore.rules.build` `scripts/test-fitness-rules-emulator.js` under `emulators:exec`. QUEUED (memory). Its M16 (`providers.business`) passes only on this merged file.
+
+## 2026-10-03: provider trust lock (one hunk, three sources)
+
+| Source | Ask | Applied here |
+|---|---|---|
+| sokoni-b2 Tech 4P (`e5eb1d6`, docs/RULES_PATCH_4P_PROVIDER_TRUST.md) | §1 `verifications` create could forge approved facets | **Already closed on this line** (`verifications` `write: false`, also on served f259c0b5). No change. |
+| | §2 `providers`: owner-writable trust, badge and sort signals | `providerTrustKeys()` is refused on owner create and update. Create keeps the onboarding allowance `status == 'pending'` (onboarding-professional.html). |
+| | §3 `services`: owner-writable `providerVerified` | Owner create/update refuse `providerVerified`, `isVerified`, `badges`, `rating`, `reviewCount`. |
+| sokoni-5b security slice, item 1 | Provider category immutable (owner: changes go request → AdminOS) | `category` is in `providerTrustKeys()`. **Covered by this hunk**, so 5b adds no second `providers` hunk. |
+| sokoni-e3 | `providers.linkedBusinessId` server-written only | In `providerTrustKeys()`. |
+
+Admin raw writes are unchanged: everything except `business`, which stays server-only (applicationDecide / bizAdminClassify). `businesses` create remains `false` on this line, so e3's tree-only finding (unpinned ownerId) doesn't ship. Writers checked: provider.html and services.html `saveProvider` were already refused by the old rule (they send a non-pending `status`), and b2 retired the services.html self-listing.
+
+Suite: `scripts/zz-test-provider-trust.js` (PT-R1/R2, PT-C*, PT-D-* one row per key, PT-S*, PT-R6a–c, PT-X1). **EMULATOR PENDING.** Baseline run against served f259c0b5: the PT-D rows must fail there.
+**Open for 5b's slice:** the owner `businesses` update `hasOnly([...,'category',...])` still lets an owner relabel `businesses.category`. Capability reads `business`, which is server-only. Whether the label must also be locked is 5b's call under item 1.

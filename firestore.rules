@@ -253,17 +253,28 @@ service cloud.firestore {
   /* CAPABILITY CANDIDATE 1 (c4 CHANGELOG 236): `business` — the ONE canonical category + commercial lane that
      decides a provider's dashboard route — is server-written ONLY (applicationDecide at approval; bizAdminClassify
      for audited correction). Not by the provider, and not by an admin's raw client write. */
+  /* 2026-10-03 PROVIDER TRUST LOCK (one hunk, three sources): sokoni-b2 Tech 4P (trust / badge / sort signals the server
+     projects: verificationDecide/Revoke, projectProvider), sokoni-5b security slice item 1 (owner: a provider cannot
+     change its approved category directly — request → AdminOS), sokoni-e3 (linkedBusinessId: Fitness staff scanning
+     resolves the gym's business only from it). Create keeps the onboarding allowance status=='pending'
+     (onboarding-professional.html); every other trust field is server-written only. */
+  function providerTrustKeys() {
+  return ['verified','suspended','approved','featured','providerVerified','isVerified','badges',
+  'rating','reviewCount','jobsCompleted','verifiedFacets','verifiedName','verificationReviewRequired',
+  'verificationProjectedAt','searchable','business','sourceApplicationId','approvedAt','suspendedAt',
+  'category','linkedBusinessId'];
+  }
   allow create: if isActive() && isAuthed() && request.resource.data.uid == request.auth.uid && noAdminFields()
   && (!request.resource.data.keys().hasAny(['status'])
   || request.resource.data.status == 'pending')
-  && !request.resource.data.keys().hasAny(['business']);
+  && !request.resource.data.keys().hasAny(providerTrustKeys());
   allow update: if (isAdmin() && !request.resource.data.diff(resource.data).affectedKeys().hasAny(['business']))
   || (isAuthed()
   && resource.data.uid == request.auth.uid
   && uidUnchanged()
   && !request.resource.data.diff(resource.data)
   .affectedKeys()
-  .hasAny(['status', 'verified', 'suspended', 'approved', 'business']));
+  .hasAny(providerTrustKeys().concat(['status'])));
   allow delete: if isAdmin();
   }
   match /bookings/{bookingId} {
@@ -3895,10 +3906,12 @@ service cloud.firestore {
   allow read:   if resource.data.status == 'active' || resource.data.status == 'published'
   || (isAuthed() && resource.data.uid == request.auth.uid)
   || isAdmin();
-  allow create: if isAuthed() && request.resource.data.uid == request.auth.uid && noAdminFields();
+  allow create: if isAuthed() && request.resource.data.uid == request.auth.uid && noAdminFields()
+  && !request.resource.data.keys().hasAny(['providerVerified','isVerified','badges','rating','reviewCount']);
   allow update: if isAdmin()
   || (isAuthed() && resource.data.uid == request.auth.uid
-  && uidUnchanged() && noAdminFields());
+  && uidUnchanged() && noAdminFields()
+  && !request.resource.data.diff(resource.data).affectedKeys().hasAny(['providerVerified','isVerified','badges','rating','reviewCount']));
   allow delete: if isAdmin() || (isAuthed() && resource.data.uid == request.auth.uid);
   }
   match /vehicles/{vehicleId} {
