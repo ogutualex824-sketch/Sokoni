@@ -5,10 +5,14 @@ Owner decision 2026-10-03: r2 is cut from the commercial line (one canonical com
 capability / PIN (5b) → live comparison per changed function → all tests incl. emulator settlement and browser E2E ≥ 700 MB
 → deploy).
 
+## Webhook
+
+`webhookIntasend: NOT DEPLOYED` (from r2). r2 CARRIES the webhook region of 5b's #4 `f0fca5c` (branch `feat/webhook-rental-hold-on-73c5e5e`, which contains #2 `f26c80a` = fast-forward of `cd2482b` on `fix/webhook-no-payer-credit-on-7428465`), 3-way merged against the LIVE webhook (`8574f5d`, 09-06 floor) — so r2 holds no stale copy — but the webhook SHIPS from 5b's tree. **Mechanical control:** `scripts/deploy/guard-r2-scope.js` is the FIRST predeploy hook in both `firebase.json` and `firebase.r2deploy.json` (relative form, executes); it ABORTS a bare/unscoped deploy and any webhook / own-tree function. Deploy only via `node scripts/deploy/r2-deploy.js <fn,...>`; accept only with `R2 SCOPE GUARD: PASS` in the log. Test: `scripts/test-r2-deploy-guard.js` (G1–G5).
+
 ## Never deployed from r2
 | function | ships from | why |
 |---|---|---|
-| `webhookIntasend` (and every IntaSend webhook handler) | 5b — `fix/webhook-commission-category-on-73c5e5e` cd2482b (#2), then `feat/webhook-rental-hold-on-73c5e5e` 2016051 (#4) | r2 lacks `shared/commission-category-source.js` and `rental-payment-hold.js`; deploying it from r2 would roll back the server-side commission-category fix, the rental hold and the rental receipt |
+| `webhookIntasend` (and every IntaSend webhook handler) | 5b — #2 `f26c80a` (`fix/webhook-no-payer-credit-on-7428465`, ff of `cd2482b`), then #4 `f0fca5c` (`feat/webhook-rental-hold-on-73c5e5e`) | r2 lacks `shared/commission-category-source.js` and `rental-payment-hold.js`; deploying it from r2 would roll back the server-side commission-category fix, the rental hold and the rental receipt |
 | `intasendWebhook` | — | its own P0-4 lifecycle gate |
 | `processTypesenseQueue` | `fix/typesense-verified-badge-on-032e88e` (live 00023-yin) | already live from its own tree |
 | `bookingDispatch` | `fix/bookingdispatch-paymentid-fulltree` ae4f084 (f3's queue) | full-copy rebuild, closure == live except booking.js |
