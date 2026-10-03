@@ -123,6 +123,8 @@
     { id:'school',           label:'School / College / Training',      hub:'education',     emoji:'🏫' },
     { id:'tutor',            label:'Tutor / Private Teacher',          hub:'education',     emoji:'📚' },
     { id:'online-course',    label:'Online Course / E-Learning',       hub:'education',     emoji:'🖥️' },
+    /* EDUCATION E1 (owner 2026-10-03): a COMPANY BUYING TRAINING for its staff — a verified buyer, not a listing. */
+    { id:'education-enterprise', label:'Company — Staff Training (Enterprise)', hub:'education', emoji:'🏢' },
     /* Beauty & Personal Care */
     { id:'salon',            label:'Hair Salon / Barbershop',          hub:'beauty',        emoji:'💇' },
     { id:'spa',              label:'Spa / Massage Therapy',            hub:'beauty',        emoji:'💆' },
@@ -205,11 +207,29 @@
     'electronics': [{ id: 'kraPin', label: 'KRA PIN (optional — AdminOS verifies)', type: 'text', max: 20 },
       { id: 'businessPermit', label: 'Business permit number (optional)', type: 'text', max: 40 },
       { id: 'sells', label: 'What you sell', type: 'multi', options: ['Phones', 'Laptops & computers', 'Tablets', 'Accessories', 'TVs & audio', 'Other electronics'] }],
+    /* EDUCATION E1 (owner 2026-10-03). The ids are the server's (application-lifecycle EDUCATION_REQUIRED): an approval
+       is refused until the starred ones are declared — AdminOS verifies them. Driving schools stay with Car Hub. */
+    'tutor': [{ id: 'subjects', label: 'Subjects you teach *', type: 'text', required: true, max: 160 },
+      { id: 'levels', label: 'Levels you teach', type: 'multi', options: ['Pre-primary', 'Primary (CBC)', 'Junior school', 'Senior school / KCSE', 'College / University', 'Adults & professionals'] },
+      { id: 'teachingMode', label: 'How you teach *', type: 'select', options: ['Online', 'In person', 'Both'], required: true },
+      { id: 'tscNo', label: 'TSC number (if registered — AdminOS verifies)', type: 'text', max: 20 }, Q.area],
+    'school': [{ id: 'institutionType', label: 'Institution type *', type: 'select', options: ['Pre-school / ECDE', 'Primary school', 'Secondary school', 'College / TVET', 'University', 'Training centre'], required: true },
+      { id: 'registrationNo', label: 'Registration / accreditation number (MoE, TVETA, CUE — AdminOS verifies) *', type: 'text', required: true, max: 60 },
+      { id: 'subjects', label: 'Programmes / courses offered', type: 'text', max: 160 }, Q.area],
+    'online-course': [{ id: 'registrationNo', label: 'Business registration number (AdminOS verifies) *', type: 'text', required: true, max: 60 },
+      { id: 'subjects', label: 'Course topics', type: 'text', max: 160 },
+      { id: 'kraPin', label: 'KRA PIN (optional — AdminOS verifies)', type: 'text', max: 20 }],
+    'education-enterprise': [{ id: 'companyRegNo', label: 'Company registration number (AdminOS verifies) *', type: 'text', required: true, max: 40 },
+      { id: 'kraPin', label: 'Company KRA PIN (AdminOS verifies) *', type: 'text', required: true, max: 11 },
+      { id: 'staffSeats', label: 'Staff to train (approximate)', type: 'number', max: 5 },
+      { id: 'trainingNeeds', label: 'Training you need', type: 'text', max: 160 }],
     'driving-school': [{ id: 'licenceNo', label: 'NTSA driving school licence number (AdminOS verifies) *', type: 'text', required: true, max: 60 },
       Q.services(['Class B (car)', 'Class A (motorcycle)', 'Class C/D (commercial)', 'Refresher lessons']), Q.area],
   };
   function _qId(q, i) { return 'sreg_q_' + q.id + (i == null ? '' : '_' + i); }
   function _renderQuestions(cat) {
+    /* EDUCATION E1: an enterprise buyer never picks a listing plan — hide the picker rather than show a price it never pays. */
+    var pb = document.getElementById('sreg_planBox'); if (pb) pb.style.display = cat === 'education-enterprise' ? 'none' : '';
     var box = document.getElementById('sreg_details'); if (!box) return;
     var qs = CAT_QUESTIONS[cat] || [];
     if (!qs.length) { box.innerHTML = ''; return; }
@@ -332,7 +352,7 @@
       '<label class="sreg-label">Brief Description *</label>' +
       '<textarea id="sreg_desc" class="sreg-input" rows="3" placeholder="What services do you offer? Opening hours, specialities…" style="resize:vertical;"></textarea>' +
 
-      '<label class="sreg-label">Listing Plan</label>' +
+      '<div id="sreg_planBox"><label class="sreg-label">Listing Plan</label>' +
       '<div class="sreg-plans">' +
         '<div class="sreg-plan sel" id="sreg_plan_free" onclick="HubRegister._selectPlan(\'free\')">' +
           '<div class="sreg-plan-name">Free</div>' +
@@ -350,7 +370,7 @@
           '<div class="sreg-plan-name">👑 Enterprise</div>' +
           '<div class="sreg-plan-price">KES 5,000/mo — all features<br>+ dedicated support</div>' +
         '</div>' +
-      '</div>' +
+      '</div></div>' +
 
       '<button class="sreg-btn" onclick="HubRegister._submit()">✅ Register My Business</button>' +
       '<div id="sreg_msg" class="sreg-msg"></div>';
@@ -407,10 +427,12 @@
         '<div class="sreg-big">📨</div>' +
         '<h3>Application submitted — SOKONI reviews it in AdminOS</h3>' +
         '<p>' + _esc(data.name) + ' (' + _esc(planLabel) + ' plan) is with SOKONI for review.<br>' +
-        'You will be notified when it is decided. Your business dashboard opens after SOKONI approves it.' +
+        (data.category === 'education-enterprise'
+          ? 'You will be notified when it is decided. Once SOKONI verifies your company you can arrange training for your staff.'
+          : 'You will be notified when it is decided. Your business dashboard opens after SOKONI approves it.') +
         '</p>' +
         '<a href="' + trackLink + '">📋 Track my application</a>' +
-        (data.plan === 'free'
+        (data.plan === 'free' && data.category !== 'education-enterprise'
           ? '<br><a href="' + subsLink + '" class="sreg-sec" style="margin-top:8px;">⚡ Upgrade to Paid Plan</a>'
           : '') +
         '<br><button onclick="HubRegister.close()" style="margin-top:14px;background:none;border:1px solid rgba(255,255,255,0.12);color:rgba(255,255,255,0.4);border-radius:10px;padding:8px 20px;cursor:pointer;font-family:inherit;font-size:12px;">Close</button>' +
@@ -468,7 +490,8 @@
     var email = (document.getElementById('sreg_email')?.value || '').trim();
     var loc   = (document.getElementById('sreg_loc')?.value   || '').trim();
     var desc  = (document.getElementById('sreg_desc')?.value  || '').trim();
-    var plan  = window._sokoniRegPlan || 'free';
+    /* An enterprise BUYER buys training; it never pays a listing plan. */
+    var plan  = cat === 'education-enterprise' ? 'free' : (window._sokoniRegPlan || 'free');
     var msgEl = document.getElementById('sreg_msg');
 
     function _err(m) {
@@ -533,7 +556,9 @@
        mechanics/{uid} profiles stay readable (mechanics.html merges both registries). */
     var _ROLE_BY_CATEGORY = { landlord: 'landlord' };
     var _ROLE_BY_HUB = { delivery: 'rider', healthcare: 'health', legal: 'legal', shopping: 'seller' };
-    var _requestedRole = _ROLE_BY_CATEGORY[cat] || _ROLE_BY_HUB[catObj.hub] || 'provider';
+    /* EDUCATION E1: an enterprise is a verified BUYER (the server files it under educationEnterprises, no role). */
+    var _requestedRole = cat === 'education-enterprise' ? 'buyer'
+      : (_ROLE_BY_CATEGORY[cat] || _ROLE_BY_HUB[catObj.hub] || 'provider');
 
     var data = {
       id:          'APP' + Date.now(),
