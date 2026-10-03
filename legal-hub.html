@@ -489,8 +489,8 @@
   <button type="button" class="law-tab" onclick="showLawTab('court',this)">🏛️ Court Help</button>
   <button type="button" class="law-tab" onclick="showLawTab('rights',this)">📖 Know Your Rights</button>
   <button type="button" class="law-tab" onclick="showLawTab('register',this)">⚖️ Register as Lawyer</button>
-  <button type="button" class="law-tab" onclick="showLawTab('completion',this)" style="color:#71ff00;border-color:rgba(113,255,0,0.2);">📝 Log Case</button>
-  <button type="button" class="law-tab" onclick="showLawTab('appointments',this)">📅 Appointments</button>
+  <button type="button" class="law-tab" onclick="showLawTab('completion',this)">💰 Getting paid</button>
+  <button type="button" class="law-tab" onclick="showLawTab('appointments',this)">📅 My bookings</button>
   <button type="button" class="law-tab" onclick="showLawTab('property-legal',this)">🏘️ Property Legal</button>
   <button type="button" class="law-tab" onclick="showLawTab('vehicle-legal',this)">🚗 Vehicle Legal</button>
   <button type="button" class="law-tab" onclick="showLawTab('business-legal',this)">💼 Business Legal</button>
@@ -772,436 +772,100 @@
 
   <!-- """" TAB: REGISTER AS LAWYER """" -->
   <div id="lawpane-register" class="law-pane">
+    <!-- Legal Hub L2/L3: ONE application wizard — Lawyer or Law firm — onto the ONE Legal record + AdminOS review item
+         (registerLegalProvider → applications/legal_{uid}). Nothing goes live on submit: SOKONI approves in AdminOS and
+         verifies the responsible advocate's LSK practising status; only then is the profile listed and bookable. -->
+    <div id="lhStatusCard" hidden></div>
 
-    <!-- Register type toggle: Individual Lawyer vs Law Firm -->
-    <div class="reg-type-toggle" style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:22px;">
-      <button type="button" id="regTypeIndBtn" onclick="switchRegType('individual')"
-        style="padding:14px;border-radius:14px;border:2px solid rgba(113,255,0,0.5);background:rgba(113,255,0,0.12);color:#c8ff80;font-weight:900;font-size:14px;cursor:pointer;font-family:inherit;transition:all .2s;">
-        👨‍⚖️ Individual Lawyer
-      </button>
-      <button type="button" id="regTypeFirmBtn" onclick="switchRegType('firm')"
-        style="padding:14px;border-radius:14px;border:2px solid rgba(255,255,255,0.1);background:rgba(255,255,255,0.04);color:rgba(255,255,255,0.5);font-weight:900;font-size:14px;cursor:pointer;font-family:inherit;transition:all .2s;">
-        🏢 Law Firm
-      </button>
-    </div>
-
-    <!-- FIRM REGISTRATION PANEL -->
-    <div id="firmRegPanel" style="display:none;">
-      <div id="firmRegForm">
-      <div class="law-alert" style="margin-bottom:18px;">
-        <strong>🏢 Register Your Law Firm</strong> — List your firm on SOKONI Legal Hub. Reach thousands of Kenyans searching for legal help. Premium listing includes verified badge, featured placement and client analytics.
+    <div id="lhRegWrap">
+      <div class="lh-section" style="margin-bottom:16px;">
+        <div class="lh-section-title">⚖️ How it works</div>
+        <ol style="margin:0;padding-left:18px;font-size:12px;color:rgba(255,255,255,0.6);line-height:1.8;">
+          <li>Choose <strong>Lawyer</strong> (you, as an advocate) or <strong>Law firm</strong> (your firm, applied for by its responsible advocate).</li>
+          <li>Submit — your application goes to SOKONI for review. It is <strong>not public</strong> yet.</li>
+          <li>SOKONI checks your LSK practising status on the official LSK source. You can see progress, and answer any request for information, right here.</li>
+          <li>Once approved and verified, your storefront is listed and clients can book and pay through SOKONI. You are paid after each client confirms the service with their completion PIN; SOKONI's commission is deducted once, at settlement.</li>
+        </ol>
       </div>
+
+      <div role="radiogroup" aria-label="Application type" style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:18px;">
+        <button type="button" role="radio" aria-checked="true" id="lhTypeAdv" class="lc-filter-btn active-lf" style="padding:14px;font-size:14px;" onclick="lhRegSetType('advocate')">👨‍⚖️ Lawyer</button>
+        <button type="button" role="radio" aria-checked="false" id="lhTypeFirm" class="lc-filter-btn" style="padding:14px;font-size:14px;" onclick="lhRegSetType('firm')">🏢 Law firm</button>
+      </div>
+
       <div class="lh-section">
-        <div class="lh-section-title">🏢 Firm Details</div>
+        <div class="lh-section-title" id="lhWhoTitle">👤 You, the advocate</div>
         <div class="lh-grid2">
-          <div>
-            <label class="lh-label">Firm Name *</label>
-            <input type="text" id="firmName" class="lh-input" placeholder="e.g. Kariuki &amp; Associates Advocates">
-          </div>
-          <div>
-            <label class="lh-label">Year Established</label>
-            <input type="number" id="firmYear" class="lh-input" placeholder="e.g. 2008" min="1900" max="2025">
-          </div>
+          <div><label class="lh-label" for="lhName">Full name (as on the Roll of Advocates) *</label><input type="text" id="lhName" class="lh-input" autocomplete="name" maxlength="120"></div>
+          <div><label class="lh-label" for="lhP105">LSK practising number (P.105/…/…) *</label><input type="text" id="lhP105" class="lh-input" placeholder="P.105/1234/15" maxlength="60"></div>
         </div>
         <div class="lh-grid2">
-          <div>
-            <label class="lh-label">Number of Advocates</label>
-            <input type="number" id="firmSize" class="lh-input" placeholder="e.g. 5" min="1">
-          </div>
-          <div>
-            <label class="lh-label">City / Town *</label>
-            <input type="text" id="firmCity" class="lh-input" placeholder="e.g. Nairobi CBD">
-          </div>
+          <div><label class="lh-label" for="lhPhone">Phone (private — never shown publicly)</label><input type="tel" id="lhPhone" class="lh-input" autocomplete="tel" maxlength="20"></div>
+          <div><label class="lh-label" for="lhCounty">County *</label><input type="text" id="lhCounty" class="lh-input" placeholder="e.g. Nairobi" maxlength="80"></div>
         </div>
-        <label class="lh-label">Office Address</label>
-        <input type="text" id="firmAddress" class="lh-input" placeholder="e.g. 4th Floor, Anniversary Towers, University Way">
-        <label class="lh-label">Primary Areas of Practice *</label>
-        <input type="text" id="firmSpecializations" class="lh-input" placeholder="e.g. Property Law, Family Law, Commercial Law">
-        <label class="lh-label">Firm Bio / Description</label>
-        <textarea id="firmBio" class="lh-input lh-textarea" placeholder="Tell clients about your firm's expertise, values and track record…"></textarea>
       </div>
+
+      <div class="lh-section" id="lhFirmSection" hidden>
+        <div class="lh-section-title">🏢 The firm</div>
+        <div class="lh-grid2">
+          <div><label class="lh-label" for="lhFirmName">Firm name *</label><input type="text" id="lhFirmName" class="lh-input" maxlength="120"></div>
+          <div><label class="lh-label" for="lhFirmReg">Business registration number</label><input type="text" id="lhFirmReg" class="lh-input" maxlength="60"></div>
+        </div>
+        <label class="lh-label" for="lhRepRole">Your role at the firm</label><input type="text" id="lhRepRole" class="lh-input" placeholder="e.g. Managing Partner" maxlength="60">
+        <label class="lh-label" for="lhFirmDesc">Firm description</label><textarea id="lhFirmDesc" class="lh-input lh-textarea" maxlength="2000"></textarea>
+        <div class="lh-label" style="margin-top:8px;">Offices</div><div id="lhOffices"></div>
+        <button type="button" class="lc-filter-btn" onclick="lhAddOffice()">+ Add office</button>
+        <div class="lh-label" style="margin-top:12px;">Advocates at the firm <span style="opacity:.6;font-weight:400;">(kept private until SOKONI can verify each of them)</span></div><div id="lhTeam"></div>
+        <button type="button" class="lc-filter-btn" onclick="lhAddMember()">+ Add advocate</button>
+      </div>
+
       <div class="lh-section">
-        <div class="lh-section-title">📞 Contact &amp; Online Presence</div>
-        <div class="lh-grid2">
-          <div>
-            <label class="lh-label">Phone Number *</label>
-            <input type="tel" id="firmPhone" class="lh-input" placeholder="e.g. 0712 345 678">
-          </div>
-          <div>
-            <label class="lh-label">Email Address *</label>
-            <input type="email" id="firmEmail" class="lh-input" placeholder="info@yourfirm.co.ke">
-          </div>
-        </div>
-        <div class="lh-grid2">
-          <div>
-            <label class="lh-label">Website (optional)</label>
-            <input type="url" id="firmWebsite" class="lh-input" placeholder="https://yourfirm.co.ke">
-          </div>
-          <div>
-            <label class="lh-label">WhatsApp Number</label>
-            <input type="tel" id="firmWhatsapp" class="lh-input" placeholder="e.g. 0722 000 000">
-          </div>
-        </div>
+        <div class="lh-section-title">📚 Practice areas * <span style="font-weight:400;opacity:.6;font-size:11px;">(up to 12)</span></div>
+        <div id="lhAreaPicker"></div>
       </div>
+
       <div class="lh-section">
-        <div class="lh-section-title">💎 Listing Plan</div>
-        <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:12px;margin-bottom:16px;">
-          <label style="cursor:pointer;">
-            <input type="radio" name="firmPlan" value="basic" checked style="display:none;" onchange="updateFirmPlanUI()">
-            <div class="firm-plan-card" id="firmPlanBasic" style="border:2px solid rgba(113,255,0,0.4);border-radius:14px;padding:16px;background:rgba(113,255,0,0.08);transition:all .2s;">
-              <div style="font-size:15px;font-weight:900;color:#c8ff80;margin-bottom:4px;">🆓 Basic</div>
-              <div style="font-size:20px;font-weight:900;color:white;margin-bottom:6px;">Free</div>
-              <div style="font-size:11px;color:rgba(255,255,255,0.5);line-height:1.7;">• Firm listing with contact<br>• Up to 3 advocates listed<br>• Standard placement</div>
-            </div>
-          </label>
-          <label style="cursor:pointer;">
-            <input type="radio" name="firmPlan" value="premium" style="display:none;" onchange="updateFirmPlanUI()">
-            <div class="firm-plan-card" id="firmPlanPremium" style="border:2px solid rgba(255,255,255,0.1);border-radius:14px;padding:16px;background:rgba(255,255,255,0.03);transition:all .2s;">
-              <div style="font-size:15px;font-weight:900;color:#71ff00;margin-bottom:4px;">⭐ Premium</div>
-              <div style="font-size:20px;font-weight:900;color:white;margin-bottom:6px;">KES 2,500<span style="font-size:11px;font-weight:400;color:rgba(255,255,255,0.4);">/mo</span></div>
-              <div style="font-size:11px;color:rgba(255,255,255,0.5);line-height:1.7;">• ✅ Verified badge<br>• Featured in search results<br>• Unlimited advocates<br>• Client enquiry analytics<br>• WhatsApp quick-connect</div>
-            </div>
-          </label>
-          <label style="cursor:pointer;">
-            <input type="radio" name="firmPlan" value="elite" style="display:none;" onchange="updateFirmPlanUI()">
-            <div class="firm-plan-card" id="firmPlanElite" style="border:2px solid rgba(255,255,255,0.1);border-radius:14px;padding:16px;background:rgba(255,255,255,0.03);transition:all .2s;">
-              <div style="font-size:15px;font-weight:900;color:#ffc107;margin-bottom:4px;">👑 Elite</div>
-              <div style="font-size:20px;font-weight:900;color:white;margin-bottom:6px;">KES 5,500<span style="font-size:11px;font-weight:400;color:rgba(255,255,255,0.4);">/mo</span></div>
-              <div style="font-size:11px;color:rgba(255,255,255,0.5);line-height:1.7;">• 👑 Elite badge + top placement<br>• Dedicated firm profile page<br>• Case intake form for clients<br>• Monthly performance report<br>• SOKONI social media feature</div>
-            </div>
-          </label>
+        <div class="lh-section-title">💼 Practice details</div>
+        <div class="lh-grid2">
+          <div><label class="lh-label" for="lhFee">Consultation fee (KES)</label><input type="number" id="lhFee" class="lh-input" min="0" step="100" placeholder="e.g. 3000"></div>
+          <div><label class="lh-label" for="lhYears">Years of practice</label><input type="number" id="lhYears" class="lh-input" min="0" max="70"></div>
         </div>
+        <div class="lh-grid2">
+          <div><label class="lh-label" for="lhLangs">Languages (comma-separated)</label><input type="text" id="lhLangs" class="lh-input" placeholder="English, Kiswahili"></div>
+          <div style="display:flex;align-items:flex-end;padding-bottom:10px;"><label style="display:flex;gap:8px;align-items:center;font-size:13px;"><input type="checkbox" id="lhOnline" style="accent-color:#71ff00;"> I offer online consultations</label></div>
+        </div>
+        <label class="lh-label" for="lhBio">Professional profile *</label><textarea id="lhBio" class="lh-input lh-textarea" maxlength="2000" placeholder="Your practice, experience and how you help clients."></textarea>
+        <p style="font-size:11px;color:rgba(255,255,255,0.4);margin:6px 0 0;">You can add more services and rates from your dashboard after approval. Prices clients pay are always set by SOKONI's server from your published rate cards.</p>
       </div>
-      <button type="button" onclick="submitFirmRegistration()"
-        style="width:100%;padding:15px;background:linear-gradient(135deg,#71ff00,#4f46e5);border:none;border-radius:14px;color:white;font-weight:900;font-size:15px;cursor:pointer;font-family:inherit;transition:all .2s;">
-        🏢 Register Law Firm
-      </button>
-      <div id="firmRegMsg" style="margin-top:12px;font-size:13px;text-align:center;"></div>
-      </div><!-- /firmRegForm -->
-      <div id="firmRegSuccess" style="display:none;padding:28px 16px;text-align:center;">
-        <div style="font-size:56px;margin-bottom:14px;">🏢✅</div>
-        <div style="font-size:20px;font-weight:900;color:#c8ff80;margin-bottom:8px;">Registration Submitted!</div>
-        <div id="firmRegRef" style="font-size:12px;color:rgba(255,255,255,0.35);margin-bottom:14px;letter-spacing:.5px;"></div>
-        <div style="font-size:13px;color:rgba(255,255,255,0.55);line-height:1.7;margin-bottom:22px;">Our team will review your submission and contact you within 24 hours to verify and activate your listing.</div>
-        <a id="firmRegWA" href="/support.html#ticket" style="display:inline-flex;align-items:center;gap:8px;padding:13px 26px;background:rgba(113,255,0,0.1);border:1px solid rgba(113,255,0,0.3);color:#71ff00;border-radius:13px;font-weight:900;font-size:13px;text-decoration:none;">
-          🎫 Questions? Open a support ticket
-        </a>
+
+      <div style="background:rgba(113,255,0,0.07);border:1px solid rgba(113,255,0,0.2);border-radius:12px;padding:14px 16px;margin-bottom:16px;font-size:12px;color:rgba(255,255,255,0.6);line-height:1.7;">
+        <strong style="color:#c8ff80;">Declaration:</strong> I confirm that I am an Advocate of the High Court of Kenya holding a current practising certificate, that the details above are true, and that SOKONI may verify them with the Law Society of Kenya.
+        <label style="display:flex;align-items:flex-start;gap:8px;margin-top:10px;cursor:pointer;"><input type="checkbox" id="lhDecl" style="accent-color:#71ff00;margin-top:3px;"> I confirm the declaration and agree to SOKONI's <a href="legal.html#terms" style="color:#c8ff80;">Terms of Service</a></label>
       </div>
+      <button type="button" onclick="registerLawyer()" style="width:100%;padding:14px;background:linear-gradient(135deg,#71ff00,#4f46e5);color:white;font-weight:900;border:none;border-radius:12px;cursor:pointer;font-size:15px;font-family:inherit;">Submit application</button>
+      <div id="lawRegMsg" role="status" style="margin-top:12px;font-size:12px;min-height:16px;"></div>
     </div>
-
-    <!-- INDIVIDUAL LAWYER PANEL (existing content below) -->
-    <div id="individualRegPanel">
-
-    <!-- How verification works -->
-    <div style="background:linear-gradient(135deg,rgba(113,255,0,0.1),rgba(79,70,229,0.06));border:1px solid rgba(113,255,0,0.25);border-radius:16px;padding:18px 20px;margin-bottom:22px;">
-      <div style="font-size:13px;font-weight:900;color:#c8ff80;margin-bottom:12px;">⚖️ How Listing &amp; Verification Works</div>
-      <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(180px,1fr));gap:10px;">
-        <div style="display:flex;gap:10px;align-items:flex-start;">
-          <div style="width:26px;height:26px;border-radius:50%;background:rgba(113,255,0,0.2);color:#c8ff80;font-size:12px;font-weight:900;display:flex;align-items:center;justify-content:center;flex-shrink:0;">1</div>
-          <div style="font-size:11px;color:rgba(255,255,255,0.6);line-height:1.6;"><strong style="color:white;display:block;margin-bottom:2px;">Fill &amp; Submit</strong>Complete the form below. Your listing goes live immediately with a <span style="color:#ff9800;">⏳ Pending</span> badge.</div>
-        </div>
-        <div style="display:flex;gap:10px;align-items:flex-start;">
-          <div style="width:26px;height:26px;border-radius:50%;background:rgba(113,255,0,0.2);color:#c8ff80;font-size:12px;font-weight:900;display:flex;align-items:center;justify-content:center;flex-shrink:0;">2</div>
-          <div style="font-size:11px;color:rgba(255,255,255,0.6);line-height:1.6;"><strong style="color:white;display:block;margin-bottom:2px;">SOKONI Verification</strong>We cross-check your Roll Number on the LSK portal within <strong style="color:#c8ff80;">23 business days</strong>.</div>
-        </div>
-        <div style="display:flex;gap:10px;align-items:flex-start;">
-          <div style="width:26px;height:26px;border-radius:50%;background:rgba(113,255,0,0.2);color:#c8ff80;font-size:12px;font-weight:900;display:flex;align-items:center;justify-content:center;flex-shrink:0;">3</div>
-          <div style="font-size:11px;color:rgba(255,255,255,0.6);line-height:1.6;"><strong style="color:white;display:block;margin-bottom:2px;">LSK Badge Awarded</strong>Once verified your listing gets the <span style="color:#c8ff80;">✅ LSK Verified</span> badge  visible to all clients.</div>
-        </div>
-        <div style="display:flex;gap:10px;align-items:flex-start;">
-          <div style="width:26px;height:26px;border-radius:50%;background:rgba(113,255,0,0.2);color:#c8ff80;font-size:12px;font-weight:900;display:flex;align-items:center;justify-content:center;flex-shrink:0;">4</div>
-          <div style="font-size:11px;color:rgba(255,255,255,0.6);line-height:1.6;"><strong style="color:white;display:block;margin-bottom:2px;">Start Receiving Clients</strong>Clients send you booking requests and messages <strong style="color:#c8ff80;">inside SOKONI</strong>. In-app payment for legal consultations is being enabled — no deposit is collected yet. After case completion, log your total fee and SOKONI invoices <strong style="color:#71ff00;">5% commission</strong>.</div>
-        </div>
-      </div>
-      <div style="margin-top:14px;padding-top:14px;border-top:1px solid rgba(113,255,0,0.15);display:flex;align-items:center;gap:10px;flex-wrap:wrap;">
-        <span style="font-size:11px;color:rgba(255,255,255,0.4);">Questions about verification?</span>
-        <a href="/support.html#ticket" style="padding:6px 14px;background:rgba(113,255,0,0.08);border:1px solid rgba(113,255,0,0.22);border-radius:8px;color:#71ff00;font-size:11px;font-weight:700;text-decoration:none;">🎫 Ask SOKONI Support</a>
-      </div>
-    </div>
-
-    <!-- Check existing application -->
-    <div id="existingAppCard" style="display:none;background:rgba(255,152,0,0.07);border:1px solid rgba(255,152,0,0.2);border-radius:14px;padding:16px 18px;margin-bottom:18px;">
-      <div style="font-size:12px;font-weight:800;color:#ff9800;margin-bottom:8px;">📋 Your Previous Application</div>
-      <div id="existingAppInfo" style="font-size:11px;color:rgba(255,255,255,0.55);line-height:1.7;"></div>
-      <div style="display:flex;gap:8px;margin-top:10px;flex-wrap:wrap;">
-        <a id="existingAppWA" href="/support.html#ticket" style="padding:7px 14px;background:rgba(113,255,0,0.08);border:1px solid rgba(113,255,0,0.22);border-radius:8px;color:#71ff00;font-size:11px;font-weight:700;text-decoration:none;">🎫 Ask about my application</a>
-        <button type="button" onclick="clearExistingApp()" style="padding:7px 14px;background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.1);border-radius:8px;color:rgba(255,255,255,0.4);font-size:11px;font-weight:700;cursor:pointer;font-family:inherit;">  Re-apply</button>
-      </div>
-    </div>
-
-    <div id="lawRegForm">
-      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:4px;">
-        <div style="font-size:15px;font-weight:800;color:white;">⚖️ Advocate Application Form</div>
-        <button onclick="SokoniFormNav.goBack()" aria-label="Close form" title="Close" style="background:none;border:none;color:rgba(255,255,255,0.4);font-size:20px;cursor:pointer;padding:0;min-width:44px;min-height:44px;display:flex;align-items:center;justify-content:center;border-radius:8px;flex-shrink:0;" onmouseover="this.style.color='#fff';this.style.background='rgba(255,255,255,0.06)'" onmouseout="this.style.color='rgba(255,255,255,0.4)';this.style.background='none'">✕</button>
-      </div>
-      <p style="font-size:12px;color:rgba(255,255,255,0.45);margin-bottom:18px;">All fields marked * are required. Your listing goes live immediately  verification badge follows within 23 days.</p>
-
-      <div class="reg-grid">
-        <div>
-          <label class="lh-label">Full Name (as per Advocates Roll) *</label>
-          <input type="text" id="lawName" class="lh-input" placeholder="e.g. Wanjiru Mwangi">
-          <label class="lh-label">Advocates Roll Number *</label>
-          <input type="text" id="lawRoll" class="lh-input" placeholder="e.g. 12345">
-          <label class="lh-label">Phone Number (for WhatsApp bookings) *</label>
-          <input type="tel" id="lawPhone" class="lh-input" placeholder="07XXXXXXXX">
-          <label class="lh-label">Email Address *</label>
-          <input type="email" id="lawEmail" class="lh-input" placeholder="advocate@chambers.co.ke">
-        </div>
-        <div>
-          <label class="lh-label">Primary Specialisation *</label>
-          <select id="lawSpec" class="lh-input">
-            <option value="property">🏠 Property &amp; Conveyancing</option>
-            <option value="family">👨‍👩‍👧 Family Law &amp; Divorce</option>
-            <option value="criminal">🏛️ Criminal &amp; Defence</option>
-            <option value="commercial">💼 Commercial &amp; Corporate</option>
-            <option value="employment">⚖️ Employment &amp; Labour</option>
-            <option value="ip">💡 IP &amp; Copyright</option>
-            <option value="immigration">🌍 Immigration &amp; Citizenship</option>
-            <option value="human_rights">⚖️ Human Rights</option>
-            <option value="environment">🌿 Environment &amp; Land</option>
-            <option value="banking">💰 Banking &amp; Finance</option>
-            <option value="general">📋 General Practice</option>
-          </select>
-          <label class="lh-label">Consultation Rate (KES) *</label>
-          <div class="lh-grid2" style="gap:8px;">
-            <input type="number" id="lawRate" class="lh-input" placeholder="e.g. 3000" style="margin:0;">
-            <select id="lawRateType" class="lh-input" style="margin:0;">
-              <option value="per hour">Per Hour</option>
-              <option value="per session">Per Session</option>
-              <option value="per document">Per Document</option>
-              <option value="retainer">Monthly Retainer</option>
-            </select>
-          </div>
-          <label class="lh-label" style="margin-top:10px;">Location *</label>
-          <select id="lawLocation" class="lh-input">
-            <option value="nairobi">Nairobi</option>
-            <option value="mombasa">Mombasa</option>
-            <option value="kisumu">Kisumu</option>
-            <option value="nakuru">Nakuru</option>
-            <option value="eldoret">Eldoret</option>
-            <option value="thika">Thika</option>
-            <option value="nyeri">Nyeri</option>
-            <option value="meru">Meru</option>
-            <option value="embu">Embu</option>
-            <option value="machakos">Machakos</option>
-            <option value="naivasha">Naivasha</option>
-            <option value="nanyuki">Nanyuki</option>
-            <option value="kisii">Kisii</option>
-            <option value="kericho">Kericho</option>
-            <option value="kakamega">Kakamega</option>
-            <option value="kitale">Kitale</option>
-            <option value="bungoma">Bungoma</option>
-            <option value="malindi">Malindi</option>
-            <option value="isiolo">Isiolo</option>
-            <option value="garissa">Garissa</option>
-            <option value="remote">Online / Remote</option>
-          </select>
-        </div>
-      </div>
-
-      <label class="lh-label">Chambers / Law Firm Name</label>
-      <input type="text" id="lawFirm" class="lh-input" placeholder="e.g. Mwangi &amp; Associates Advocates">
-      <label class="lh-label">Other Specialisations (comma-separated)</label>
-      <input type="text" id="lawSkills" class="lh-input" placeholder="e.g. Land disputes, Contract drafting, Family settlements">
-      <label class="lh-label">Professional Bio *</label>
-      <textarea id="lawBio" class="lh-input lh-textarea" placeholder="Briefly describe your experience, years of practice, notable cases (2-3 sentences)..."></textarea>
-
-      <div style="background:rgba(113,255,0,0.07);border:1px solid rgba(113,255,0,0.2);border-radius:12px;padding:14px 16px;margin-bottom:16px;font-size:12px;color:rgba(255,255,255,0.55);line-height:1.7;">
-        <strong style="color:#c8ff80;">⚖️ Declaration:</strong> By registering, I confirm that I am duly admitted as an Advocate of the High Court of Kenya, I am in good standing with the Law Society of Kenya, and I hold a valid Practising Certificate for the current year. I understand that SOKONI may verify my credentials with the Law Society of Kenya and may remove my listing if this information is found to be inaccurate.
-        <div style="margin-top:10px;"><label style="display:flex;align-items:flex-start;gap:8px;cursor:pointer;"><input type="checkbox" id="lawDeclaration" style="accent-color:#71ff00;margin-top:3px;flex-shrink:0;"> I confirm the above declaration and agree to SOKONI's <a href="legal.html#terms" style="color:#c8ff80;">Terms of Service</a></label></div>
-      </div>
-
-      <button type="button" onclick="registerLawyer()" style="width:100%;padding:14px;background:linear-gradient(135deg,#71ff00,#4f46e5);color:white;font-weight:900;border:none;border-radius:12px;cursor:pointer;font-size:15px;font-family:inherit;display:flex;align-items:center;justify-content:center;gap:8px;">⚖️ Submit Application</button>
-      <div id="lawRegMsg" style="margin-top:12px;font-size:12px;min-height:16px;"></div>
-    </div>
-
-    <!-- Success state (shown after registration) -->
-    <div id="lawRegSuccess" style="display:none;text-align:center;padding:30px 20px;">
-      <div style="font-size:48px;margin-bottom:16px;">⚖️</div>
-      <div style="font-size:18px;font-weight:900;color:white;margin-bottom:8px;">Application Received!</div>
-      <div style="font-size:13px;color:rgba(255,255,255,0.5);line-height:1.8;max-width:400px;margin:0 auto 24px;">
-        Your application is with SOKONI — <span style="color:#ff9800;font-weight:700;">⏳ Pending Verification</span>.<br>
-        SOKONI verifies your Roll Number with the Law Society of Kenya; your listing appears in the directory once it is approved.
-        Check your status on this page any time.
-      </div>
-      <div style="display:flex;flex-direction:column;gap:10px;max-width:360px;margin:0 auto;">
-        <button type="button" onclick="showLawTab('lawyers',null)" style="padding:13px 24px;background:linear-gradient(135deg,#71ff00,#4f46e5);color:white;border:none;border-radius:12px;font-weight:900;font-size:14px;cursor:pointer;font-family:inherit;">⚖️ Browse the directory</button>
-        <a id="regWAFollowUp" href="/support.html#ticket" style="padding:12px 24px;background:rgba(113,255,0,0.08);border:1px solid rgba(113,255,0,0.22);border-radius:12px;color:#71ff00;font-weight:800;font-size:13px;text-decoration:none;">🎫 Questions about verification</a>
-      </div>
-      <div id="regRef" style="margin-top:18px;font-size:11px;color:rgba(255,255,255,0.25);"></div>
-    </div>
-
-    </div><!-- /individualRegPanel -->
-
   </div>
 
-
-  <!-- """" TAB: LOG CASE COMPLETION """" -->
+  <!-- """" TAB: HOW ADVOCATES GET PAID (was "Log case": a client-side 5% + off-platform Paybill) """" -->
   <div id="lawpane-completion" class="law-pane">
-    <div class="law-alert">
-      <strong>Advocates only:</strong> When you complete a case or consultation that was discovered through SOKONI, log the total fee here. SOKONI will invoice its <strong>5% commission</strong> which you pay via M-PESA. Unpaid commissions will suspend your listing.
-    </div>
-
-    <!-- How it works -->
-    <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(180px,1fr));gap:10px;margin-bottom:22px;">
-      <div style="background:rgba(113,255,0,0.05);border:1px solid rgba(113,255,0,0.15);border-radius:12px;padding:14px;">
-        <div style="font-size:11px;font-weight:800;color:#71ff00;margin-bottom:4px;">✅ Client Pays Deposit</div>
-        <div style="font-size:11px;color:rgba(255,255,255,0.45);line-height:1.6;">KES 500 booking deposit flows to SOKONI when client books you. This is guaranteed revenue.</div>
-      </div>
-      <div style="background:rgba(0,170,255,0.05);border:1px solid rgba(0,170,255,0.15);border-radius:12px;padding:14px;">
-        <div style="font-size:11px;font-weight:800;color:#00aaff;margin-bottom:4px;">✅ Case Proceeds</div>
-        <div style="font-size:11px;color:rgba(255,255,255,0.45);line-height:1.6;">Case fees are agreed directly between you and the client. Money may not pass through SOKONI.</div>
-      </div>
-      <div style="background:rgba(168,85,247,0.05);border:1px solid rgba(168,85,247,0.15);border-radius:12px;padding:14px;">
-        <div style="font-size:11px;font-weight:800;color:#c8ff80;margin-bottom:4px;">✅ Log & Pay Commission</div>
-        <div style="font-size:11px;color:rgba(255,255,255,0.45);line-height:1.6;">After completion, log the total fee below. SOKONI calculates 5% and shows M-PESA payment details.</div>
-      </div>
-    </div>
-
     <div class="lh-section">
-      <div class="lh-section-title">📋 Case / Consultation Completion Form</div>
-      <div class="lh-grid2">
-        <div>
-          <label class="lh-label">SOKONI Booking Reference (if known)</label>
-          <input type="text" id="caseRef" class="lh-input" placeholder="e.g. SKN1A2B3C (from client's deposit receipt)">
-        </div>
-        <div>
-          <label class="lh-label">Your Name / Firm</label>
-          <input type="text" id="caseLawyerName" class="lh-input" placeholder="Full name or firm name">
-        </div>
-      </div>
-      <div class="lh-grid2">
-        <div>
-          <label class="lh-label">Client Name</label>
-          <input type="text" id="caseClientName" class="lh-input" placeholder="Client full name">
-        </div>
-        <div>
-          <label class="lh-label">Case / Matter Type</label>
-          <select id="caseMatter" class="lh-input">
-            <option value="">-- Select --</option>
-            <option>Property / Land dispute</option>
-            <option>Family law / Divorce</option>
-            <option>Criminal defence</option>
-            <option>Business / Contract</option>
-            <option>Employment law</option>
-            <option>IP / Copyright</option>
-            <option>Immigration</option>
-            <option>Debt recovery</option>
-            <option>Human rights</option>
-            <option>Document drafting</option>
-            <option>Legal consultation only</option>
-            <option>Other</option>
-          </select>
-        </div>
-      </div>
-      <label class="lh-label">Total Fee Received from Client (KES) *</label>
-      <input type="number" id="caseTotalFee" class="lh-input" placeholder="e.g. 50000" oninput="previewCaseCommission()" style="font-size:18px;font-weight:700;">
-
-      <!-- Commission preview -->
-      <div id="caseCommPreview" style="display:none;background:rgba(113,255,0,0.06);border:1px solid rgba(113,255,0,0.2);border-radius:12px;padding:14px 16px;margin:10px 0;">
-        <div style="font-size:11px;font-weight:800;color:#71ff00;margin-bottom:8px;text-transform:uppercase;letter-spacing:.06em;">Commission Breakdown</div>
-        <div style="display:flex;justify-content:space-between;font-size:13px;color:rgba(255,255,255,0.6);margin-bottom:4px;padding-bottom:4px;border-bottom:1px solid rgba(255,255,255,0.06);">
-          <span>Total case fee</span><span id="prevTotal" style="color:white;font-weight:800;"></span>
-        </div>
-        <div style="display:flex;justify-content:space-between;font-size:14px;font-weight:900;margin-bottom:8px;">
-          <span style="color:rgba(255,255,255,0.7);">SOKONI commission (5%)</span><span id="prevOwed" style="color:#71ff00;"></span>
-        </div>
-        <div style="font-size:11px;color:rgba(255,255,255,0.4);line-height:1.7;">
-          Pay via M-PESA: <strong style="color:white;">Paybill <span data-sk-pay="commissionPaybill">522522</span></strong>  Account: <strong style="color:#71ff00;" id="prevRef">SOK-[REF]</strong>
-        </div>
-      </div>
-
-      <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:4px;">
-        <button type="button" onclick="submitCaseCompletion()" style="padding:12px 24px;background:linear-gradient(135deg,#71ff00,#4fc800);border:none;border-radius:12px;color:black;font-weight:900;font-size:13px;cursor:pointer;font-family:inherit;">✅ Log Completion & Get Invoice</button>
-        <!-- "Pay my commission via WhatsApp" REMOVED 2026-09-30 (owner: WhatsApp is never the hand-off for a SOKONI
-             payment). The request now raises a SOKONI Support ticket carrying the reference; settlement through an
-             IntaSend provider-commission flow is a separate functions slice (no server authority exists yet). -->
-        <a href="#" onclick="event.preventDefault();location.href='support.html?topic=payment&ref='+encodeURIComponent((document.getElementById('prevRef')||{}).textContent||'SOK-legal-commission')+'&desc='+encodeURIComponent('Commission settlement for a completed legal case. Fee: '+((document.getElementById('prevTotal')||{}).textContent||'')+' · Owed: '+((document.getElementById('prevOwed')||{}).textContent||''))" style="padding:12px 18px;background:rgba(113,255,0,0.08);border:1px solid rgba(113,255,0,0.25);border-radius:12px;color:#71ff00;font-weight:700;font-size:13px;text-decoration:none;display:inline-flex;align-items:center;gap:6px;">🛟 Settle via SOKONI Support</a>
-      </div>
-      <div id="caseCompMsg" style="margin-top:12px;font-size:12px;min-height:16px;"></div>
+      <div class="lh-section-title">💰 How you get paid on SOKONI</div>
+      <ol style="margin:0;padding-left:18px;font-size:13px;color:rgba(255,255,255,0.7);line-height:1.9;">
+        <li>The client books and pays through SOKONI (IntaSend). The payment is <strong>held</strong> by SOKONI — not yet yours, not yet SOKONI's.</li>
+        <li>You deliver the consultation or service.</li>
+        <li>The client gives you their <strong>completion PIN</strong>; you enter it in your dashboard.</li>
+        <li>SOKONI deducts its commission <strong>once</strong>, automatically, and credits the rest to your <strong>business wallet</strong>.</li>
+      </ol>
+      <p style="font-size:12px;color:rgba(255,255,255,0.5);margin:12px 0 0;">There is nothing to log by hand and no commission to pay separately — it is never added to the client's price. Your bookings, PIN entry, earnings and business wallet are in your <a href="provider-dashboard.html" style="color:#c8ff80;">provider dashboard</a>.</p>
     </div>
-
-    <!-- Recent completions (from localStorage) -->
-    <div style="font-size:13px;font-weight:800;color:white;margin:24px 0 12px;display:flex;align-items:center;gap:8px;">
-      📋 Your Logged Completions <span style="flex:1;height:1px;background:rgba(255,255,255,0.07);display:block;margin-left:8px;"></span>
-    </div>
-    <div id="myLegalCompletions"></div>
   </div>
 
-
-  <!-- ════ TAB: APPOINTMENTS ════ -->
+  <!-- ════ TAB: MY LEGAL BOOKINGS (canonical providerBookings; was a localStorage-only appointments list) ════ -->
   <div id="lawpane-appointments" class="law-pane">
-    <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px;margin-bottom:20px;">
-      <div>
-        <div style="font-size:17px;font-weight:900;color:white;">📅 My Appointments</div>
-        <div style="font-size:11px;color:rgba(255,255,255,0.4);margin-top:2px;">Book and manage consultations with legal professionals</div>
-      </div>
-      <button type="button" onclick="showBookAppointmentForm()" style="padding:10px 18px;background:linear-gradient(135deg,#71ff00,#4f46e5);border:none;border-radius:10px;color:white;font-weight:800;font-size:13px;cursor:pointer;font-family:inherit;">+ Book Consultation</button>
-    </div>
-
-    <div id="appointmentForm" style="display:none;background:rgba(113,255,0,0.06);border:1px solid rgba(113,255,0,0.2);border-radius:16px;padding:20px;margin-bottom:20px;">
-      <div style="font-size:14px;font-weight:900;color:white;margin-bottom:16px;">Book a Legal Consultation</div>
-      <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">
-        <div>
-          <label class="lh-label">Consultation Type *</label>
-          <select id="apptType" class="lh-input" style="font-size:16px;">
-            <option value="">Select type</option>
-            <option value="video">Video Call</option>
-            <option value="in-person">In-Person</option>
-            <option value="phone">Phone Call</option>
-          </select>
-        </div>
-        <div>
-          <label class="lh-label">Practice Area *</label>
-          <select id="apptArea" class="lh-input" style="font-size:16px;">
-            <option value="">Select area</option>
-            <option>Property / Land</option>
-            <option>Family Law</option>
-            <option>Criminal Law</option>
-            <option>Business / Commercial</option>
-            <option>Employment</option>
-            <option>IP / Copyright</option>
-            <option>Immigration</option>
-            <option>Tax Law</option>
-            <option>Corporate Law</option>
-            <option>General Legal Advice</option>
-          </select>
-        </div>
-        <div>
-          <label class="lh-label">Preferred Date *</label>
-          <input type="date" id="apptDate" class="lh-input" style="font-size:16px;">
-        </div>
-        <div>
-          <label class="lh-label">Preferred Time *</label>
-          <select id="apptTime" class="lh-input" style="font-size:16px;">
-            <option value="">Select time</option>
-            <option>08:00 AM</option><option>09:00 AM</option><option>10:00 AM</option>
-            <option>11:00 AM</option><option>12:00 PM</option><option>02:00 PM</option>
-            <option>03:00 PM</option><option>04:00 PM</option><option>05:00 PM</option>
-          </select>
-        </div>
-      </div>
-      <div style="margin-top:12px;">
-        <label class="lh-label">Preferred Lawyer / Firm (optional)</label>
-        <input type="text" id="apptLawyer" class="lh-input" placeholder="Any Property Lawyer or leave blank for auto-match" style="font-size:16px;">
-      </div>
-      <div style="margin-top:12px;">
-        <label class="lh-label">Brief Description of Matter *</label>
-        <textarea id="apptDesc" class="lh-input" rows="3" placeholder="Briefly describe your legal matter" style="resize:vertical;font-size:16px;"></textarea>
-      </div>
-      <div style="display:flex;gap:8px;margin-top:16px;flex-wrap:wrap;">
-        <button type="button" onclick="submitAppointment()" style="padding:11px 22px;background:linear-gradient(135deg,#71ff00,#4f46e5);border:none;border-radius:10px;color:white;font-weight:900;font-size:13px;cursor:pointer;font-family:inherit;">📅 Request Appointment</button>
-        <button type="button" onclick="document.getElementById('appointmentForm').style.display='none'" style="padding:11px 18px;background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.1);border-radius:10px;color:rgba(255,255,255,0.5);font-weight:700;font-size:13px;cursor:pointer;font-family:inherit;">Cancel</button>
-      </div>
-      <div id="apptMsg" style="margin-top:10px;font-size:12px;min-height:16px;"></div>
-    </div>
-
-    <div id="appointmentsList">
-      <div style="text-align:center;padding:40px 20px;color:rgba(255,255,255,0.3);">
-        <div style="font-size:36px;margin-bottom:12px;">📅</div>
-        <div style="font-size:13px;">No appointments yet. Book your first consultation above.</div>
-      </div>
-    </div>
+    <div style="font-size:17px;font-weight:900;color:white;margin-bottom:4px;">📅 My legal bookings</div>
+    <div style="font-size:11px;color:rgba(255,255,255,0.45);margin-bottom:16px;">Live from SOKONI bookings. Book a new consultation from an advocate's profile.</div>
+    <div id="lhMyBookings"></div>
   </div>
 
   <!-- ════ TAB: PROPERTY LEGAL ════ -->
@@ -1426,87 +1090,28 @@
     <div id="myBusinessRequests"><div style="text-align:center;padding:24px 20px;color:rgba(255,255,255,0.3);font-size:12px;">No active requests yet.</div></div>
   </div>
 
-  <!-- ════ TAB: CLIENT DASHBOARD ════ -->
+  <!-- ════ TAB: CLIENT DASHBOARD (canonical bookings; the old counters were localStorage tallies) ════ -->
   <div id="lawpane-dashboard" class="law-pane">
-    <div style="font-size:17px;font-weight:900;color:white;margin-bottom:20px;">👤 My Legal Dashboard</div>
-    <div class="dash-stats">
-      <div class="dash-stat"><div class="dash-stat-num" id="dStatAppts">0</div><div class="dash-stat-label">Appointments</div></div>
-      <div class="dash-stat"><div class="dash-stat-num" id="dStatRequests">0</div><div class="dash-stat-label">Service Requests</div></div>
-      <div class="dash-stat"><div class="dash-stat-num" id="dStatDocs">0</div><div class="dash-stat-label">Documents</div></div>
-      <div class="dash-stat"><div class="dash-stat-num" id="dStatSaved">0</div><div class="dash-stat-label">Saved Lawyers</div></div>
+    <div style="font-size:17px;font-weight:900;color:white;margin-bottom:6px;">👤 My Legal</div>
+    <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:16px;">
+      <button type="button" class="lc-filter-btn" onclick="showLawTab('appointments')">📅 My bookings</button>
+      <button type="button" class="lc-filter-btn" onclick="showLawTab('register')">⚖️ My advocate / firm application</button>
+      <a class="lc-filter-btn" style="text-decoration:none" href="legal-hub.html#lawyers">🔎 Find an advocate</a>
     </div>
-    <div style="font-size:13px;font-weight:800;color:white;margin-bottom:10px;display:flex;align-items:center;gap:8px;">
-      🔔 Notifications
-      <span id="notifBadge" style="display:none;background:#71ff00;color:#000;border-radius:6px;padding:1px 7px;font-size:10px;font-weight:900;"></span>
-      <span style="flex:1;height:1px;background:rgba(255,255,255,0.07);display:block;margin-left:4px;"></span>
-      <button type="button" onclick="markAllNotifsRead()" style="font-size:10px;color:rgba(255,255,255,0.3);background:none;border:none;cursor:pointer;font-family:inherit;">Mark all read</button>
-    </div>
-    <div id="notifList" style="margin-bottom:24px;"><div style="text-align:center;padding:20px;color:rgba(255,255,255,0.3);font-size:12px;">No notifications.</div></div>
-    <div style="font-size:13px;font-weight:800;color:white;margin-bottom:10px;display:flex;align-items:center;gap:8px;">
-      📅 Upcoming Appointments
-      <span style="flex:1;height:1px;background:rgba(255,255,255,0.07);display:block;margin-left:4px;"></span>
-      <button type="button" onclick="showLawTab('appointments')" style="font-size:10px;color:#c8ff80;background:none;border:none;cursor:pointer;font-family:inherit;">See all</button>
-    </div>
-    <div id="dashUpcomingAppts" style="margin-bottom:24px;"><div style="text-align:center;padding:16px;color:rgba(255,255,255,0.3);font-size:12px;">No upcoming appointments.</div></div>
-    <div style="font-size:13px;font-weight:800;color:white;margin-bottom:10px;display:flex;align-items:center;gap:8px;">🛠️ Recent Service Requests <span style="flex:1;height:1px;background:rgba(255,255,255,0.07);display:block;margin-left:4px;"></span></div>
-    <div id="dashRecentRequests" style="margin-bottom:24px;"><div style="text-align:center;padding:16px;color:rgba(255,255,255,0.3);font-size:12px;">No recent requests.</div></div>
-    <div style="font-size:13px;font-weight:800;color:white;margin-bottom:10px;">❤️ Saved Professionals</div>
-    <div id="dashSavedProfessionals"><div style="text-align:center;padding:16px;color:rgba(255,255,255,0.3);font-size:12px;">No saved professionals yet. Tap the heart on a lawyer card to save them.</div></div>
+    <div id="lhDashBookings"></div>
   </div>
 
-  <!-- ════ TAB: PRO DASHBOARD ════ -->
+  <!-- ════ TAB: PRO DASHBOARD → the canonical provider dashboard (the Legal-only one read localStorage sessions,
+       showed made-up analytics and wrote availability the rules deny) ════ -->
   <div id="lawpane-pro-dashboard" class="law-pane">
-    <div id="proDashGate" style="text-align:center;padding:40px 20px;">
-      <div style="font-size:40px;margin-bottom:16px;">⚖️</div>
-      <div style="font-size:16px;font-weight:900;color:white;margin-bottom:8px;">Legal Professional Dashboard</div>
-      <div style="font-size:13px;color:rgba(255,255,255,0.4);margin-bottom:20px;">Manage appointments, client requests, availability and track your practice analytics.</div>
-      <button type="button" onclick="showProDashLogin()" style="padding:12px 24px;background:linear-gradient(135deg,#71ff00,#4f46e5);border:none;border-radius:12px;color:white;font-weight:900;font-size:14px;cursor:pointer;font-family:inherit;">Login as Legal Professional</button>
-      <div style="margin-top:12px;font-size:11px;color:rgba(255,255,255,0.3);">Not registered? <button type="button" onclick="showLawTab('register')" style="background:none;border:none;color:#c8ff80;cursor:pointer;font-size:11px;font-weight:700;font-family:inherit;text-decoration:underline;">Register as Lawyer</button></div>
-    </div>
-    <div id="proDashLoginForm" style="display:none;max-width:400px;margin:0 auto;padding:20px;">
-      <div style="font-size:15px;font-weight:900;color:white;margin-bottom:16px;text-align:center;">Professional Login</div>
-      <label class="lh-label">LSK Number / Registration ID *</label>
-      <input type="text" id="proLskId" class="lh-input" placeholder="e.g. LSK/AD/001234" style="font-size:16px;margin-bottom:12px;">
-      <label class="lh-label">Phone Number *</label>
-      <input type="tel" id="proPhone" class="lh-input" placeholder="07XXXXXXXX" style="font-size:16px;margin-bottom:16px;">
-      <button type="button" onclick="loginProDashboard()" style="width:100%;padding:12px;background:linear-gradient(135deg,#71ff00,#4f46e5);border:none;border-radius:12px;color:white;font-weight:900;font-size:14px;cursor:pointer;font-family:inherit;">Login</button>
-      <div id="proLoginMsg" style="margin-top:10px;font-size:12px;text-align:center;min-height:16px;"></div>
-      <button type="button" onclick="document.getElementById('proDashLoginForm').style.display='none';document.getElementById('proDashGate').style.display='block';" style="margin-top:12px;width:100%;padding:10px;background:none;border:1px solid rgba(255,255,255,0.1);border-radius:10px;color:rgba(255,255,255,0.4);font-size:12px;cursor:pointer;font-family:inherit;">Cancel</button>
-    </div>
-    <div id="proDashContent" style="display:none;">
-      <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px;margin-bottom:20px;">
-        <div>
-          <div style="font-size:16px;font-weight:900;color:white;" id="proDashName">Welcome</div>
-          <div style="font-size:11px;color:rgba(255,255,255,0.4);" id="proDashSpec"></div>
-        </div>
-        <button type="button" onclick="logoutProDashboard()" style="padding:8px 14px;background:rgba(255,68,68,0.1);border:1px solid rgba(255,68,68,0.2);border-radius:8px;color:#ff6b6b;font-size:11px;font-weight:700;cursor:pointer;font-family:inherit;">Logout</button>
+    <div class="lh-section">
+      <div class="lh-section-title">⚖️ For advocates &amp; law firms</div>
+      <p style="font-size:13px;color:rgba(255,255,255,0.7);margin:0 0 12px;">Run your practice from your SOKONI provider dashboard: bookings and calendar, services and rates, availability, completion-PIN entry, earnings and your business wallet.</p>
+      <div style="display:flex;gap:8px;flex-wrap:wrap;">
+        <a class="lc-filter-btn active-lf" style="text-decoration:none;padding:12px 18px;" href="provider-dashboard.html">Open my provider dashboard →</a>
+        <button type="button" class="lc-filter-btn" style="padding:12px 18px;" onclick="showLawTab('register')">Application status &amp; profile</button>
       </div>
-      <div class="dash-stats">
-        <div class="dash-stat"><div class="dash-stat-num" id="proStatPending">0</div><div class="dash-stat-label">Pending</div></div>
-        <div class="dash-stat"><div class="dash-stat-num" id="proStatConfirmed">0</div><div class="dash-stat-label">Confirmed</div></div>
-        <div class="dash-stat"><div class="dash-stat-num" id="proStatCompleted">0</div><div class="dash-stat-label">Completed</div></div>
-        <div class="dash-stat"><div class="dash-stat-num" id="proStatRating">5.0</div><div class="dash-stat-label">Avg Rating</div></div>
-      </div>
-      <div style="font-size:13px;font-weight:800;color:white;margin:20px 0 10px;display:flex;align-items:center;gap:8px;">📨 Incoming Requests <span style="flex:1;height:1px;background:rgba(255,255,255,0.07);display:block;margin-left:4px;"></span></div>
-      <div id="proIncomingRequests"><div style="text-align:center;padding:20px;color:rgba(255,255,255,0.3);font-size:12px;">No pending requests.</div></div>
-      <div style="font-size:13px;font-weight:800;color:white;margin:20px 0 10px;display:flex;align-items:center;gap:8px;">📆 Availability <span style="flex:1;height:1px;background:rgba(255,255,255,0.07);display:block;margin-left:4px;"></span></div>
-      <div id="availabilitySlots">
-        <div class="avail-slot"><div><div class="avail-day">Monday</div><div class="avail-time">8:00 AM - 5:00 PM</div></div><button class="toggle-switch on" onclick="toggleAvailDay(this,'mon')"></button></div>
-        <div class="avail-slot"><div><div class="avail-day">Tuesday</div><div class="avail-time">8:00 AM - 5:00 PM</div></div><button class="toggle-switch on" onclick="toggleAvailDay(this,'tue')"></button></div>
-        <div class="avail-slot"><div><div class="avail-day">Wednesday</div><div class="avail-time">8:00 AM - 5:00 PM</div></div><button class="toggle-switch on" onclick="toggleAvailDay(this,'wed')"></button></div>
-        <div class="avail-slot"><div><div class="avail-day">Thursday</div><div class="avail-time">8:00 AM - 5:00 PM</div></div><button class="toggle-switch on" onclick="toggleAvailDay(this,'thu')"></button></div>
-        <div class="avail-slot"><div><div class="avail-day">Friday</div><div class="avail-time">8:00 AM - 5:00 PM</div></div><button class="toggle-switch on" onclick="toggleAvailDay(this,'fri')"></button></div>
-        <div class="avail-slot"><div><div class="avail-day">Saturday</div><div class="avail-time">By appointment</div></div><button class="toggle-switch" onclick="toggleAvailDay(this,'sat')"></button></div>
-        <div class="avail-slot"><div><div class="avail-day">Sunday</div><div class="avail-time">Not available</div></div><button class="toggle-switch" onclick="toggleAvailDay(this,'sun')"></button></div>
-      </div>
-      <button type="button" onclick="saveAvailability()" style="margin-top:12px;padding:10px 20px;background:rgba(113,255,0,0.2);border:1px solid rgba(113,255,0,0.3);border-radius:10px;color:#c8ff80;font-weight:800;font-size:12px;cursor:pointer;font-family:inherit;">Save Availability</button>
-      <div id="availMsg" style="margin-top:8px;font-size:11px;min-height:14px;"></div>
-      <div style="font-size:13px;font-weight:800;color:white;margin:20px 0 10px;display:flex;align-items:center;gap:8px;">📊 Practice Analytics <span style="flex:1;height:1px;background:rgba(255,255,255,0.07);display:block;margin-left:4px;"></span></div>
-      <div style="background:rgba(255,255,255,0.02);border:1px solid rgba(255,255,255,0.07);border-radius:14px;padding:18px;">
-        <div style="margin-bottom:14px;"><div style="display:flex;justify-content:space-between;font-size:11px;margin-bottom:4px;"><span style="color:rgba(255,255,255,0.5);">Property Law</span><span style="color:white;font-weight:700;" id="analyticsProp">0%</span></div><div class="analytics-bar"><div class="analytics-fill" id="analyticsBarProp" style="width:0%"></div></div></div>
-        <div style="margin-bottom:14px;"><div style="display:flex;justify-content:space-between;font-size:11px;margin-bottom:4px;"><span style="color:rgba(255,255,255,0.5);">Commercial Law</span><span style="color:white;font-weight:700;" id="analyticsComm">0%</span></div><div class="analytics-bar"><div class="analytics-fill" id="analyticsBarComm" style="width:0%"></div></div></div>
-        <div><div style="display:flex;justify-content:space-between;font-size:11px;margin-bottom:4px;"><span style="color:rgba(255,255,255,0.5);">Family Law</span><span style="color:white;font-weight:700;" id="analyticsFam">0%</span></div><div class="analytics-bar"><div class="analytics-fill" id="analyticsBarFam" style="width:0%"></div></div></div>
-      </div>
+      <div id="lhProStatus" style="font-size:12px;margin-top:10px;"></div>
     </div>
   </div>
 
@@ -1610,17 +1215,13 @@ function showLawTab(name, btn, _skipHistory){
   /* remember + browser history */
   localStorage.setItem("sokoniLegalLastTab", name);
   if(!_skipHistory) history.pushState({sokoniTab:name,page:"legal-hub"}, "", "#"+name);
-  if(name==="lawyers")    renderLawyers();
-  if(name==="court")      renderCourtSection();
-  if(name==="rights")     renderRights();
-  if(name==="register")   checkExistingApp();
-  if(name==="completion")     renderMyLegalCompletions();
-  if(name==="appointments")   renderAppointments();
-  if(name==="property-legal") renderPropertyRequests();
-  if(name==="vehicle-legal")  renderVehicleRequests();
-  if(name==="business-legal") renderBusinessRequests();
-  if(name==="dashboard")      renderClientDashboard();
-  if(name==="pro-dashboard")  initProDashboard();
+  /* One tab's loader failing must never break navigation (Legal Hub L3b). Loaders are looked up on window so the
+     account module's canonical versions win over the legacy ones. */
+  const L = { lawyers: 'renderLawyers', court: 'renderCourtSection', rights: 'renderRights', register: 'checkExistingApp',
+    completion: 'renderMyLegalCompletions', appointments: 'renderAppointments', 'property-legal': 'renderPropertyRequests',
+    'vehicle-legal': 'renderVehicleRequests', 'business-legal': 'renderBusinessRequests', dashboard: 'renderClientDashboard', 'pro-dashboard': 'initProDashboard' };
+  try { const fn = L[name] && window[L[name]]; if (typeof fn === 'function') { const r = fn(); if (r && typeof r.catch === 'function') r.catch(e => console.warn('[Legal Hub] ' + name, e && e.message)); } }
+  catch (e) { console.warn('[Legal Hub] tab ' + name + ':', e && e.message); }
   if(switching){
     /* Scroll so the tab bar sits just below the navbar, not back to hero top */
     const bar = document.getElementById('lawTabsBar');
@@ -1648,7 +1249,10 @@ function isLawyerSaved(id){return _lhGet('sokoniSavedLawyers').some(function(l){
   const hashTab = location.hash.replace("#","");
   const stored  = localStorage.getItem("sokoniLegalLastTab");
   const start   = VALID.has(hashTab) ? hashTab : (VALID.has(stored) ? stored : "lawyers");
-  showLawTab(start, null, true);
+  /* Legal Hub L3b: open the tab once the DOM and the deferred modules are in (sokoni-legal-account.js replaces the
+     legacy account loaders). Opening it mid-parse ran the old localStorage loaders against panes that no longer exist. */
+  const go = () => showLawTab(start, null, true);
+  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', go, { once: true }); else go();
   history.replaceState({sokoniTab:start,page:"legal-hub"}, "", "#"+start);
 })();
 
@@ -3573,146 +3177,137 @@ window.heroSearchLawyers = heroSearchLawyers;
 /* """"""""""""""""""""""""""""""""""""""""""""""""""""""""""
    REGISTER AS LAWYER
 """""""""""""""""""""""""""""""""""""""""""""""""""""""""" */
-const SPEC_LABELS = {
-  property:"🏠 Property & Conveyancing", family:"👨‍👩‍👧 Family Law", criminal:"🏛️ Criminal & Defence",
-  commercial:"💼 Commercial Law", employment:"⚖️ Employment Law", ip:"💡 IP & Copyright",
-  immigration:"🌍 Immigration", human_rights:"⚖️ Human Rights", environment:"🌿 Environment & Land",
-  banking:"💰 Banking & Finance", general:"📋 General Practice"
-};
-
-async function checkExistingApp(){
-  const card = document.getElementById("existingAppCard");
-  const form = document.getElementById("lawRegForm");
-  if(!card || !form) return;
-
-  /* Prefer Firestore status when logged in — provider can always read own doc */
-  const uid = window._sokoniUser?.uid;
-  if (uid) {
-    try {
-      const fsDb = await _lhGetDb();
-      if (fsDb) {
-        const { doc, getDoc } = await import('https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js');
-        const snap = await getDoc(doc(fsDb, 'legalProviders', uid));
-        if (snap.exists()) {
-          const p = snap.data();
-          const statusLabel = {
-            active:               '<span style="color:#71ff00;">✅ Verified — Visible to Clients</span>',
-            pending_review:       '<span style="color:#ff9800;">⏳ Pending SOKONI review</span>',
-            pending_verification: '<span style="color:#ff9800;">⏳ Approved by SOKONI — awaiting LSK practising-status verification</span>',
-            rejected:             '<span style="color:#ff6b6b;">⛔ Not approved — Contact Support</span>',
-            suspended:            '<span style="color:#ff6b6b;">⛔ Suspended — Contact Support</span>',
-          }[p.status] || `<span style="color:rgba(255,255,255,0.4);">${lhEsc(p.status||'unknown')}</span>`;
-          card.style.display = 'block';
-          const info = document.getElementById('existingAppInfo');
-          if (info) info.innerHTML = `<strong style="color:white;">Advocate ${lhEsc(p.name)}</strong>  Lic #${lhEsc(p.licenseNumber||'')}<br>
-            ${lhEsc((p.specializations||[]).join(', '))}  ${lhEsc(p.county||'Kenya')}<br>
-            ${statusLabel}<br>
-            <span style="color:rgba(255,255,255,0.35);">KES ${(p.consultationFee||0).toLocaleString()} / session</span>`;
-          if (form) form.style.display = 'none';
-          return;
-        }
-      }
-    } catch(e) { /* permission-denied = not yet registered; fall through */ }
-  }
-
-  /* Fallback: localStorage application record (submitted before login or CF) */
-  const app = JSON.parse(localStorage.getItem("sokoniLawyerApp")||"null");
-  if(!app) return;
-  card.style.display = "block";
-  const info = document.getElementById("existingAppInfo");
-  if(info){
-    const date = new Date(app.createdAt).toLocaleDateString("en-KE",{day:"numeric",month:"long",year:"numeric"});
-    info.innerHTML = `<strong style="color:white;">Advocate ${lhEsc(app.name)}</strong>  Roll #${lhEsc(app.rollNo)}<br>
-      ${lhEsc(SPEC_LABELS[app.spec]||app.spec)}  ${lhEsc(app.location?.charAt(0).toUpperCase()+app.location?.slice(1)||"Kenya")}<br>
-      <span style="color:#ff9800;">⏳ Status: Pending LSK Verification</span>  Submitted ${lhEsc(date)}<br>
-      <span style="color:rgba(255,255,255,0.35);">Ref: ${lhEsc(app.ref)}</span>`;
-  }
+/* ══ LEGAL HUB L2/L3 — application wizard + applicant status (server only) ══════════════════════════════════════
+   registerLegalProvider creates the ONE Legal record + AdminOS review item. legalDispatch: legalMyProfile (status, reviewer
+   reason, verification), legalResubmitApplication (only when SOKONI asked for information), legalUpdateProfile (public
+   profile facts only — identity and verification are protected server-side). No localStorage application copies. */
+let _lhRegType = 'advocate';
+const _lhSel = new Set();
+function lhRegSetType(t){
+  _lhRegType = t === 'firm' ? 'firm' : 'advocate';
+  const a = document.getElementById('lhTypeAdv'), f = document.getElementById('lhTypeFirm');
+  if (a && f) { a.classList.toggle('active-lf', _lhRegType==='advocate'); f.classList.toggle('active-lf', _lhRegType==='firm'); a.setAttribute('aria-checked', String(_lhRegType==='advocate')); f.setAttribute('aria-checked', String(_lhRegType==='firm')); }
+  const fs = document.getElementById('lhFirmSection'); if (fs) fs.hidden = _lhRegType !== 'firm';
+  const w = document.getElementById('lhWhoTitle'); if (w) w.textContent = _lhRegType === 'firm' ? '👤 The responsible advocate (you)' : '👤 You, the advocate';
+  if (_lhRegType === 'firm' && !document.querySelector('#lhOffices .lh-row')) lhAddOffice();
 }
+function lhRenderAreaPicker(hostId, selected){
+  const host = document.getElementById(hostId || 'lhAreaPicker');
+  if (!host) return;
+  if (!LT) { host.innerHTML = '<p style="font-size:12px;color:#ff9800;">Practice areas could not load — please refresh.</p>'; return; }
+  const sel = selected || _lhSel;
+  host.innerHTML = LT.GROUPS.map(g => `<div style="margin-bottom:10px;"><div style="font-size:11px;font-weight:800;color:rgba(255,255,255,0.5);margin-bottom:6px;">${lhEsc(g.icon+' '+g.label)}</div><div style="display:flex;flex-wrap:wrap;gap:6px;">${
+    g.services.map(sv => `<button type="button" class="lc-filter-btn${sel.has(sv.id)?' active-lf':''}" aria-pressed="${sel.has(sv.id)}" data-area="${sv.id}">${lhEsc(sv.label)}</button>`).join('')}</div></div>`).join('');
+  host.onclick = (e) => {
+    const b = e.target.closest('[data-area]'); if (!b) return;
+    const id = b.getAttribute('data-area');
+    if (sel.has(id)) sel.delete(id); else if (sel.size < (LT.MAX_AREAS || 12)) sel.add(id);
+    b.classList.toggle('active-lf', sel.has(id)); b.setAttribute('aria-pressed', String(sel.has(id)));
+  };
+}
+function _lhRow(hostId, fields){
+  const host = document.getElementById(hostId); if (!host) return;
+  const row = document.createElement('div'); row.className = 'lh-row'; row.style.cssText = 'display:grid;grid-template-columns:repeat(' + fields.length + ',1fr) auto;gap:6px;margin-bottom:6px;';
+  row.innerHTML = fields.map(f => `<input type="text" class="lh-input" style="margin:0" data-k="${f[0]}" placeholder="${lhEsc(f[1])}" maxlength="${f[2]}" aria-label="${lhEsc(f[1])}">`).join('') + '<button type="button" class="lc-filter-btn" aria-label="Remove" onclick="this.parentNode.remove()">✕</button>';
+  host.appendChild(row);
+}
+function lhAddOffice(){ if (document.querySelectorAll('#lhOffices .lh-row').length < 10) _lhRow('lhOffices', [['name','Office name',80],['county','County',80],['address','Address',200]]); }
+function lhAddMember(){ if (document.querySelectorAll('#lhTeam .lh-row').length < 50) _lhRow('lhTeam', [['name','Advocate name',120],['lskNumber','LSK number',60],['role','Role',60]]); }
+function _lhRows(hostId){ return [...document.querySelectorAll('#' + hostId + ' .lh-row')].map(r => { const o = {}; r.querySelectorAll('[data-k]').forEach(i => { o[i.getAttribute('data-k')] = i.value.trim(); }); return o; }); }
+function _lhMsg(t, c){ const m = document.getElementById('lawRegMsg'); if (m) { m.innerHTML = t; m.style.color = c || '#ff9800'; } }
 
 async function registerLawyer(){
-  if(typeof SokoniSecurity !== 'undefined' && !SokoniSecurity.persistentRateLimit('lawyer_reg', 3, 3600000)){
-    const m = document.getElementById("lawRegMsg"); if(m){ m.textContent="⚠️ Too many submissions. Please wait 1 hour."; m.style.color="#ff9800"; } return;
-  }
-  const name   = document.getElementById("lawName")?.value.trim();
-  const roll   = document.getElementById("lawRoll")?.value.trim();
-  const phone  = document.getElementById("lawPhone")?.value.trim();
-  const email  = document.getElementById("lawEmail")?.value.trim();
-  const spec   = document.getElementById("lawSpec")?.value;
-  const rate   = Number(document.getElementById("lawRate")?.value||0);
-  const bio    = document.getElementById("lawBio")?.value.trim();
-  const decl   = document.getElementById("lawDeclaration")?.checked;
-  const msgEl  = document.getElementById("lawRegMsg");
-
-  if(!name||!roll||!phone||!rate||!bio){
-    if(msgEl){ msgEl.textContent="⚖️ Fill all required fields (name, roll number, phone, rate, bio)"; msgEl.style.color="#ff9800"; }
-    return;
-  }
-  if(!email){
-    if(msgEl){ msgEl.textContent="⚖️ Email address is required"; msgEl.style.color="#ff9800"; }
-    return;
-  }
-  if(!decl){
-    if(msgEl){ msgEl.textContent="⚖️ You must confirm the declaration before submitting"; msgEl.style.color="#ff9800"; }
-    return;
-  }
-
-  const ref = "LSK-" + Date.now().toString(36).toUpperCase();
-  const lawyer = {
-    id: "LAW"+Date.now(), name, phone, email,
-    category: spec||"general", isLawyer: true,
-    skills: (document.getElementById("lawSkills")?.value||"").split(",").map(s=>s.trim()).filter(Boolean),
-    firm: document.getElementById("lawFirm")?.value.trim()||"",
-    location: document.getElementById("lawLocation")?.value||"nairobi",
-    rate, rateType: document.getElementById("lawRateType")?.value||"per session",
-    bio, rating:5.0, jobsCompleted:0, available:true, verified:false,
-    rollNo: roll, ref,
-    spec: SPEC_LABELS[spec]||"📋 General Practice",
-    createdAt: Date.now()
+  const v = (id) => (document.getElementById(id)?.value || '').trim();
+  const name = v('lhName'), p105 = v('lhP105'), county = v('lhCounty'), bio = v('lhBio');
+  if (!name || !p105 || !county || !bio) return _lhMsg('Please fill in your name, LSK practising number, county and profile.');
+  if (!_lhSel.size) return _lhMsg('Choose at least one practice area.');
+  if (_lhRegType === 'firm' && !v('lhFirmName')) return _lhMsg('Enter the firm name.');
+  if (!document.getElementById('lhDecl')?.checked) return _lhMsg('Please confirm the declaration.');
+  await _lhAuthReady();
+  if (!window._sokoniUser?.uid) return _lhMsg('Please <a href="login.html?redirect=' + encodeURIComponent(location.pathname + '#register') + '" style="color:#71ff00;font-weight:800;">sign in</a> to apply — your application is linked to your SOKONI account.');
+  const data = {
+    entityType: _lhRegType, name, licenseNumber: p105, county, bio, phone: v('lhPhone'),
+    practiceAreas: [..._lhSel], consultationFee: Number(v('lhFee')) || 0, yearsOfExperience: Number(v('lhYears')) || 0,
+    languages: v('lhLangs').split(',').map(x => x.trim()).filter(Boolean).slice(0, 5), isOnline: !!document.getElementById('lhOnline')?.checked,
   };
-
-  /* CHANGELOG 219 — the application IS the server record (registerLegalProvider, status
-     'pending' until an admin approves). It used to be fire-and-forget: a signed-out or failed
-     submission still showed "Application Received! Your listing is now live", copied itself
-     into the local directory, and opened the admin's WhatsApp. */
-  if(!window._sokoniUser?.uid){
-    if(msgEl){ msgEl.innerHTML='⚖️ Please <a href="login.html?redirect='+encodeURIComponent(location.pathname+location.search)+'" style="color:#71ff00;font-weight:800;">sign in</a> to apply — your application is reviewed inside SOKONI.'; msgEl.style.color="#ff9800"; }
-    return;
-  }
-  if(msgEl){ msgEl.textContent="Submitting your application…"; msgEl.style.color="#c8ff80"; }
-  const saved = await _saveLawyerFs(lawyer);
-  if(!saved){
-    if(msgEl){ msgEl.textContent="⚠️ We could not submit your application — nothing was saved. Please try again."; msgEl.style.color="#ff9800"; }
-    return;
+  if (_lhRegType === 'firm') Object.assign(data, { firmName: v('lhFirmName'), firmRegistrationNumber: v('lhFirmReg'), representativeRole: v('lhRepRole'),
+    firmDescription: v('lhFirmDesc'), offices: _lhRows('lhOffices'), team: _lhRows('lhTeam') });
+  _lhMsg('Submitting your application…', '#c8ff80');
+  try { await _lhCallCF('registerLegalProvider', data); }
+  catch (e) {
+    const c = (e && e.code) || '';
+    return _lhMsg(c.indexOf('already-exists') > -1 ? 'This account already has a Legal application — see its status above.' : (lhEsc((e && e.message) || 'We could not submit your application.') + ' Nothing was saved.'));
   }
   _fsLawyersCache = null;
-  /* status-check hint only (the server record is authoritative) */
-  try { localStorage.setItem("sokoniLawyerApp", JSON.stringify({ name, rollNo:roll, spec, location:lawyer.location, ref, createdAt:Date.now() })); } catch(e){}
-  /* CHANGELOG 220 — the server created the AdminOS review item (applications/legal_{uid}) together with
-     the Legal record; a second, client-written application is no longer made. SOKONI approval and LSK
-     verification are separate — the advocate is listed only once both hold. */
-
-  /* Show success state */
-  const formEl   = document.getElementById("lawRegForm");
-  const successEl= document.getElementById("lawRegSuccess");
-  const refEl    = document.getElementById("regRef");
-
-  if(formEl) formEl.style.display = "none";
-  if(successEl) successEl.style.display = "block";
-  if(refEl) refEl.textContent = `Application Ref: ${ref}`;
+  await checkExistingApp();
 }
 
-function clearExistingApp(){
-  localStorage.removeItem("sokoniLawyerApp");
-  const card = document.getElementById("existingAppCard");
-  if(card) card.style.display = "none";
-  const form = document.getElementById("lawRegForm");
-  const success = document.getElementById("lawRegSuccess");
-  if(form) form.style.display = "block";
-  if(success) success.style.display = "none";
+const _LH_STATUS = {
+  pending: ['⏳ Under review', 'SOKONI is reviewing your application.'],
+  info_requested: ['📝 SOKONI needs more information', 'Answer below and resubmit.'],
+  approved: ['✅ Approved by SOKONI', 'Next: LSK practising-status verification.'],
+  rejected: ['⛔ Not approved', 'See the reason below. Contact SOKONI Support if you think this is wrong.'],
+  suspended: ['⛔ Suspended', 'Your profile is not listed or bookable. Contact SOKONI Support.'],
+};
+async function checkExistingApp(){
+  const card = document.getElementById('lhStatusCard'), wrap = document.getElementById('lhRegWrap');
+  if (!card || !wrap) return;
+  lhRenderAreaPicker();
+  await _lhAuthReady();
+  if (!window._sokoniUser?.uid) { card.hidden = true; wrap.hidden = false; return; }
+  let r = null;
+  try { r = await _lhCallCF('legalDispatch', { op: 'legalMyProfile' }); }
+  catch (_) { card.hidden = false; card.innerHTML = '<div class="law-alert">We could not load your application status just now — this is not "no application". Please refresh.</div>'; wrap.hidden = true; return; }
+  if (!r || !r.exists) { card.hidden = true; wrap.hidden = false; return; }
+  wrap.hidden = true; card.hidden = false;
+  const p = r.profile || {}, a = r.application || {}, vf = r.verification || {};
+  const st = _LH_STATUS[a.status] || ['—', ''];
+  const live = vf.bookable === true;
+  card.innerHTML = `<div class="lh-section">
+    <div class="lh-section-title">${a.type === 'law_firm' ? '🏢 Law-firm application' : '👨‍⚖️ Lawyer application'} — ${lhEsc(p.entityType === 'firm' ? (p.firmName || p.name) : p.name)}</div>
+    <div style="font-size:15px;font-weight:900;color:white;">${lhEsc(st[0])}</div>
+    <div style="font-size:12px;color:rgba(255,255,255,0.55);margin:4px 0 10px;">${lhEsc(st[1])}</div>
+    ${a.reviewReason ? `<div class="law-alert" style="margin-bottom:10px;"><strong>From SOKONI:</strong> ${lhEsc(a.reviewReason)}</div>` : ''}
+    <div style="display:flex;flex-wrap:wrap;gap:8px;font-size:12px;">
+      <span class="lc-skill">SOKONI approval: ${vf.sokoniVerified ? '✅' : '⏳'}</span>
+      <span class="lc-skill">LSK practising status: ${vf.lskVerified ? '✅ ' + lhEsc(vf.lskPractisingYear || '') : '⏳ not verified yet'}</span>
+      <span class="lc-skill">${live ? '🟢 Listed &amp; bookable' : '⚪ Not listed yet'}</span>
+    </div>
+    ${live ? `<p style="margin:10px 0 0;font-size:12px;"><a href="legal-profile.html?id=${encodeURIComponent(p.providerId)}" style="color:#c8ff80;">View your public storefront →</a> · <a href="provider-dashboard.html" style="color:#c8ff80;">Manage bookings, services &amp; availability →</a></p>` : ''}
+  </div>
+  ${a.status === 'info_requested' ? `<div class="lh-section"><div class="lh-section-title">📝 Respond to SOKONI</div>
+    <label class="lh-label" for="lhResNote">Your answer *</label><textarea id="lhResNote" class="lh-input lh-textarea" maxlength="1000"></textarea>
+    <button type="button" class="lc-filter-btn active-lf" style="padding:12px 18px;" onclick="lhResubmit()">Resubmit application</button></div>` : ''}
+  <div class="lh-section"><div class="lh-section-title">✏️ Public profile</div>
+    <p style="font-size:11px;color:rgba(255,255,255,0.45);margin:0 0 8px;">Your verified name, LSK number and firm name can only be changed through SOKONI Support (re-verification).</p>
+    <label class="lh-label" for="lhEdBio">Profile</label><textarea id="lhEdBio" class="lh-input lh-textarea" maxlength="2000">${lhEsc(p.bio || '')}</textarea>
+    <div class="lh-grid2"><div><label class="lh-label" for="lhEdFee">Consultation fee (KES)</label><input id="lhEdFee" type="number" min="0" step="100" class="lh-input" value="${p.consultationFee != null ? lhEsc(p.consultationFee) : ''}"></div>
+    <div><label class="lh-label" for="lhEdCounty">County</label><input id="lhEdCounty" class="lh-input" value="${lhEsc(p.county || '')}"></div></div>
+    <div class="lh-label">Practice areas</div><div id="lhEdAreas"></div>
+    <button type="button" class="lc-filter-btn active-lf" style="padding:12px 18px;margin-top:8px;" onclick="lhSaveProfile()">Save profile</button>
+    <div id="lhEdMsg" role="status" style="font-size:12px;margin-top:8px;"></div></div>`;
+  window._lhEdSel = new Set(p.practiceAreas || []);
+  lhRenderAreaPicker('lhEdAreas', window._lhEdSel);
 }
+async function lhResubmit(){
+  const note = (document.getElementById('lhResNote')?.value || '').trim();
+  if (!note) { alert('Please write your answer to SOKONI.'); return; }
+  try { await _lhCallCF('legalDispatch', { op: 'legalResubmitApplication', note }); await checkExistingApp(); }
+  catch (e) { alert(((e && e.message) || 'Could not resubmit.') + ' Nothing was changed.'); }
+}
+async function lhSaveProfile(){
+  const m = document.getElementById('lhEdMsg');
+  const fee = document.getElementById('lhEdFee')?.value;
+  const data = { op: 'legalUpdateProfile', bio: document.getElementById('lhEdBio')?.value || '', county: document.getElementById('lhEdCounty')?.value || '', practiceAreas: [...(window._lhEdSel || [])] };
+  if (fee !== '' && fee != null) data.consultationFee = Number(fee);
+  if (m) { m.textContent = 'Saving…'; m.style.color = '#c8ff80'; }
+  try { await _lhCallCF('legalDispatch', data); if (m) { m.textContent = 'Saved.'; m.style.color = '#71ff00'; } _fsLawyersCache = null; }
+  catch (e) { if (m) { m.textContent = ((e && e.message) || 'Could not save.') + ' Nothing was changed.'; m.style.color = '#ff9800'; } }
+}
+function clearExistingApp(){ checkExistingApp(); }
+window.registerLawyer = registerLawyer; window.clearExistingApp = clearExistingApp; window.lhRegSetType = lhRegSetType;
+window.lhAddOffice = lhAddOffice; window.lhAddMember = lhAddMember; window.lhResubmit = lhResubmit; window.lhSaveProfile = lhSaveProfile;
 
-window.registerLawyer  = registerLawyer;
-window.clearExistingApp= clearExistingApp;
 
 /* """""""""""""""""""""""""""""""""""""""""""""""""""""""""""
    CASE COMPLETION  captures off-platform legal fees
@@ -4837,116 +4432,16 @@ function _setPct(labelId, barId, pct){
   }catch(e){}
 })();
 
-/* ── Firm Registration JS ───────────────────────────────── */
-(function(){
-  var _regType = 'individual';
-  var _firmPlan = 'basic';
-
-  window.switchRegType = function(type){
-    _regType = type;
-    var indPanel = document.getElementById('individualRegPanel');
-    var firmPanel = document.getElementById('firmRegPanel');
-    var btnInd = document.getElementById('regTypeIndBtn');
-    var btnFirm = document.getElementById('regTypeFirmBtn');
-    if(!indPanel || !firmPanel) return;
-    if(type === 'firm'){
-      indPanel.style.display = 'none';
-      firmPanel.style.display = 'block';
-      if(btnFirm){ btnFirm.style.background='rgba(113,255,0,0.9)'; btnFirm.style.color='#fff'; btnFirm.style.borderColor='rgba(113,255,0,0.8)'; }
-      if(btnInd){ btnInd.style.background='rgba(255,255,255,0.04)'; btnInd.style.color='rgba(255,255,255,0.5)'; btnInd.style.borderColor='rgba(255,255,255,0.1)'; }
-    } else {
-      indPanel.style.display = 'block';
-      firmPanel.style.display = 'none';
-      if(btnInd){ btnInd.style.background='rgba(113,255,0,0.9)'; btnInd.style.color='#fff'; btnInd.style.borderColor='rgba(113,255,0,0.8)'; }
-      if(btnFirm){ btnFirm.style.background='rgba(255,255,255,0.04)'; btnFirm.style.color='rgba(255,255,255,0.5)'; btnFirm.style.borderColor='rgba(255,255,255,0.1)'; }
-    }
-  };
-
-  window.updateFirmPlanUI = function(plan){
-    if(!plan){
-      var chk = document.querySelector('input[name="firmPlan"]:checked');
-      plan = chk ? chk.value : 'basic';
-    }
-    _firmPlan = plan;
-    ['basic','premium','elite'].forEach(function(p){
-      var card = document.getElementById('firmPlan' + p.charAt(0).toUpperCase() + p.slice(1));
-      if(!card) return;
-      if(p === plan){
-        card.style.border = '2px solid rgba(113,255,0,0.8)';
-        card.style.background = 'rgba(113,255,0,0.18)';
-      } else {
-        card.style.border = '1.5px solid rgba(255,255,255,0.1)';
-        card.style.background = 'rgba(255,255,255,0.03)';
-      }
-    });
-  };
-
-  window.submitFirmRegistration = async function(){
-    if(typeof SokoniSecurity !== 'undefined' && !SokoniSecurity.persistentRateLimit('firm_reg', 3, 3600000)){
-      var _m = document.getElementById('firmRegMsg'); if(_m){ _m.textContent='⚠️ Too many submissions. Please wait 1 hour.'; _m.style.color='#ff9800'; } return;
-    }
-    var name  = (document.getElementById('firmName')||{}).value||'';
-    var year  = (document.getElementById('firmYear')||{}).value||'';
-    var size  = (document.getElementById('firmSize')||{}).value||'';
-    var city  = (document.getElementById('firmCity')||{}).value||'';
-    var phone = (document.getElementById('firmPhone')||{}).value||'';
-    var email = (document.getElementById('firmEmail')||{}).value||'';
-    var msgEl = document.getElementById('firmRegMsg');
-
-    function _err(t){ if(msgEl){ msgEl.textContent=t; msgEl.style.color='#ff9800'; } }
-    if(!name.trim()){ _err('⚠️ Please enter your firm name.'); return; }
-    if(!city.trim()){ _err('⚠️ Please enter your city.'); return; }
-    if(!phone.trim()){ _err('⚠️ Please enter a contact phone number.'); return; }
-    if(!email.trim()){ _err('⚠️ Email address is required.'); return; }
-    if(!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)){ _err('⚠️ Please enter a valid email address.'); return; }
-
-    var ref = 'FIRM-' + Date.now().toString(36).toUpperCase();
-    var firmData = {
-      id: ref,
-      type: 'law_firm',
-      name: name.trim(),
-      yearFounded: year,
-      size: size,
-      city: city.trim(),
-      address: (document.getElementById('firmAddress')||{}).value||'',
-      specializations: (document.getElementById('firmSpecializations')||{}).value||'',
-      bio: (document.getElementById('firmBio')||{}).value||'',
-      phone: phone.trim(),
-      email: email.trim(),
-      website: (document.getElementById('firmWebsite')||{}).value||'',
-      whatsapp: (document.getElementById('firmWhatsapp')||{}).value||'',
-      plan: _firmPlan,
-      hub: 'legal',
-      status: 'pending',
-      date: new Date().toLocaleDateString('en-KE'),
-      submittedAt: new Date().toISOString()
-    };
-
-    /* CHANGELOG 219 — the registration IS the admin-queue record; success only once it is saved.
-       It used to show "Registration Submitted!" whether or not the save worked, keep a local
-       copy as the "fallback", and open the admin's WhatsApp. */
-    if(!window._sokoniUser || !window._sokoniUser.uid){
-      if(msgEl){ msgEl.innerHTML = '⚠️ Please <a href="login.html?redirect=' + encodeURIComponent(location.pathname + location.search) + '" style="color:#71ff00;font-weight:800;">sign in</a> to register your firm.'; msgEl.style.color = '#ff9800'; }
-      return;
-    }
-    if(!window.SokoniDB){ _err('⚠️ Registration is loading — please try again in a moment. Nothing was submitted.'); return; }
-    if(msgEl){ msgEl.textContent = 'Submitting…'; msgEl.style.color = '#c8ff80'; }
-    try { await window.SokoniDB.saveApplication(firmData); }
-    catch(e){ console.warn('[SOKONI] Firm reg Firestore save:', e.message); _err('⚠️ We could not submit your registration — nothing was saved. Please try again.'); return; }
-
-
-    /* Show success state */
-    var formEl    = document.getElementById('firmRegForm');
-    var successEl = document.getElementById('firmRegSuccess');
-    var refEl     = document.getElementById('firmRegRef');
-
-    if(formEl) formEl.style.display = 'none';
-    if(successEl) successEl.style.display = 'block';
-    if(refEl) refEl.textContent = 'Registration Ref: ' + ref;
-  };
-})();
+/* Firm registration moved into the ONE Legal application wizard (Legal Hub L2): the old block wrote a second,
+   client-side application (SokoniDB.saveApplication) and sold "Premium/Elite" plans promising a paid VERIFIED badge —
+   verification is SOKONI + LSK evidence, never a purchase. */
+window.switchRegType = function(type){ lhRegSetType(type === 'firm' ? 'firm' : 'advocate'); };
+window.updateFirmPlanUI = function(){};
+window.submitFirmRegistration = function(){ lhRegSetType('firm'); registerLawyer(); };
 </script><script src="sokoni-audit.js" defer></script>
 <script src="sokoni-inbox.js" defer></script>
+<script src="sokoni-book-service.js" defer></script>
+<script src="sokoni-legal-account.js" defer></script>
 <!-- Powers the Follow and Share buttons on every lawyer card. Without it,
      window.SokoniSocial is undefined and both buttons silently do nothing —
      they are guarded by `&&`, so they failed without any error. -->

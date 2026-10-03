@@ -1,3 +1,29 @@
+## [2026-10-03] — Legal Hub L3b (hosting): one Lawyer / Law-firm application wizard, applicant status + resubmit, My legal bookings with completion PIN, fake commission and pro tabs retired — NOT deployed
+
+- **legal-hub.html — Register:**
+  - ONE wizard with Lawyer and Law firm types. Practice areas come from the taxonomy (max 12).
+  - Firm fields: registration number, role, description, offices, and declared advocates (kept private).
+  - Submits registerLegalProvider with entityType and practiceAreas. No localStorage copy.
+  - The sold "Premium/Elite" plans that promised a paid VERIFIED badge are removed, along with the second client-written firm application (SokoniDB.saveApplication).
+  - The status card comes from legalDispatch legalMyProfile: type, status, SOKONI's reason, SOKONI and LSK verification, and listed/bookable. Resubmit (legalResubmitApplication) is offered only when SOKONI asked. Public profile edits go through legalUpdateProfile.
+- **legal-hub.html — tabs:**
+  - "Log Case" (a client-side 5% plus an off-platform Paybill 522522) is replaced by "Getting paid": commission is deducted once at PIN settlement into the business wallet.
+  - "Appointments" (localStorage) becomes "My bookings".
+  - The client dashboard drops its localStorage counters.
+  - The Legal-only pro dashboard (localStorage session, made-up analytics, denied availability writes) now points to the canonical provider-dashboard.html.
+- **sokoni-legal-account.js (new):**
+  - My legal bookings = providerBookings where customerUid == me, kept to Legal providers by the server-projected providers/{id}.
+  - Open/Review uses SokoniBookService.review. The completion PIN uses serviceBookingPin getMyBookingPin (only once paid & held). Message uses SokoniInbox.openForTransaction. Help / refund REQUEST goes to support with the booking ref.
+  - It writes nothing.
+- **Robustness:**
+  - Tab restore waits for DOMContentLoaded, so the deferred module wins over the legacy loaders.
+  - showLawTab looks loaders up on window and contains any loader error.
+- **Tests:**
+  - test-legal-hub-web 12/0; sabotage-legal-hub-web 10/10.
+  - test-legal-projection 96/0, test-role-authority 155/0, test-role-switch-routing 50/0, test-secondary-firebase-apps 9/0.
+  - Browser suites UNRUN (memory floor).
+- **Known gap:** profile.html Bookings reads the legacy  collection, not providerBookings, so service bookings are not listed there (profile.html is owned by sokoni-2f 53715a3).
+
 ## [2026-10-03] — Legal Hub L3 + L6 (hosting): discovery cards → storefront, taxonomy filters, honest values, money-less booking removed — NOT deployed
 
 - **legal-profile.html (new):** the lawyer / law-firm storefront.

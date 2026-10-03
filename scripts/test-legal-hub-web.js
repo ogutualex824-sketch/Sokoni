@@ -72,6 +72,38 @@ const run = async (cat) => { ctx._activeLawCat = cat; await ctx.renderLawyers();
   ck('S2', !/tel:|wa\.me|whatsapp/i.test(prof) && !/licenseNumber|\.phone\b/.test(prof) && /No reviews yet/.test(prof) && /: '—'\) \+ '<\/dd>'/.test(prof)
     && /location\.origin \+ '\/legal-profile\.html\?id=' \+ encodeURIComponent\(id\)/.test(prof),
     'storefront privacy + honesty: no phone / licence / WhatsApp; unrated says so; unknown details "—"; Share carries only the public profile link');
+  /* ── L3b: application wizard, account views, retired legacy tabs ── */
+  const acct = read('sokoni-legal-account.js');
+  const strip = (x) => x.replace(/\/\*[\s\S]*?\*\//g, '').replace(/<!--[\s\S]*?-->/g, '');
+  const reg = strip(slice(html, 'registerLawyer') || '') ;
+  ck('R1', /entityType: _lhRegType/.test(reg) && /practiceAreas: \[\.\.\._lhSel\]/.test(reg) && /_lhCallCF\('registerLegalProvider', data\)/.test(reg) && !/localStorage/.test(reg)
+    && html.includes('id="lhTypeAdv"') && html.includes('id="lhTypeFirm"') && html.includes('id="lhAreaPicker"') && html.includes("onclick=\"lhAddOffice()\"")
+    && !/KES 2,500|KES 5,500|Elite badge|firmPlan/.test(strip(html)),
+    'ONE application wizard: Lawyer vs Law firm → registerLegalProvider (entityType + taxonomy practiceAreas); no localStorage copy; no sold "verified badge" plans');
+  const chk = strip(slice(html, 'checkExistingApp') || '');
+  ck('R2', /op: 'legalMyProfile'/.test(chk) && /a\.reviewReason/.test(chk) && /info_requested/.test(chk) && /legalResubmitApplication/.test(strip(slice(html, 'lhResubmit') || '')) && /legalUpdateProfile/.test(strip(slice(html, 'lhSaveProfile') || ''))
+    && /this is not "no application"/.test(chk),
+    'applicant status from the server (type, status, SOKONI reason, verification), resubmit only when asked, profile edits via legalUpdateProfile; a failed load is not "no application"');
+  let ok3 = false, rows3 = {};
+  try {
+    const c2 = { window: {}, document: { addEventListener() {}, getElementById: () => null, querySelector: () => null }, console, setTimeout, Promise };
+    c2.window = c2; vm.createContext(c2); vm.runInContext(acct, c2);
+    const A2 = c2.SokoniLegalAccount;
+    const held = A2._rowHtml({ id: 'bk1', providerId: 'adv1', service: 'Legal consultation', price: 500000, paymentStatus: 'paid_held', status: 'confirmed', date: '2026-10-10', startTime: '10:00' }, { name: 'Wanjiru' });
+    const unpaid = A2._rowHtml({ id: 'bk2', providerId: 'adv1', price: 500000, paymentStatus: 'pending', status: 'pending' }, { name: 'Wanjiru' });
+    rows3 = { held, unpaid };
+    ok3 = held.includes('data-lb-pin="bk1"') && held.includes('KES 5,000') && held.includes('data-lb-msg="bk1"') && held.includes('topic=refund')
+      && !unpaid.includes('data-lb-pin') && !unpaid.includes('data-lb-msg') && unpaid.includes('Awaiting payment')
+      && typeof c2.renderAppointments === 'function' && typeof c2.initProDashboard === 'function';
+  } catch (e) { rows3 = { err: e.message }; }
+  ck('A1', ok3 && /\.where\('customerUid', '==', u\.uid\)/.test(acct) && /p\.category === 'legal' \|\| p\.legalProviderId/.test(acct) && /op: 'getMyBookingPin'/.test(acct)
+    && /SokoniBookService\.review\(\{ bookingId: id \}\)/.test(acct) && !/\.set\(|\.update\(|\.add\(|localStorage/.test(strip(acct)),
+    'My legal bookings: canonical providerBookings (mine, Legal providers only); PIN button ONLY once paid & held; message/refund-request only on a real booking; module writes nothing', rows3);
+  const comp = strip((html.split('id="lawpane-completion"')[1] || '').split('id="lawpane-appointments"')[0]);
+  ck('A2', comp.length > 0 && !/<input|<form|522522|Paybill|submitCaseCompletion/i.test(comp) && /deducts its commission <strong>once<\/strong>/.test(comp)
+    && html.includes('<script src="sokoni-legal-account.js" defer></script>') && html.includes("document.addEventListener('DOMContentLoaded', go, { once: true })")
+    && /catch \(e\) \{ console\.warn\('\[Legal Hub\] tab '/.test(html),
+    'the client-side "log case + pay 5% by Paybill" tab is gone (commission is deducted once at PIN settlement); legacy loaders replaced; tab restore waits for modules and cannot break navigation');
   done();
 })();
 function done() { console.log('\nRESULT: ' + pass + ' passed, ' + fail + ' failed'); console.log('NOT proven here: a real browser render (memory floor) and a live booking.'); process.exit(fail ? 1 : 0); }
