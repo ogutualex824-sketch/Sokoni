@@ -67,6 +67,9 @@ const FROM_BUSINESS_ID = Object.freeze({
   'software':           ['SOFTWARE_DEV', 'REMOTE_SUPPORT', 'QUOTE_REQUEST'],
   'app-developer':      ['SOFTWARE_DEV', 'REMOTE_SUPPORT', 'QUOTE_REQUEST'],
   'data-entry':         ['REMOTE_SUPPORT', 'QUOTE_REQUEST'],
+  /* Electrical (Tech Hub slice 4, sokoni-b2): category 'trades' (business-category). Service-mode capabilities only —
+     no trade vertical capability exists, and none is invented here. */
+  'electrical':         ['FIELD_SERVICE', 'ONSITE_SUPPORT', 'QUOTE_REQUEST', 'DIRECT_BOOKING'],
   'restaurant':         ['FOOD_MENU', 'KITCHEN', 'DRINKS'],
   'fast-food':          ['FOOD_MENU', 'KITCHEN', 'DRINKS'],
   'cafe':               ['FOOD_MENU', 'KITCHEN', 'DRINKS'],

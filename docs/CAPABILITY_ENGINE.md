@@ -75,6 +75,11 @@ application ──(AdminOS, admin account, not self)──► VALID approval    
 | `test-business-capabilities` / `test-shell-gate-mutations` | 46/0 / 9/0 (unchanged) |
 | `test-business-workspace`, `test-workspace-capability`, `test-candidate-shell-gate-compat`, `test-workspace-rules` | **NOT RUN**: emulator, memory below the 512 MB floor |
 
+## Tech Hub slice 4a (sokoni-b2)
+
+Tech ids laptop-repair, computer-repair, electronics-repair, networking and pos-support are classifiable (business-category →
+`it_services`), and `electrical` (`trades`) carries service-mode capabilities. Proof: scripts/test-tech-taxonomy.js. Related: [[Tech Hub Convergence]].
+
 ## Not in this slice
 
 - **Writers:** none added. Capabilities are DERIVED from valid approvals on every read.

@@ -1,3 +1,19 @@
+## [2026-10-03] — Tech Hub slice 4a: Tech business ids classifiable + capable (functions, on 13f74f3) — NOT deployed
+
+**Files:** `functions/business-category.js`, `functions/shared/service-capabilities.js`, `scripts/test-tech-taxonomy.js` (new).
+
+- business-category FROM_BUSINESS_ID: `laptop-repair`, `computer-repair`, `electronics-repair`, `networking`, `pos-support` → `it_services`.
+  Before this, an APPROVED application for any of them classified to nothing, so workspaceFor answered PENDING_CLASSIFICATION
+  and the provider had no dashboard. They are services, never the goods-selling `electronics` seller category.
+- service-capabilities FROM_BUSINESS_ID: `electrical` (category `trades`) gets service-mode capabilities only: FIELD_SERVICE,
+  ONSITE_SUPPORT, QUOTE_REQUEST, DIRECT_BOOKING. No trade vertical capability is invented.
+- Tests: test-tech-taxonomy 8/0 (BASE=13f74f3 fails T1–T3, executed). test-service-capabilities 15/0, sabotage 7/7,
+  test-business-workspace 30/0 (= base).
+- Database / rules: none. API: workspaceFor returns a provider dashboard plus capabilities for these ids once approved.
+- Release: ships inside the ONE providerDispatch reconciliation release (sokoni-5b). Never a separate providerDispatch deploy.
+  The hosting half (hub-register.js CATS) is on hosting/techhub-on-chain. The approval-time category stamp (sokoni-5b) must
+  be live for an application's category to reach providers/{uid}.business.
+
 ## [2026-10-03] — Slice 0: the ONE service-capability engine (Food Hub + Tech Hub), on the live providerDispatch lineage
 
 **Files:** `functions/shared/service-capabilities.js` (new), `functions/business-workspace.js`, `scripts/test-service-capabilities.js` (new), `scripts/sabotage-service-capabilities.js` (new), `docs/CAPABILITY_ENGINE.md` (new), `CHANGELOG.md` · **Base:** `95ff9e8` (live `c7e26b6`)
