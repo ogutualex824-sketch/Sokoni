@@ -1,3 +1,28 @@
+## [2026-10-03] — Test safety: two suites that could reach PRODUCTION made safe (parcel-rail emulator-only guard; B2 §2 hermetic)
+
+Context: on 2026-10-01 a test wrote to production through application-default credentials on this machine, and on
+2026-09-30 `test-supply-relationship-b2.js` performed one production read. Test-only change; no function, rule or page.
+
+**Files:**
+- `scripts/test-parcel-rail.js`: an emulator-only guard now runs FIRST, before any `require` (the suite deletes every
+  collection on startup). It exits 3 with `REFUSED test-parcel-rail: <reason>` unless `FIRESTORE_EMULATOR_HOST` and
+  `FIREBASE_AUTH_EMULATOR_HOST` are both set to `localhost|127.0.0.1:<port>`, every set project-id source
+  (`GCLOUD_PROJECT`, `GOOGLE_CLOUD_PROJECT`, inline `FIREBASE_CONFIG.projectId`) matches `demo-*` and at least one is set,
+  and `GOOGLE_APPLICATION_CREDENTIALS` is unset. The previous check let 8 unsafe environments through (remote/LAN/no-port
+  hosts, a production `GOOGLE_CLOUD_PROJECT` or `FIREBASE_CONFIG`, a path-form `FIREBASE_CONFIG`, a set service-account key).
+- `scripts/test-parcel-rail-guard.js` (new): runs the suite as a child under 14 unsafe environments with a `-r` tracer
+  recording every `Module._load`; asserts exit 3, the reason, and ZERO loads (firebase-admin never requested). Positive
+  control: a safe env passes the guard and the tracer DOES see the firebase-admin request (then throws on it). 47/47.
+  Counterproof: the same test against the pre-change suite fails 44 checks.
+- `scripts/test-supply-relationship-b2.js` §2: `procurement.js` is now loaded with `firebase-admin` stubbed via
+  `Module._load` (the slice-k / slice-m pattern) so its module `db` IS the fixture double. `_assertSuppliesEnabled` is
+  EXECUTED: opted-in A accepted; B (no supply block) and C (`enabled:false`) refused `failed-precondition`; unknown id
+  `not-found`; path-shaped id `invalid-argument`; a string `"true"` refused (sabotage); and the suite asserts the only
+  collection read was the fixture's `businesses`. Passes under the block-admin preload (63/63, 9/9 sabotage); before
+  this change it crashed under that preload at `require('firebase-admin')`.
+
+**Database / API / security changes:** none to production code. Security: removes two test paths to production data.
+
 ## [2026-10-03] — Payments: Daraja removal PORTED from 093fd4f onto this (a545818 / 7091029) lineage — functions source, NOT deployed
 
 Owner brief Gate 2: "copy, do not merge, the approved removal". A cherry-pick of 093fd4f conflicts in 9 files here, so the

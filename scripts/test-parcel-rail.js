@@ -11,9 +11,42 @@
  *   firebase emulators:exec --only firestore,auth --project demo-parcel "node scripts/test-parcel-rail.js"
  */
 'use strict';
+
+/* ── EMULATOR-ONLY GUARD (2026-10-03) — runs BEFORE anything can load firebase-admin ──────────
+   This suite DELETES EVERY COLLECTION it can list on startup. Pointed at production through
+   application-default credentials it would wipe the live database (a test wrote to production
+   through ADC on this machine on 2026-10-01). It therefore refuses — exit 3, nothing required —
+   unless ALL of these hold:
+     · FIRESTORE_EMULATOR_HOST and FIREBASE_AUTH_EMULATOR_HOST are both set, and each host is
+       localhost or 127.0.0.1 (host:port);
+     · every project-id source the Admin SDK reads (GCLOUD_PROJECT, GOOGLE_CLOUD_PROJECT,
+       FIREBASE_CONFIG.projectId) that is set starts with "demo-", and at least one is set
+       (a demo-* project can never resolve to a real Firebase project);
+     · GOOGLE_APPLICATION_CREDENTIALS is NOT set (no service-account key in reach).
+   Pure: only process.env is read; no module is required until the guard has passed.
+   Proven by scripts/test-parcel-rail-guard.js. Never weaken; never bypass with a flag. */
+(function emulatorOnlyGuard(env) {
+  const refuse = (why) => { console.error('REFUSED test-parcel-rail: ' + why + ' — this suite deletes every collection; it runs ONLY against local emulators with a demo-* project.'); process.exit(3); };
+  const localHost = (v) => { const m = /^(localhost|127\.0\.0\.1):(\d{1,5})$/.exec(String(v || '').trim()); return !!m && Number(m[2]) > 0 && Number(m[2]) < 65536; };
+  if (env.GOOGLE_APPLICATION_CREDENTIALS) refuse('GOOGLE_APPLICATION_CREDENTIALS is set');
+  for (const k of ['FIRESTORE_EMULATOR_HOST', 'FIREBASE_AUTH_EMULATOR_HOST']) {
+    if (!env[k]) refuse(k + ' is not set');
+    if (!localHost(env[k])) refuse(k + ' is not localhost/127.0.0.1:<port>');
+  }
+  const ids = [];
+  if (env.GCLOUD_PROJECT) ids.push(['GCLOUD_PROJECT', env.GCLOUD_PROJECT]);
+  if (env.GOOGLE_CLOUD_PROJECT) ids.push(['GOOGLE_CLOUD_PROJECT', env.GOOGLE_CLOUD_PROJECT]);
+  if (env.FIREBASE_CONFIG) {
+    let pid = null;
+    try { pid = JSON.parse(env.FIREBASE_CONFIG).projectId || null; } catch (_) { refuse('FIREBASE_CONFIG is not inline JSON (cannot verify its projectId)'); }
+    if (!pid) refuse('FIREBASE_CONFIG has no projectId');
+    ids.push(['FIREBASE_CONFIG.projectId', pid]);
+  }
+  if (!ids.length) refuse('no project id is set (GCLOUD_PROJECT / GOOGLE_CLOUD_PROJECT)');
+  for (const [k, v] of ids) if (!/^demo-[a-z0-9-]+$/.test(String(v))) refuse(k + ' "' + v + '" is not a demo-* project');
+})(process.env);
+
 const path = require('path');
-if (!process.env.FIRESTORE_EMULATOR_HOST || !process.env.FIREBASE_AUTH_EMULATOR_HOST) { console.log('CRASH needs Firestore + Auth emulators'); process.exit(2); }
-if (!/^demo-/.test(process.env.GCLOUD_PROJECT || '')) { console.log('CRASH needs a demo-* project'); process.exit(2); }
 process.env.FUNCTIONS_EMULATOR = 'true';
 process.env.INTASEND_PRIVATE_KEY = 'test-key';
 const FN_DIR = path.resolve(process.env.FUNCTIONS_DIR || path.join(__dirname, '..', 'functions'));

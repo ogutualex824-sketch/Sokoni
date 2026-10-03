@@ -89,6 +89,32 @@ function loadAuthority(data) {
   return m.exports;
 }
 
+/** Load procurement.js against the SAME fixture. firebase-admin is stubbed via Module._load
+ *  before the require (as test-supply-integration-slice-m.js / test-find-suppliers-slice-k.js
+ *  do), so the module-level `db = admin.firestore()` IS the fixture double. Before 2026-10-03
+ *  this section required procurement.js unstubbed and `_assertSuppliesEnabled(BIZ_A)` read
+ *  through the REAL admin SDK (one production read on 2026-09-30). The stub's firestore()
+ *  records every collection it is asked for, so the suite can prove the read hit the fixture. */
+function loadProcurement(data) {
+  const touched = [];
+  const base = makeFirestore(data);
+  const fsFn = () => { const f = base(); return { collection(n) { touched.push(n); return f.collection(n); } }; };
+  fsFn.FieldValue = { serverTimestamp: () => 'TS', increment: (n) => ({ __inc: n }), arrayUnion: (...a) => ({ __union: a }), delete: () => ({ __del: true }) };
+  fsFn.Timestamp  = { fromDate: (d) => d, now: () => new Date(0) };
+  fsFn.FieldPath  = { documentId: () => ({ __docId: true }) };
+  const stubAdmin = { firestore: fsFn, auth: () => ({}), storage: () => ({}), messaging: () => ({}),
+                      apps: [{}], initializeApp() {}, credential: { applicationDefault() {} } };
+  const orig = Module._load;
+  Module._load = function (req) { if (req === 'firebase-admin') return stubAdmin; return orig.apply(this, arguments); };
+  try {
+    ['functions/procurement.js', 'functions/merchant-authority.js', 'functions/tenant-identity.js']
+      .forEach((f) => { try { delete require.cache[require.resolve(path.join(ROOT, f))]; } catch (_) {} });
+    const mod = require(path.join(ROOT, 'functions/procurement.js'));
+    mod.__touched = touched;
+    return mod;
+  } finally { Module._load = orig; }
+}
+
 const auth = (uid, token) => ({ uid, token: token || {} });
 async function verdict(fn) { try { return { ok: true, value: await fn() }; } catch (e) { return { ok: false, code: e && e.code, message: e && e.message }; } }
 
@@ -134,13 +160,39 @@ async function verdict(fn) { try { return { ok: true, value: await fn() }; } cat
      §2 participation is EXPLICIT, never inferred (executed)
   ══════════════════════════════════════════════════════════ */
   console.log('\n§2 explicit supply participation (executed)');
-  const proc = require(path.join(ROOT, 'functions/procurement.js'));
+  const proc = loadProcurement(DATA);
 
+  check('_assertSuppliesEnabled is exported and callable', typeof proc._assertSuppliesEnabled === 'function');
   {
+    /* EXECUTED against the fixture (hermetic since 2026-10-03): opted in → passes. */
     const r = await verdict(() => proc._assertSuppliesEnabled(BIZ_A));
-    /* _assertSuppliesEnabled uses the real module db, not the fixture, so a thrown
-       not-found here is expected; what matters is the SOURCE contract below. */
-    check('_assertSuppliesEnabled is exported and callable', typeof proc._assertSuppliesEnabled === 'function');
+    check('an opted-in business (A) is accepted as a supplier', r.ok && r.value === BIZ_A);
+    check('the read went to the FIXTURE businesses collection, not a real database',
+      proc.__touched.length > 0 && proc.__touched.every((c) => c === 'businesses'));
+  }
+  {
+    const r = await verdict(() => proc._assertSuppliesEnabled(BIZ_B));
+    check('a business with NO supply block (B) is REFUSED: failed-precondition',
+      !r.ok && r.code === 'failed-precondition' && /has not enabled supply/.test(r.message || ''));
+  }
+  {
+    const r = await verdict(() => proc._assertSuppliesEnabled(BIZ_C));
+    check('a business with supply.enabled === false (C) is REFUSED: failed-precondition',
+      !r.ok && r.code === 'failed-precondition');
+  }
+  {
+    const r = await verdict(() => proc._assertSuppliesEnabled('SOK-NOPE99'));
+    check('an unknown business is REFUSED: not-found', !r.ok && r.code === 'not-found');
+  }
+  {
+    const r = await verdict(() => proc._assertSuppliesEnabled('a/b'));
+    check('a path-shaped id is REFUSED before any read', !r.ok && r.code === 'invalid-argument');
+  }
+  {
+    /* Positive control on the fixture itself: flip A's opt-in in a COPY and the same call refuses. */
+    const flipped = JSON.parse(JSON.stringify(DATA)); flipped.businesses[BIZ_A].supply.enabled = 'true';
+    const r = await verdict(() => loadProcurement(flipped)._assertSuppliesEnabled(BIZ_A));
+    sab('a string "true" is not an opt-in (the executed check is strict)', !r.ok && r.code === 'failed-precondition');
   }
   check('participation requires an explicit boolean',
     /typeof supply\.enabled !== 'boolean'/.test(PROC));
