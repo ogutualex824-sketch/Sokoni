@@ -1766,6 +1766,9 @@ exports.applicationDecide = onCall(
       applicantUid,
       reason: _sanText(reason, 500) || null,
       decidedAt: _ts(),
+      /* Marketing (b2, 2026-10-03): the APPROVED category subset lives on the server record too — the application's
+         marketingApprovedCategories is applicant-writable. Record = the CURRENT decision: anything but approve → []. */
+      ...(AT0 && AT0.T.key === 'marketing' ? { approvedCategories: decision === 'approve' ? (_mkt.marketingApprovedCategories || []) : [] } : {}),
     });
 
     await ref.set({

@@ -132,6 +132,9 @@ const BASE_APP = { name: 'Achieng Creative', description: 'Brand identity and so
     && JSON.stringify(p1.marketingGroups) === JSON.stringify(['creative']) && p1.status === 'active' && JSON.stringify(a1b.marketingDeclinedCategories) === JSON.stringify(['seo'])
     && (CLAIMS.get('u1') || {}).provider === true,
     'approval activates ONLY the approved subset (seo declined, recorded), provider record live, provider claim granted', { p1, a1b });
+  const rec1 = DOCS.get('applicationDecisions/marketing_u1') || {};
+  ck('DR1', rec1.status === 'approved' && JSON.stringify(rec1.approvedCategories) === JSON.stringify(['branding', 'logo-design']),
+    'the SERVER decision record carries the approved category subset (the application copy is applicant-writable)', rec1);
 
   /* ── L: directory = filtered view of approved marketers ── */
   r = await D('marketingDirectory', null, { category: 'branding' });
@@ -152,11 +155,15 @@ const BASE_APP = { name: 'Achieng Creative', description: 'Brand identity and so
   ck('R1', r.ok && p2.status === 'active' && p2.acceptsBookings === true && p2.category === 'cleaning' && p2.marketingStatus === 'rejected' && p2.marketingListed === false,
     'REJECTING a cleaning company\'s marketing application leaves its cleaning listing live; only the marketing block is retracted', p2);
   ck('R2', (CLAIMS.get('u2') || {}).provider === true, 'the rejected marketing application does not strip the existing provider claim', CLAIMS.get('u2'));
+  const rec2 = DOCS.get('applicationDecisions/marketing_u2') || {};
+  ck('DR2', rec2.status === 'rejected' && Array.isArray(rec2.approvedCategories) && rec2.approvedCategories.length === 0, 'a REJECT writes approvedCategories [] on the server record', rec2);
 
   /* ── S: suspension unlists the marketer ── */
   r = await decide('admin1', { applicationId: 'marketing_u1', decision: 'suspend', reason: 'complaint' }, ADM);
   const ls = await D('marketingDirectory', null, { category: 'branding' });
   ck('S1', r.ok && (DOCS.get('providers/u1') || {}).marketingListed === false && ls.ok && ls.ok.items.length === 0, 'a suspended marketer disappears from the directory', ls);
+  const rec3 = DOCS.get('applicationDecisions/marketing_u1') || {};
+  ck('DR3', rec3.status === 'suspended' && Array.isArray(rec3.approvedCategories) && rec3.approvedCategories.length === 0, 'a SUSPEND clears approvedCategories on the server record (record = the current decision)', rec3);
 
   /* ── W: withdraw / needs-info / resubmit ── */
   r = await D('marketingWithdraw', 'u4');

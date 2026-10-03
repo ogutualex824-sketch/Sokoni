@@ -1,3 +1,10 @@
+## [2026-10-03] - Marketing: the approved category subset is on the server decision record
+
+Functions only (`applicationDecide` in `functions/application-lifecycle.js`), NOT deployed. For a marketing application,
+`applicationDecisions/{appId}.approvedCategories` now records the validated approved subset. Any other decision writes `[]`, because the record holds the CURRENT decision.
+The application's `marketingApprovedCategories` is applicant-writable, so b2's Marketing authority checks will intersect with this record and fail closed without it.
+**Database:** a new field on `applicationDecisions` (server-only). Tests: DR1-DR3 in `scripts/test-marketing-hub.js` (35/0; 3 fail with the write disabled).
+
 ## [2026-10-03] - Applications: an admin cannot stage their own application either
 
 Functions only (`applicationDecide` in `functions/application-lifecycle.js`), NOT deployed. The K13-A SELF_DECISION refusal now runs
