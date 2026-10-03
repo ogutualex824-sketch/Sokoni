@@ -54,16 +54,17 @@ const MS = require(path.join(FN, 'membership-settlement.js'));
 const FA = require(path.join(FN, 'fitness-attendance.js'));
 const SRC_FILE = path.join(FN, 'fitness-membership-create.js');
 const SRC = fs.readFileSync(SRC_FILE, 'utf8');
+const SWITCH = require(path.join(FN, 'shared', 'fitness-sales-switch.js'));   /* 2f's file — read, never mutated */
 const PP_FILE = path.join(FN, 'payment-purposes.js');
 const PP_SRC = fs.readFileSync(PP_FILE, 'utf8');
 
 function compile (file, src, tag) {
-  if (!tag) return require(file);
+  if (!tag) { const e = require(file); return Object.assign(Object.create(e), e, { __src: src }); }
   const filename = file.replace(/\.js$/, `.${tag}.js`);     /* virtual — never written to disk */
   const m = new Module(filename, module);
   m.filename = filename; m.paths = Module._nodeModulePaths(FN);
   m._compile(src, filename);
-  return m.exports;
+  return Object.assign(Object.create(m.exports), m.exports, { __src: src });
 }
 
 /* ── in-memory Firestore (same semantics as test-fitness-attendance.js) ── */
@@ -359,6 +360,15 @@ async function matrix (FMC, PP) {
     ck('C17 PAY_BY_MS equals booking-service.js HOLD_MS (the platform pre-payment hold window) — drift fails here',
       hold != null && hold === FMC.PAY_BY_MS, { hold, payBy: FMC.PAY_BY_MS }); }
 
+  return Object.assign(rows, await flagRows(FMC));
+}
+
+/* C18/C19 — the sales switch. Separate so a flag mutant (NC-g..j) is judged on its NAMED row alone: a mutant that
+   refuses EVERY creation (NC-h) would otherwise crash the earlier rows that need a created membership. */
+async function flagRows (FMC) {
+  const rows = {};
+  const ck = (name, ok, detail) => { rows[name] = { ok: !!ok, detail }; };
+
   /* C18 — SALES FLAG (owner 2026-10-03): featureFlags/fitness_membership_sales.enabled === true, read server-side */
   { const out = {};
     const run = async (label, flagDoc, opts) => {
@@ -383,11 +393,21 @@ async function matrix (FMC, PP) {
     await run('true', FLAG_ON);
     const refused = ['missing doc', 'missing field', 'false', "'true' string", '1', 'read error'].every((k) => {
       const o = out[k]; return !o.ok && o.code === 'failed-precondition' && o.reason === 'SALES_DISABLED' && o.msg === "Memberships aren't on sale yet." && o.mems === 0 && o.claims === 0; });
-    /* the exported predicate with an EXPLICIT db (the handle 2f's payment-purposes would pass) */
+    /* THE shared predicate (2f fe33bcc) with an explicit db agrees with what the handler did */
     const onDb = fakeDb({ 'featureFlags/fitness_membership_sales': FLAG_ON }); const offDb = fakeDb({ 'featureFlags/fitness_membership_sales': { enabled: 'true' } });
-    out.explicitDb = [await FMC.salesEnabled(onDb), await FMC.salesEnabled(offDb), await FMC.salesEnabled(fakeDb({}))];
-    ck("C18 sales flag gates creation: missing doc / missing field / false / 'true' string / 1 / read error → failed-precondition SALES_DISABLED, nothing written; enabled === true → created; salesEnabled(db) with an explicit db agrees",
-      refused && out.true.ok && out.true.mems === 1 && out.explicitDb.join() === 'true,false,false', out); }
+    out.sharedPredicate = [await SWITCH.salesEnabled(onDb), await SWITCH.salesEnabled(offDb), await SWITCH.salesEnabled(fakeDb({}))];
+    ck("C18 sales flag gates creation: missing doc / missing field / false / 'true' string / 1 / read error → failed-precondition SALES_DISABLED, nothing written; enabled === true → created; the shared predicate agrees",
+      refused && out.true.ok && out.true.mems === 1 && out.sharedPredicate.join() === 'true,false,false', out); }
+
+  /* C19 — ONE predicate: the create path reads the flag ONLY through functions/shared/fitness-sales-switch.js (2f), the
+     same function payment-purposes.fitness_membership calls; no local reader, no exported copy. Checked on the module
+     under test (FMC), so a mutant that re-grows a private copy fails here. */
+  { const src = FMC.__src || '';
+    const usesShared = src.includes("const { salesEnabled } = require('./shared/fitness-sales-switch');") && src.includes('await salesEnabled(_db())');
+    const noLocal = !src.includes("collection('featureFlags')") && !src.includes('collection(FLAGS)') && !/function salesEnabled|salesEnabled\s*=\s*async/.test(src);
+    const ppShared = PP_SRC.includes("require('./shared/fitness-sales-switch').salesEnabled(db())");
+    ck('C19 one sales predicate: create imports shared/fitness-sales-switch salesEnabled and passes its db; no local featureFlags read or copy; no salesEnabled export; payment-purposes calls the same module',
+      usesShared && noLocal && ppShared && FMC.salesEnabled === undefined && FMC.SALES_FLAG === undefined, { usesShared, noLocal, ppShared, exported: typeof FMC.salesEnabled }); }
 
   return rows;
 }
@@ -409,9 +429,15 @@ const MUTANTS = [
   { tag: 'f', row: 'C15', what: 'payBy not written', file: 'fmc',
     from: 'startAt: _tsFromDate(now), payBy: _tsFromDate(new Date(now.getTime() + PAY_BY_MS)),', to: 'startAt: _tsFromDate(now),' },
   { tag: 'g', row: 'C18', what: 'sales-flag check removed', file: 'fmc',
-    from: "if (!(await salesEnabled())) throw new HttpsError(", to: "if (false && !(await salesEnabled())) throw new HttpsError(" },
-  { tag: 'h', row: 'C18', what: "sales flag compared truthy ('true' string / 1 accepted)", file: 'fmc',
-    from: "(f.data() || {}).enabled === true", to: "!!(f.data() || {}).enabled" },
+    from: "if (!(await salesEnabled(_db()))) throw new HttpsError(", to: "if (false && !(await salesEnabled(_db()))) throw new HttpsError(" },
+  { tag: 'h', row: 'C18', what: 'call site drops the db handle (shared predicate then always reads OFF — sales can never open)', file: 'fmc',
+    from: "if (!(await salesEnabled(_db()))) throw new HttpsError(", to: "if (!(await salesEnabled())) throw new HttpsError(" },
+  { tag: 'i', row: 'C18', what: "shared import replaced by a private truthy copy ('true' string / 1 accepted)", file: 'fmc',
+    from: "const { salesEnabled } = require('./shared/fitness-sales-switch');",
+    to: "const salesEnabled = async (db) => { try { const f = await db.collection('featureFlags').doc('fitness_membership_sales').get(); return !!(f.exists && (f.data() || {}).enabled); } catch (_) { return false; } };" },
+  { tag: 'j', row: 'C19', what: 'an exact private copy of the predicate (behaviour identical, second reader)', file: 'fmc',
+    from: "const { salesEnabled } = require('./shared/fitness-sales-switch');",
+    to: "const salesEnabled = async (db) => { try { const f = await db.collection('featureFlags').doc('fitness_membership_sales').get(); return !!(f && f.exists && (f.data() || {}).enabled === true); } catch (_) { return false; } };" },
 ];
 
 (async () => {
@@ -428,7 +454,7 @@ const MUTANTS = [
     if (!base.includes(mu.from)) { console.log(`  CONTROL BROKEN  NC-${mu.tag}: mutation anchor not found in source`); ctlBad++; continue; }
     const fmc = mu.file === 'fmc' ? compile(SRC_FILE, SRC.replace(mu.from, mu.to), 'mutant_' + mu.tag) : realFMC;
     const pp = mu.file === 'pp' ? compile(PP_FILE, PP_SRC.replace(mu.from, mu.to), 'mutant_' + mu.tag) : realPP;
-    const rows = await matrix(fmc, pp);
+    const rows = (mu.row === 'C18' || mu.row === 'C19') ? await flagRows(fmc) : await matrix(fmc, pp);
     const named = rows[ROW(rows, mu.row)];
     const failed = Object.keys(rows).filter((k) => !rows[k].ok);
     const ok = named && named.ok === false;

@@ -7,7 +7,8 @@
    fitnessCreateMembership({ serviceId }) → { membershipId, reused, priceCents, periodCount, periodUnit, title, payBy }
      1. auth required
      1b. SALES FLAG (owner 2026-10-03): featureFlags/fitness_membership_sales must have enabled === true (boolean). Read
-        SERVER-side. Missing doc / missing field / false / 'true' string / any non-true → refused failed-precondition
+        SERVER-side through THE ONE predicate functions/shared/fitness-sales-switch.js salesEnabled(db) (2f fe33bcc), the
+        same function payment-purposes.fitness_membership calls — this module keeps no copy and exports none. Missing doc / missing field / false / 'true' string / any non-true → refused failed-precondition
         { reason:'SALES_DISABLED' }; a READ ERROR also refuses (fail closed). The doc is publicly readable (the hosting
         lane reads the same one to hide the buy button) and admin-writable (rules: isAdmin()) via AdminOS
         adminOsDispatch op 'adminUpdateFeatureFlag' (functions/admin-os.js, superAdmin). The UI hiding the button is a
@@ -46,6 +47,7 @@ const logger = require('firebase-functions/logger');
 const admin = require('firebase-admin');
 const crypto = require('crypto');
 const OFFER = require('./shared/membership-offer');
+const { salesEnabled } = require('./shared/fitness-sales-switch');   /* THE one predicate (2f fe33bcc) — no copy here */
 
 const COL = 'providerMemberships';
 const CLAIMS = 'fitnessMembershipClaims';
@@ -54,8 +56,6 @@ const PAY_BY_MS = 5 * 60 * 1000;          /* = booking-service.js HOLD_MS (sourc
 const SERVICE_ID_RE = /^[A-Za-z0-9_-]{1,128}$/;
 const ACTIVE_PROVIDER_STATES = Object.freeze(['active', 'approved']);   /* booking-service.bookingCreateService */
 const FITNESS_CATEGORY = 'fitness_studio';
-const FLAGS = 'featureFlags';
-const SALES_FLAG = 'fitness_membership_sales';
 const SALES_DISABLED_MSG = "Memberships aren't on sale yet.";
 
 /* Overridable ONLY by the suite (in-memory Firestore). */
@@ -70,20 +70,6 @@ const _newId = () => (_hooks.newId ? _hooks.newId() : _db().collection(COL).doc(
 const _ms = (v) => { if (!v) return 0; if (typeof v.toMillis === 'function') return v.toMillis(); const t = new Date(v instanceof Date ? v.getTime() : v).getTime(); return Number.isFinite(t) ? t : 0; };
 
 const _claimId = (buyerUid, serviceId) => 'fmc_' + crypto.createHash('sha256').update(buyerUid + '|' + serviceId).digest('hex').slice(0, 40);
-
-/** Is the platform selling fitness memberships? Server-side read of featureFlags/fitness_membership_sales.
-    → true ONLY for a doc whose enabled is the boolean true. Missing / non-true / read error → false (fail closed).
-    `db` is optional (default: this module's db) so payment-purposes.fitness_membership (2f) can call the SAME predicate
-    with its own Firestore handle — one reader of the flag, not two. */
-async function salesEnabled(db) {
-  try {
-    const f = await (db || _db()).collection(FLAGS).doc(SALES_FLAG).get();
-    return !!(f && f.exists && (f.data() || {}).enabled === true);
-  } catch (e) {
-    logger.error('[fitness-membership] sales flag read failed — refusing (fail closed)', { err: (e && e.message) || 'Error' });
-    return false;
-  }
-}
 
 /** Pure: may this provider record sell a fitness membership? → null | { code, message } */
 function providerRefusal(prov) {
@@ -102,7 +88,7 @@ async function createMembershipHandler(req) {
   if (!uid) throw new HttpsError('unauthenticated', 'Sign in required.');
   const serviceId = String((req.data && req.data.serviceId) || '');
   if (!SERVICE_ID_RE.test(serviceId)) throw new HttpsError('invalid-argument', 'serviceId is required.');
-  if (!(await salesEnabled())) throw new HttpsError('failed-precondition', SALES_DISABLED_MSG, { reason: 'SALES_DISABLED' });
+  if (!(await salesEnabled(_db()))) throw new HttpsError('failed-precondition', SALES_DISABLED_MSG, { reason: 'SALES_DISABLED' });
 
   const svcSnap = await _db().collection('providerServices').doc(serviceId).get();
   if (!svcSnap.exists) throw new HttpsError('not-found', OFFER.REASONS.missing, { reason: 'missing' });
@@ -158,7 +144,7 @@ async function createMembershipHandler(req) {
 const fitnessCreateMembership = onCall({ region: 'us-central1', enforceAppCheck: true, maxInstances: 20 }, createMembershipHandler);
 
 module.exports = {
-  fitnessCreateMembership, providerRefusal, salesEnabled, SALES_FLAG, SALES_DISABLED_MSG, PENDING_REUSE_MS, PAY_BY_MS, COL, CLAIMS,
+  fitnessCreateMembership, providerRefusal, SALES_DISABLED_MSG, PENDING_REUSE_MS, PAY_BY_MS, COL, CLAIMS,
   _h: { createMembershipHandler },
   _test: { use: (h) => Object.assign(_hooks, h || {}), claimId: _claimId },
 };
