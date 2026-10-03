@@ -124,6 +124,7 @@ function builderFindings (builderSrc, rulesKeys) {
   ck('A16 success copy appears only AFTER the awaited addDoc', iAdd > 0 && iOk > iAdd, { iAdd, iOk });
   ck('A17 no "will contact you soon" anywhere in product.js', !/will contact you soon/i.test(P), null);
   ck('A18 signed out → login.html?redirect=<this page> (no write)', /login\.html\?redirect=' \+ encodeURIComponent\(location\.pathname \+ location\.search\)/.test(grab(P, '_prdLoginForContact') || '') && /if \(!user\) \{[^}]*_prdLoginForContact\(\); return; \}/.test(submit), null);
+  ck('A23 after the write resolves, an Open chat link anchors the conversation on THIS contactRequests id (product_enquiry, DOM-built, no innerHTML)', submit.indexOf("var crRef = await fsm.addDoc(fsm.collection(db, 'contactRequests'), built.data)") >= 0 && submit.indexOf("tx: 'product_enquiry', txId: String(crRef.id)") >= 0 && submit.indexOf('chat.textContent = ') >= 0 && submit.indexOf('chat.innerHTML') < 0 && submit.indexOf('crRef.id') > submit.indexOf('addDoc('), null);
   ck('A19 failure names the class (permission / network) and offers Support', /permission-denied/.test(submit) && /Network problem/.test(submit) && /_prdContactSupportLink\(fb, lead\)/.test(submit) && /support\.html\?topic=request/.test(grab(P, '_prdContactSupportLink') || ''), null);
   ck('A20 the modal requires a signed-in user before it opens', /if \(!user\) \{ _prdLoginForContact\(\); return; \}/.test(grab(P, '_openContactRequestModal') || ''), null);
   const csg = grab(P, 'contactSellerGated') || '';

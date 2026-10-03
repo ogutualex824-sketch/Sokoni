@@ -2192,12 +2192,25 @@ async function _submitContactRequest() {
         }
 
         stage = 'write';
-        await fsm.addDoc(fsm.collection(db, 'contactRequests'), built.data);
+        var crRef = await fsm.addDoc(fsm.collection(db, 'contactRequests'), built.data);
         /* Success is shown ONLY after the canonical write resolved. */
         say('✅ Request sent to the seller on SOKONI — they\'ll see it in their dashboard.', '#71ff00');
         if (btn) { btn.textContent = 'Sent'; }
         var msgEl = document.getElementById('prdCrMsg'); if (msgEl) msgEl.value = '';
-        setTimeout(function() { var m = document.getElementById('prd-contact-modal'); if (m) m.classList.remove('open'); }, 2500);
+        /* "Open chat" (sokoni-f3 product_enquiry contract): the conversation is anchored on THIS contactRequests doc;
+           the server derives buyer + seller from it and re-checks the product's seller on every send. The modal stays
+           open so the buyer can take the link; built with DOM nodes, never innerHTML. */
+        if (fb && crRef && crRef.id) {
+            var chat = document.createElement('a');
+            chat.href = 'messages.html?' + new URLSearchParams({ tx: 'product_enquiry', txId: String(crRef.id) }).toString();
+            chat.textContent = '💬 Open chat with the seller';
+            chat.setAttribute('data-prd-open-chat', '1');
+            chat.style.cssText = 'display:inline-block;margin-top:8px;padding:8px 14px;border-radius:8px;background:#71ff00;color:#000;font-weight:700;text-decoration:none;';
+            fb.appendChild(document.createElement('br'));
+            fb.appendChild(chat);
+        } else {
+            setTimeout(function() { var m = document.getElementById('prd-contact-modal'); if (m) m.classList.remove('open'); }, 2500);
+        }
     } catch (e) {
         var code = (e && e.code) ? String(e.code) : '';
         var offline = (typeof navigator !== 'undefined' && navigator.onLine === false);
