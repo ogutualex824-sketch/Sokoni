@@ -1,3 +1,12 @@
+## [2026-10-03] - Tech Hub slice 4T: AI tools honestly represented; KASS is the one real (advisory) assistant — hosting, NOT deployed
+
+- **Audit:** tech-hub.html "AI Tools" listed DEMO_AI, invented third-party products (SnapBooks AI, ChatSoko, …) rendered only on localhost /
+  sokoniDemoData. In production the grid was blank with a "0 tools" count. No symptom-intake, device-classification or troubleshooting AI exists
+  in the Tech pages. The only real AI is KASS (kass-widget.js), SOKONI's assistant.
+- **Production now says:** "No AI tools are listed on SOKONI yet", with no fabricated count, plus "Ask KASS — advice only", which opens the real assistant.
+  KASS stays advisory: it has no approval, booking, payment, refund, verification or AdminOS authority. Demo cards are unchanged for localhost.
+- **Test:** test-tech-directory P6 (58/0), running filterAITools with demo disallowed. Positive control: the pre-change page fails P6.
+
 ## [2026-10-03] - Tech Hub slice 4R: Super Admin commission rates read the canonical source; the dead editor is gone — hosting, NOT deployed
 
 - super-admin.html "Commission Rate Editor" wrote platformConfig/commissions from the browser, a document NO server code reads (checked on the

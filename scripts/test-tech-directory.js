@@ -99,6 +99,19 @@ function badgeWeb() {
     legacy: v({ verified: true }) === true,
   };
 }
+/* slice 4T: the AI Tools tab in production is honest (no demo cards, no fabricated count) and offers KASS (advisory) */
+function aiTab() {
+  const vm = require('vm');
+  const th = fs.readFileSync(path.join(ROOT, 'tech-hub.html'), 'utf8');
+  const src = fnSrc(th, 'filterAITools');
+  if (!src) return null;
+  const els = { aiCount: { textContent: 'x' }, aiGrid: { innerHTML: '' } };
+  const ctx = { _demoAllowed: false, DEMO_AI: [{ id: 'A', name: 'Fake AI', cat: 'ai', emoji: 'x', tagline: '', desc: '' }], _aiFilter: 'all',
+    document: { getElementById: (id) => els[id] || null, querySelectorAll: () => [] } };
+  vm.createContext(ctx); vm.runInContext(src + '; filterAITools("all", null);', ctx);
+  return { honest: /No AI tools are listed on SOKONI yet/.test(els.aiGrid.innerHTML) && !/Fake AI/.test(els.aiGrid.innerHTML),
+    noCount: els.aiCount.textContent === '', kass: /data-kass-open/.test(els.aiGrid.innerHTML) && /advice only/.test(els.aiGrid.innerHTML) };
+}
 /* slice 2: tech-hub.html tabs + providers.html booking */
 function fnSrc(src, name) {
   const i = src.indexOf('function ' + name + '(');
@@ -269,6 +282,7 @@ function taxonomy(modSrc, hubSrc) {
   for (const [k, v] of Object.entries(servicesRegister(rd('services.html')))) ck('P4  services.html: ' + k, v);
   for (const [k, v] of Object.entries(taxonomy(MOD, rd('hub-register.js')))) ck('T9  taxonomy: ' + k, v);
   { const bw = badgeWeb(); if (!bw) ck('P5  badge predicate loads', false); else for (const [k, v] of Object.entries(bw)) ck('P5  web badge: ' + k, v); }
+  { const ai = aiTab(); if (!ai) ck('P6  AI tab', false); else for (const [k, v] of Object.entries(ai)) ck('P6  AI tools tab: ' + k, v); }
   console.log('\n  [sabotage]');
   const SAB = {
     T2: MOD.replace("'<span class=\"' + x + '-prov-rnum\">New on SOKONI</span>'", "'<span class=\"' + x + '-prov-rnum\">4.9 · 0 jobs</span>'"),

@@ -867,6 +867,8 @@ function goThPanel(name, btn) {
   window.scrollTo({top:0,behavior:'smooth'});
 }
 window.goThPanel = goThPanel;
+/* Tech Hub 4T: [data-kass-open] opens SOKONI's assistant (KASS) — advisory only. */
+document.addEventListener('click', function(e){ var b=e.target&&e.target.closest?e.target.closest('[data-kass-open]'):null; if(!b) return; var k=document.getElementById('kassBtn'); if(k) k.click(); });
 
 /* ── FIRESTORE WRITE (fire-and-forget) ── */
 async function _thFireWrite(coll, data) {
@@ -1133,8 +1135,17 @@ function filterAITools(cat, btn) {
   document.querySelectorAll('#thpanel-aitools .th-pill').forEach(b=>b.classList.remove('active'));
   if(btn) btn.classList.add('active');
   let list=!_demoAllowed?[]:(cat==='all'?[...DEMO_AI]:DEMO_AI.filter(t=>t.cat===cat));
-  const cnt=document.getElementById('aiCount'); if(cnt) cnt.textContent=list.length+' tools';
+  const cnt=document.getElementById('aiCount');
   const grid=document.getElementById('aiGrid'); if(!grid) return;
+  /* Tech Hub 4T (2026-10-03): the cards below are DEMO data (localhost / sokoniDemoData only) — invented third-party products.
+     SOKONI has no AI-tools directory yet, so production says so plainly instead of a blank grid or a fabricated "0 tools" count.
+     The one real AI is KASS, SOKONI's assistant — advisory only: it never approves, books, pays, refunds or verifies. */
+  if(!list.length){
+    if(cnt) cnt.textContent='';
+    grid.innerHTML='<div style="grid-column:1/-1;text-align:center;padding:36px 20px;color:rgba(255,255,255,0.6);font-size:13px;line-height:1.6">No AI tools are listed on SOKONI yet.<br>Need help choosing a repair or a provider? <button type="button" data-kass-open="1" style="background:none;border:0;color:#c084fc;font-weight:700;cursor:pointer;font:inherit">Ask KASS — advice only</button></div>';
+    return;
+  }
+  if(cnt) cnt.textContent=list.length+' tools';
   grid.innerHTML=list.map(t=>`
     <div class="th-card">
       <span class="th-card-emoji">${t.emoji}</span>
