@@ -8,6 +8,7 @@
      G4  BOTH firebase.json and firebase.r2deploy.json run the guard FIRST, in the relative form that actually executes
          (never the quoted "$RESOURCE_DIR" form that silently never ran)
      G6  applicationDecide / applicationReconcile / applicationLifecycle and Sports are refused
+     G7  the Users security unit is refused (ships only from the aosr tree)   G8  explicit allow-list: unreviewed functions refused
      G5  the wrapper refuses a forbidden list before launching anything (--dry-run)
    node scripts/test-r2-deploy-guard.js */
 const path = require('path'), fs = require('fs'), cp = require('child_process');
@@ -32,5 +33,10 @@ const w2 = cp.spawnSync(process.execPath, [path.join(ROOT, 'scripts/deploy/r2-de
 ck('G5 wrapper refuses a forbidden list before launching; an allowed list builds a scoped --only command', w.status === 1 && /REFUSED/.test(w.stderr) && w2.status === 0 && /--only functions:providerDispatch /.test(w2.stdout), { w: w.stderr, w2: w2.stdout });
 const g6 = ['applicationDecide', 'applicationReconcile', 'applicationLifecycle', 'sportsDispatch', 'sportsFixtureReminders', 'providerDispatch,applicationDecide'].map((s) => [s, hook(s).code]);
 ck('G6 application lifecycle (no K13-A on r2) and Sports (owner hold) are refused, alone or mixed in', g6.every(([, c]) => c === 1), g6);
+const users = ['setUserRole', 'suspendUser', 'tsBanUser', 'tsReviewReport', 'adminOsDispatch', 'expireSuspensions', 'adminUpdateUserRole'].map((n) => [n, hook(n).code]);
+const usersMixed = hook('providerDispatch,setUserRole').code;
+ck('G7 Users security unit (no Authority Core / account-lock contract on r2) is refused, alone or mixed in', users.every(([, c]) => c === 1) && usersMixed === 1, { users, usersMixed });
+const un = hook('someUnreviewedFunction'), unMixed = hook('providerDispatch,adminGetUser');
+ck('G8 explicit ALLOW-LIST: any function not reviewed into the r2 scope is refused', un.code === 1 && /NOT ON THE r2 ALLOW-LIST/.test(un.out) && unMixed.code === 1, { un, unMixed: unMixed.code });
 console.log(`\n${pass} passed, ${fail} failed`);
 process.exit(fail ? 1 : 0);

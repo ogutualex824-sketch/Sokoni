@@ -1,3 +1,15 @@
+## 2026-10-04 — r2 deploy guard: explicit ALLOW-list + Users security unit refused (b2) (NOT deployed)
+
+- **Why (b2 live comparison):** r2 lacks live-only behaviour in functions no deny-list named.
+  - setUserRole has no AdminOS Authority Core; deploying it from r2 would destroy non-role claims.
+  - r2 lacks the audit.read pilot.
+- **Change:**
+  - guard-r2-scope.js refuses setUserRole, suspendUser, tsBanUser, tsReviewReport, adminOsDispatch, expireSuspensions and adminUpdateUserRole;
+  - it ENFORCES an explicit ALLOW-list (the manifest's candidate scope); anything else is refused;
+  - the manifest is updated.
+- **Files:** scripts/deploy/guard-r2-scope.js, scripts/test-r2-deploy-guard.js (G7, G8), docs/release-gates/r2-deploy-manifest.md.
+- **Tests:** test-r2-deploy-guard 8/0. **Breaking:** any r2 deploy outside the allow-list now aborts (intended).
+
 ## 2026-10-03 — Owner category rules, restricted categories, NO generic 5% default (NOT deployed)
 
 - **Owner decisions (via b2):** fashion/furniture/books/appliances/beauty/shoes → marketplace 15%; cars → vehicles (2%, vehicle sales only; car_rental stays 5%); laundry / hair-beauty → services 5%; dj → entertainment bookings; vape / alcohol / tobacco / adult → REFUSED; no recognized transaction silently gets 5%.

@@ -18,11 +18,16 @@ capability / PIN (5b) → live comparison per changed function → all tests inc
 | `bookingDispatch` | `fix/bookingdispatch-paymentid-fulltree` ae4f084 (f3's queue) | full-copy rebuild, closure == live except booking.js |
 | `applicationDecide`, `applicationReconcile`, `applicationLifecycle` | production (K13-A live) until 5b's stage (c) lands on r2 | r2's application-lifecycle.js has NO K13-A (_authoritativeDecision / SELF_DECISION absent) — deploying from r2 would reopen admin self-approval and status-only approval; refused by guard-r2-scope (G6) |
 | `sportsDispatch`, `sportsFixtureReminders` | — (owner hold) | Sports is held: NOT DEPLOYED from r2 unless the owner approves; refused by guard-r2-scope (G6) |
-| any function not listed in "Candidate scope" below | — | scoped deploys only; a function absent from this list is out of scope, not retired |
+| `setUserRole`, `suspendUser`, `tsBanUser`, `tsReviewReport`, `adminOsDispatch`, `expireSuspensions`, `adminUpdateUserRole` | `hosting/adminos-receipts-on-72dca56` (Users security unit, under its reconciliation guard) | NEVER from r2: r2's super-admin.js has NO AdminOS Authority Core — setUserRole from r2 would DESTROY non-role claims — and r2 has none of the account-lock contract (owner 2026-10-04, b2). Refused by guard-r2-scope (G7) |
+| any function not listed in "Candidate scope" below | — | scoped deploys only; a function absent from this list is out of scope, not retired. **Mechanical since 2026-10-04:** guard-r2-scope enforces an explicit ALLOW-list (G8) — deny-lists miss live-only behaviour |
 
 `firebase deploy` WITHOUT `--only functions:<names>` is forbidden for this tree.
 
 ## Candidate scope (to be fixed by the live comparison, step D)
+**Allow-list in force** (`guard-r2-scope.js` ALLOW): providerDispatch, createPaymentIntent, myTransactionReceipts, providerLedger,
+requestSellerPayout, processPayoutRetries, processPendingPayouts, autoScheduledPayouts, initiateSellerPayout. Being ON the
+list is necessary, not sufficient — each still needs its step-D live comparison before deploy. Adding a function = a reviewed
+commit to the guard AND this manifest.
 To be filled per function with: live generation · live archive path · closure diff vs r2 · every live-only behaviour
 preserved or deliberately retired (documented).
 Expected members (not final): providerDispatch (provider-ops: PIN port + settlement authority), bookingCreateService
