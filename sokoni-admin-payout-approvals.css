@@ -1,0 +1,77 @@
+/* ============================================================================
+   SOKONI — Payout approvals view styles (AdminOS + Super Admin)
+   sokoni-admin-payout-approvals.css
+
+   NO NEW PALETTE. Every colour is the host console's own token: AdminOS
+   (--aos-*) first, Super Admin (--accent/--card/--border/--text/--muted) as the
+   fallback — the same rule as sokoni-admin-failures.css.
+   State is ALWAYS carried by text; colour only reinforces it.
+   ========================================================================= */
+.sk-pa{
+  --pa-accent:var(--aos-accent,var(--accent,#71ff00));
+  --pa-surface:var(--aos-surface,var(--card,#141414));
+  --pa-surface2:var(--aos-surface2,var(--surface,#1a1a1a));
+  --pa-border:var(--aos-border,var(--border,#252838));
+  --pa-text:var(--aos-text,var(--text,#e8e8e8));
+  --pa-muted:var(--aos-sub,var(--muted,#8888aa));
+  --pa-warn:var(--aos-warn,var(--orange,#ff9800));
+  --pa-radius:var(--aos-radius,var(--radius,12px));
+  color:var(--pa-text);min-width:0;max-width:1180px;
+}
+.sk-pa *{min-width:0;box-sizing:border-box}
+.sk-pa-sr{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}
+.sk-pa-mono{font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;font-size:12px;overflow-wrap:anywhere}
+.sk-pa-num{white-space:nowrap;font-variant-numeric:tabular-nums}
+
+.sk-pa-hero{padding:20px 22px;margin-bottom:14px;border:1px solid var(--pa-border);border-radius:calc(var(--pa-radius) + 4px);background:var(--pa-surface)}
+.sk-pa-eyebrow{font-size:10.5px;font-weight:800;letter-spacing:.12em;text-transform:uppercase;color:var(--pa-accent);margin:0 0 4px}
+.sk-pa-title{font-size:24px;font-weight:800;margin:0}
+.sk-pa-lede{color:var(--pa-muted);font-size:13px;margin:6px 0 0;max-width:680px}
+
+.sk-pa-controls{display:flex;flex-wrap:wrap;align-items:flex-end;gap:10px;margin:0 0 14px}
+.sk-pa-field{display:flex;flex-direction:column;gap:4px;font-size:11px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:var(--pa-muted);flex:1 1 180px;max-width:260px}
+.sk-pa-input{width:100%;min-height:40px;padding:8px 12px;border-radius:var(--pa-radius);border:1px solid var(--pa-border);background:var(--pa-surface2);color:var(--pa-text);font:inherit;font-size:13px;text-transform:none;letter-spacing:0}
+.sk-pa-note-input{resize:vertical;min-width:200px}
+.sk-pa-btn{display:inline-flex;align-items:center;justify-content:center;min-height:40px;padding:8px 18px;border-radius:var(--pa-radius);border:1px solid var(--pa-border);background:var(--pa-surface2);color:var(--pa-text);font:inherit;font-size:13px;font-weight:700;cursor:pointer;white-space:nowrap}
+.sk-pa-btn-primary{border-color:var(--pa-accent);color:var(--pa-accent)}
+.sk-pa-btn[disabled]{opacity:.6;cursor:progress}
+.sk-pa-input:focus-visible,.sk-pa-btn:focus-visible,.sk-pa-scroll:focus-visible{outline:2px solid var(--pa-accent);outline-offset:2px}
+
+.sk-pa-summary{display:flex;flex-wrap:wrap;align-items:center;gap:10px;margin:0 0 8px}
+.sk-pa-status{margin:0;font-size:14px;font-weight:700}
+.sk-pa-evidence{display:inline-block;padding:3px 10px;border-radius:999px;border:1px solid var(--pa-border);font-size:11.5px;font-weight:700;color:var(--pa-muted)}
+.sk-pa-evidence.sk-pa-ev-unreadable{border-color:var(--pa-warn);color:var(--pa-warn)}
+.sk-pa-evidence.sk-pa-ev-observed{border-color:var(--pa-text);color:var(--pa-text)}
+.sk-pa-detail{font-size:12.5px;color:var(--pa-muted);border-left:3px solid var(--pa-warn);background:var(--pa-surface2);border-radius:0 8px 8px 0;padding:10px 12px;margin:0 0 12px}
+.sk-pa-note{font-size:12.5px;color:var(--pa-muted);margin:0 0 10px}
+
+.sk-pa-cols{display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:10px;margin:0 0 12px}
+.sk-pa-col{display:flex;flex-direction:column;gap:2px;padding:10px 12px;border:1px solid var(--pa-border);border-radius:var(--pa-radius);background:var(--pa-surface)}
+.sk-pa-col.sk-pa-ev-unreadable{border-color:var(--pa-warn)}
+.sk-pa-col-label{font-size:11px;font-weight:800;letter-spacing:.06em;text-transform:uppercase;color:var(--pa-muted)}
+.sk-pa-col-value{font-size:14px;font-weight:700}
+.sk-pa-col-note{font-size:11.5px;color:var(--pa-muted)}
+
+/* The table scrolls inside its own box; the page never scrolls sideways. */
+.sk-pa-scroll{max-width:100%;overflow-x:auto;-webkit-overflow-scrolling:touch;border:1px solid var(--pa-border);border-radius:var(--pa-radius);background:var(--pa-surface)}
+.sk-pa-table{width:100%;min-width:860px;border-collapse:collapse;font-size:12.5px}
+.sk-pa-table th{text-align:left;font-size:10.5px;font-weight:800;letter-spacing:.06em;text-transform:uppercase;color:var(--pa-muted);padding:10px 12px;border-bottom:1px solid var(--pa-border);white-space:nowrap}
+.sk-pa-table td{padding:10px 12px;border-bottom:1px solid var(--pa-border);vertical-align:top;overflow-wrap:anywhere}
+.sk-pa-action{min-width:220px}
+.sk-pa-confirm{display:flex;flex-direction:column;gap:8px;padding:10px;border:1px solid var(--pa-accent);border-radius:var(--pa-radius);background:var(--pa-surface2)}
+.sk-pa-confirm-q{margin:0;font-size:12.5px;font-weight:700}
+.sk-pa-field-note{max-width:none}
+.sk-pa-confirm-actions{display:flex;flex-wrap:wrap;gap:8px}
+.sk-pa-msg{display:block;margin-top:6px;font-size:12.5px;font-weight:700}
+.sk-pa-msg:empty{display:none}
+tr[data-pa-result="error"] .sk-pa-msg{color:var(--pa-warn)}
+tr[data-pa-result="approved"] .sk-pa-msg,tr[data-pa-result="already"] .sk-pa-msg{color:var(--pa-accent)}
+
+@media (max-width:768px){
+  .sk-pa-hero{padding:16px}
+  .sk-pa-title{font-size:20px}
+  .sk-pa-field{max-width:none}
+  .sk-pa-input,.sk-pa-btn{min-height:44px}
+  .sk-pa-controls .sk-pa-btn{flex:1 1 100%}
+  .sk-pa-confirm-actions .sk-pa-btn{flex:1 1 auto}
+}

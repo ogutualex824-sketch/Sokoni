@@ -248,6 +248,11 @@ window.SokoniAOS = (() => {
       security:      () => _loadSecurity(),
       hubs:          () => _loadHubs(),
       workflows:     () => _loadWorkflows(),
+      failures:      () => _loadFailures(),
+      "payout-approvals": () => _loadPayoutApprovals(),
+      "partner-registrations": () => _loadPartnerRegistrations(),
+      foundation:    () => _loadFoundation(),
+      commercial:    () => _loadCommercial(),
     };
     loaders[s]?.();
   }
@@ -2420,6 +2425,73 @@ window.SokoniAOS = (() => {
     warning:  '<span class="status-badge st-pending">warning</span>',
     degraded: '<span class="status-badge st-cancelled">degraded</span>',
   };
+
+  /* Failures view. ONE implementation (sokoni-admin-failures.js) shared with
+     super-admin.html; this console only hands it the panel body and its own
+     callable transport. Re-opening the section is a no-op — the module's Refresh re-reads. */
+  function _loadFailures() {
+    const body = document.getElementById("failuresBody");
+    if (!body) return;
+    if (!window.SokoniAdminFailures) {
+      body.innerHTML = _emptyMsg("The Failures module did not load. Reload the page to try again.");
+      return;
+    }
+    /* getErrorLog is not in _ADMIN_OS_OPS, so _call reaches it directly by name. */
+    window.SokoniAdminFailures.mount(body, { console: "aos", call: (name, data) => _call(name, data) });
+  }
+
+  /* Payout approvals. ONE implementation (sokoni-admin-payout-approvals.js) shared with
+     super-admin.html. The server is the authority: the module shows "Approved" only after
+     adminApproveSellerPayout resolves. */
+  function _loadPayoutApprovals() {
+    const body = document.getElementById("payoutApprovalsBody");
+    if (!body) return;
+    if (!window.SokoniAdminPayoutApprovals) {
+      body.innerHTML = _emptyMsg("The Payout approvals module did not load. Reload the page to try again.");
+      return;
+    }
+    /* Neither callable is in _ADMIN_OS_OPS, so _call reaches them directly by name. */
+    window.SokoniAdminPayoutApprovals.mount(body, { console: "aos", call: (name, data) => _call(name, data) });
+  }
+
+  /* Partner registrations. ONE implementation (sokoni-admin-partner-registrations.js) shared with
+     super-admin.html. financialPartnerDispatch checks the admin claim server-side; "Verified" is shown
+     only after it answers ok:true. */
+  function _loadPartnerRegistrations() {
+    const body = document.getElementById("partnerRegistrationsBody");
+    if (!body) return;
+    if (!window.SokoniAdminPartnerRegistrations) {
+      body.innerHTML = _emptyMsg("The Partner registrations module did not load. Reload the page to try again.");
+      return;
+    }
+    window.SokoniAdminPartnerRegistrations.mount(body, { console: "aos", call: (name, data) => _call(name, data) });
+  }
+
+  /* SOKONI Foundation. ONE implementation (sokoni-admin-foundation.js) shared with super-admin.html.
+     The impact* / foundationContentDispatch / financialPartnerDispatch ops check the admin claim (and,
+     for authorization, superAdmin) server-side; results are shown only after the server answers ok. */
+  function _loadFoundation() {
+    const body = document.getElementById("foundationBody");
+    if (!body) return;
+    if (!window.SokoniAdminFoundation) {
+      body.innerHTML = _emptyMsg("The SOKONI Foundation module did not load. Reload the page to try again.");
+      return;
+    }
+    window.SokoniAdminFoundation.mount(body, { console: "aos", call: (name, data) => _call(name, data) });
+  }
+
+  /* Partner plans & promotions. ONE implementation (sokoni-admin-commercial.js) shared with super-admin.html.
+     financialPartnerDispatch checks the admin claim server-side; results are shown only after ok:true.
+     Prices/plans are read-only here (server catalogue). */
+  function _loadCommercial() {
+    const body = document.getElementById("commercialBody");
+    if (!body) return;
+    if (!window.SokoniAdminCommercial) {
+      body.innerHTML = _emptyMsg("The Partner plans & promotions module did not load. Reload the page to try again.");
+      return;
+    }
+    window.SokoniAdminCommercial.mount(body, { console: "aos", call: (name, data) => _call(name, data) });
+  }
 
   async function _loadHubs() {
     const body = document.getElementById("hubsBody");

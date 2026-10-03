@@ -90,6 +90,188 @@ group-name escape removed and must set `__pwn`) — written, QUEUED (browser hol
 **Files:** `community.html`, `requests.html`, `scripts/test-community-c0.js`, `scripts/test-community-c0-browser.js`,
 `CHANGELOG.md`. **Database:** none (document shapes unchanged; the seed writer no longer writes). **API:** none.
 **Security:** stored XSS closed on both pages. **Breaking:** none. **Deploy:** hosting only, not deployed.
+## [2026-10-03] — AdminOS + Super Admin: Foundation reconciliation + rails, partner review/licence, "Partner plans & promotions" (hosting, NOT deployed)
+
+**Branch `hosting/admin-failures-on-chain`.** Static hosting only; every callable below is NOT deployed, so each surface
+says "not available yet" with evidence **unreadable** — never "none", never 0. Contracts: FOUNDATION_CONTRACT +
+ADDENDUM 2026-10-03, read against `impact.js` (feat/foundation-on-3a38f35 @ 8aedd10) and `financial-partner.js` (@ a64296e).
+
+**Summary.**
+1. **Foundation** (`sokoni-admin-foundation.js`) — Overview money: *Recorded (not proof of payment)*, *Verified paid*,
+   *Requires reconciliation*, *Reserved*, *Available (verified)* (the server's verified − reserved; never recomputed),
+   with reconciliation counts/amounts; tiles open the filtered list; banner **"Payouts can only use verified money."**
+   while anything is unverified, unclassified or unknown. Reconciliation tab: *Classify records*; per held donation
+   *Propose verified* (IntaSend reference; IntaSend's own refusal shown verbatim), *Propose closed — no payment*
+   (note), *Confirm* / *Withdraw proposal* only when a proposal exists (server refuses the proposer); a verify
+   proposal IntaSend did not confirm needs the tick "IntaSend could not be reached; I checked this payment in the
+   IntaSend dashboard" → `acknowledgeUnchecked:true`. Evidence labels "Confirmed by IntaSend" / "Confirmed manually
+   (IntaSend unreachable)". "Closing posts an adjustment that reverses the recorded credit; nothing is deleted."
+   Send support: rails *IntaSend M-PESA* / *IntaSend M-PESA B2B (Till/PayBill)* / *IntaSend PesaLink (bank)* /
+   *Manual* ("Pay manually outside SOKONI" → `destination.rail='manual'`); PesaLink bank picker from
+   `impactBankCodes` (+ "Refresh bank list from IntaSend"; automated BANK disabled until loaded); validation status /
+   account name / requiresReview on rows; Authorize on requiresReview needs "I reviewed the beneficiary details" →
+   `acknowledgeUnvalidated:true`. `isManualRail` now follows the server's `rail`. Stories: per-media processing state;
+   Publish/Schedule disabled with a reason unless every item is READY (server still decides).
+2. **Partner registrations** — verdicts Approve / Needs information / Reject (`approved|needs_information|rejected`,
+   note unless approving); filters add approved / needs_information; *Revoke review* (note) → `adminRevokeReview`;
+   *Record licence check* → `adminRecordLicenceCheck` ("Register URL or register name + reference — not an uploaded
+   document"). Approve grants "Registration reviewed by SOKONI"; licence checks are separate.
+3. **NEW `sokoni-admin-commercial.js`** — key `commercial`, nav "Partner plans & promotions", both consoles: tabs
+   Entitlements / Campaigns / Fulfilments (`adminListCommercial`), *Stop campaign* (reason) → `adminStopCampaign`,
+   Promotion requests (`adminListPromotionRequests` / `adminDecidePromotion`) — **moved out of the Foundation module**
+   (one place). Catalogue/prices read-only (commercial-entitlements.js). Amounts "KES n" or "—".
+
+**Security.** textContent/setAttribute only; results only after `ok:true`; both acknowledgement flags are sent only
+from an explicit per-row tick; separation of duties stays server-side.
+**Files.** `sokoni-admin-foundation.js`, `sokoni-admin-foundation.css`, `sokoni-admin-partner-registrations.js`,
+`sokoni-admin-commercial.js` (new), `admin-os.html`, `sokoni-aos.js`, `super-admin.html`,
+`scripts/test-admin-foundation.js` (125/0), `scripts/test-admin-partner-registrations.js` (34/0),
+`scripts/test-admin-commercial.js` (new, 36/0), `CHANGELOG.md`.
+**Functions / rules / DB / API: none changed here.** **Breaking:** partner review now sends verdict `approved`
+(server accepts the legacy `verified` too); the Foundation "Partner promotions" tab is gone (now in the commercial module).
+
+## [2026-10-01] — AdminOS + Super Admin: "SOKONI Foundation" workspace (hosting, NOT deployed)
+
+**Branch `hosting/admin-failures-on-chain`.** Static hosting only. **Reads callables that are NOT deployed yet** (all but
+`impactGetFinancialReport`); until they are, every tab says "not available yet" with evidence **unreadable** — never
+"none", never 0. Deploy after the Foundation functions slice.
+
+**Summary.** One shared module `sokoni-admin-foundation.js` (+ `sokoni-admin-foundation.css`, on top of the `sk-pa-*`
+styles) exposing `window.SokoniAdminFoundation.mount(host, {console, call, upload?})`, mounted by both consoles under
+key `foundation` (nav "SOKONI Foundation"). A keyboard-accessible tab strip (`role=tablist`, `aria-selected`, roving
+tabindex, Arrow/Home/End), each tab loaded lazily, lists bounded (cursor Load more, cap 500), no listeners:
+1. **Overview** — `impactAdminFoundationData {view:'summary'}`: balance/reserved/available/received/disbursed/fees,
+   donation + disbursement status counts (each a button opening the filtered list), story counts via
+   `foundationContentDispatch {op:'adminCounts'}`. Null balance/counts → "—"; a real 0 stays 0.
+2. **Donations** — `{view:'donations', status?, cursor?}`; Refund on completed rows opens Send support prefilled
+   (`refundOfPledgeId`, amount ≤ gross) labelled "Refund request — needs approval + super-admin authorization".
+3. **Send support** — `{view:'disbursements'}` + the chain, actions gated by status: Approve, Authorize (super admin
+   only), Check status (M-PESA), Record payment reference / Mark failed (manual rail), Confirm (second admin),
+   Cancel (before authorization; note). New support payment form: MPESA/BANK/TILL/PAYBILL fields, optional
+   grantId/campaignId, `requestId = crypto.randomUUID()` once per form open and reused on every retry (no secure
+   randomness → refuses to submit). Manual rails carry "No automated rail — you pay outside SOKONI, record the
+   reference, a second admin confirms." Status words exactly per contract; the word "Sent" never appears.
+4. **Stories & Media House** — `adminList` (status/kind), row actions by state (submit, approve, request changes,
+   reject, publish now/schedule, unpublish, archive, restore, remove; notes where required), "Published" vs
+   "Approved, not published", testimonial consent flags. New story form; media to Storage
+   `foundation-media/admin/{random}.{ext}` (JPEG/PNG/WebP ≤15 MB, MP4/WebM/MOV ≤80 MB, max 4, ≤1 video) via the
+   console's `firebase.storage()` shim; without it, "Media upload not available in this console yet" and text-only.
+   Server refusals (e.g. "Another administrator must approve a story you wrote") are shown as text.
+5. **Partner promotions** — `adminListPromotionRequests` / `adminDecidePromotion` (grant 1–90 days, decline with
+   note). "Promotion ranks a listing; it never verifies it. No payment is taken."
+6. **Reconciliation** — `impactGetFinancialReport` (live), ledger entries grouped by type, plus the warning
+   "Pre-fix checkout donations … reconcile before trusting the balance."
+
+**Security.** textContent/setAttribute only (no server string reaches innerHTML); every result shown only after the
+server answers `ok:true`; separation of duties (approver ≠ requester, super-admin authorizer, second-admin confirm,
+story author ≠ approver) is enforced server-side — the UI only labels it.
+
+**Files.** `sokoni-admin-foundation.js` (new), `sokoni-admin-foundation.css` (new), `admin-os.html`, `sokoni-aos.js`,
+`super-admin.html`, `scripts/test-admin-foundation.js` (new), `CHANGELOG.md`.
+**Functions / rules / DB: none.** Storage rules for `foundation-media/admin/` are not deployed — uploads fail with a
+clear message until they are. **Breaking: none.**
+
+**Tests.** `scripts/test-admin-foundation.js` 75/0 (fake DOM). Siblings unchanged: payout-approvals 43/0,
+partner-registrations 16/0, failures 37/0. Sabotage: "Sent" label → 5g + 6 red; new requestId per submit → 7b + 7d
+red; optimistic success → 5m red; null count as 0 → 3b + 3c red. Browser certification NOT run.
+
+## [2026-10-01] — AdminOS + Super Admin: Partner registrations view (hosting, NOT deployed)
+
+**Why:** financial partners submit their regulator registration from the partner workspace; an administrator must be able to review it. **What:** one shared module `sokoni-admin-partner-registrations.js` (styles reuse `sokoni-admin-payout-approvals.css`), wired into `admin-os.html` + `sokoni-aos.js` and `super-admin.html` (inline-onclick nav, own transport per console). Calls `financialPartnerDispatch` ops `adminListRegistrations` / `adminReviewRegistration` (admin claim checked server-side). Result shown only after ok:true; rejecting needs a note; unreadable / not deployed never shown as "none waiting". Wording: a review is SOKONI's paperwork check, **not** a licence confirmation — the public listing stays self-declared (owner decision pending on any public marker). Test `scripts/test-admin-partner-registrations.js` 16/0 (innerHTML sabotage caught). See [[FINANCIAL_PARTNER_WORKSPACE]].
+
+## [2026-10-01] - AdminOS + Super Admin: "Payout approvals" view — ONE shared module, built, browser certification QUEUED, NOT deployed
+
+**Branch `hosting/admin-failures-on-chain` (on top of the Failures view and `6f0a576`).** Static hosting only. Merged
+by sokoni-aa. **Reads `adminListPendingSellerPayouts` / `adminApproveSellerPayout` — deploy after those functions.**
+
+**Owner decision.** A seller payout may be marked ready only after an ADMIN approves it. This view is that approval
+surface; the server stays the authority.
+
+**Summary.**
+- `sokoni-admin-payout-approvals.js` exposes `window.SokoniAdminPayoutApprovals.mount(hostEl, {console, call})` — the
+  same layout-owner contract as Failures (AdminOS passes `_call`; Super Admin a wrapper over `_fns.httpsCallable`).
+  It reads `adminListPendingSellerPayouts({collection?, limit:100})` and renders per-collection evidence
+  (packageRequests / deliveries / orders), a collection filter, Refresh, a truncation note and a table (collection,
+  item id, status, short seller uid, amount, completed at, Approve) inside an `overflow-x:auto` scroller.
+- Evidence vocabulary, never collapsed: a collection named in `unreadable` reads **"Could not be read"** and the
+  headline never says "nothing pending" for it; `not-found`/`unavailable`/`internal` → **"Payout approvals not
+  available yet"**; list `permission-denied` → **"You do not have access"**; empty → **"No payouts awaiting
+  approval"**. `amountKES: null` → **"—"**, never 0.
+- Approve: an inline confirmation step (Super Admin has no `SK.dialog`, so one inline flow serves both consoles) with
+  a labelled optional note (`maxlength=300`). Confirm disables the row (and Refresh) while in flight; **"Approved"**
+  appears ONLY after `adminApproveSellerPayout` resolves with `ok:true`; `already:true` → **"Already approved"**; a
+  response without `ok:true` is not success. Errors carry their meaning: self-approval (permission-denied whose
+  message names self) → **"You cannot approve a payout to yourself"**; other permission-denied → no permission;
+  `failed-precondition` → **"Not delivered yet"**; not-deployed codes → not available yet.
+- All server strings rendered with `textContent`/`setAttribute` only. 44px targets at <=768px, visible focus,
+  `role="status"`/`aria-live` for headline and per-row results, Escape cancels the confirmation.
+- AdminOS: one `Payout approvals` button (icon + `.nav-label`, inline `onclick` like Failures) directly after Failures
+  in the Operations group, `#panel-payout-approvals`, `"payout-approvals"` registered in the EXISTING `_loadPanel`
+  router. Super Admin: one nav button after Failures (inline `SA.nav('payout-approvals')`), native
+  `#panel-payout-approvals`, `SA.nav` routing. No hash-on-load handler. Note: `_parseRoute` accepts `[a-z]+` only,
+  so `admin-os.html#payout-approvals` on load falls back to the dashboard (unchanged behaviour, by contract).
+
+**Files.** `sokoni-admin-payout-approvals.js` (new), `sokoni-admin-payout-approvals.css` (new), `admin-os.html`,
+`sokoni-aos.js`, `super-admin.html`, `scripts/test-admin-payout-approvals.js` (new), `CHANGELOG.md`.
+
+**Functions/rules/DB: none in this slice.** API: consumes the admin-only, App Check callables
+`adminListPendingSellerPayouts` and `adminApproveSellerPayout` (NOT deployed yet). Security: the only write is the
+server callable; no optimistic success; self-approval refused server-side and explained client-side. Breaking: none.
+
+**Evidence.** `node scripts/test-admin-payout-approvals.js` — 43/0 (vm + fake DOM, innerHTML serialised raw:
+malicious sellerUid/id inert, unreadable/partial wording, three not-deployed codes, empty, denied, malformed, null
+amount, filter + Refresh, confirmation required, in-flight disable + no double submit, success only after resolve,
+already, non-ok response, self-approval, non-admin, failed-precondition, unavailable; static wiring). Sabotage (temp
+copies outside the repo): success-before-resolve → 1 FAIL (exit 1); `h()` via innerHTML → 2 FAIL (exit 1).
+`test-admin-failures` 37/0, `test-admin-nav-context` 3/0, `after-superadmin-link-gating` 13/0,
+`verify-admin-markup` intact, `audit-duplicate-ids` 90 = baseline 90, no regression. **Pending:**
+`predeploy-syntax-gate.js` and browser suites (not run — low RAM, concurrent deploy).
+
+## [2026-10-01] - AdminOS + Super Admin: "Failures" view (client error log) — ONE shared module, built, browser certification QUEUED, NOT deployed
+
+**Branch `hosting/admin-failures-on-chain`, built on `8a738e5` (`origin/hosting/chain-on-3e8dd53`).** Static hosting
+only. Mirrors the Updates centre pattern (`sokoni-admin-updates.js`, branch `hosting/admin-updates-center-on-54b72cc`):
+one module, mounted by both consoles with their OWN callable transport.
+
+**Summary.**
+- `sokoni-admin-failures.js` exposes `window.SokoniAdminFailures.mount(hostEl, {console, call})`; `call(name, data)`
+  resolves to the callable's data. It reads `getErrorLog({hours, limit:100, severity?})` and renders counts by severity,
+  a severity filter, a window filter (24 / 72 / 168 h), a Refresh button, a truncation note and a table (time, severity
+  badge with TEXT, surface, code, message + optional context, reference id / order / merchant, short uid + masked
+  email, token-free page path + build/online). The table scrolls inside an `overflow-x:auto` region; the page never
+  scrolls sideways. 44px touch targets at <=768px, visible focus, `role="status"`/`aria-live` for state text.
+- Every field is CLIENT-WRITTEN and rendered with `textContent`/`setAttribute` only; URLs are shown as text (query and
+  hash stripped again client-side), never as links.
+- Evidence vocabulary, never collapsed: `not-found` / `unavailable` / `internal` (callable not deployed) →
+  **"Failure log not available yet"** (unreadable, counts `—`); `permission-denied` → **"You do not have access"**;
+  a successful empty result → **"No client failures reported in the last N hours"** (empty, canonical 0). A severity
+  absent from `bySeverity` is 0 only when the reported figures add up to the server's `count`; otherwise `—`. Counts
+  are never computed from rows.
+- AdminOS: one `Failures` button (Operations group, appended — nothing reordered), `#panel-failures`, `failures`
+  registered in the EXISTING `_loadPanel` router (deep link `admin-os.html#failures`; `aria-current` set by the
+  router). Super Admin: one nav button (Operations group) + native `#panel-failures` opened by `SA.nav('failures')`;
+  NO hash-on-load handler (the Updates branch adds one; merge later).
+- Wiring note: every existing sidebar button on this tip uses an inline `onclick`. Per the owner contract the new
+  buttons carry none; each console gained a small delegated listener that routes ONLY `button.nav-item[data-section]`
+  without `onclick` through the same router (`SokoniAOS.navigate` / `SA.nav`) and closes the drawer.
+
+**Files.** `sokoni-admin-failures.js` (new), `sokoni-admin-failures.css` (new), `admin-os.html`, `sokoni-aos.js`,
+`super-admin.html`, `scripts/test-admin-failures.js` (new), `CHANGELOG.md`.
+
+**Functions/rules/DB: none (reads getErrorLog).** API: consumes the admin-only, App Check callable `getErrorLog`
+(NOT deployed yet). Security: no new write path; all untrusted fields escaped by construction; uid shortened.
+Breaking changes: none.
+
+**Evidence.** `node scripts/test-admin-failures.js` — 37/0 (executed in a vm with a fake DOM whose serialiser emits
+innerHTML raw: malicious message/surface inert, severity counts, three not-deployed codes, empty, denied, malformed,
+incomplete bySeverity, URL token stripped, filters re-query; plus static wiring checks). Positive control: a temp copy
+whose `h()` uses `innerHTML` fails 2 checks (exit 1). Gates: test-admin-nav-context 3/0, after-superadmin-link-gating
+13/0, verify-admin-markup (admin-os + super-admin) intact, audit-duplicate-ids no regression (output identical to
+base). Browser suites QUEUED for the layout owner's RESUME window: test-admin-layouts, test-adminos-sidebar-a11y,
+test-adminos-nav-coverage, test-adminos-shell-final.
+
+**Deploy order.** After `functions:getErrorLog` is live; merged by sokoni-aa into their hosting sequence. Until then
+the view truthfully reads "Failure log not available yet".
 
 ## [2026-09-30] - BnB: category pill strip made phone-safe (snap-scroll chips, sort on its own row) — built, browser certification QUEUED, NOT deployed
 ## [2026-09-27] — Home: hub-card buttons stay inside the card at every width (Sokoni Eats "Become Rider") — UNCOMMITTED, NOT deployed
