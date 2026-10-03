@@ -39,7 +39,7 @@ let file = path.join(ROOT, 'functions', 'account-status.js');
 if (process.env.BASE) { file = path.join(ROOT, 'functions', '.account-status.base.' + process.pid + '.js'); fs.writeFileSync(file, execSync('git show ' + process.env.BASE + ':functions/account-status.js', { cwd: ROOT })); }
 let AS; try { AS = require(file); } finally { if (process.env.BASE) fs.unlinkSync(file); }
 
-const call = async (fn, uid, data, token) => { try { return await AS[fn].run({ auth: uid ? { uid, token: token || {} } : null, data: data || {} }); } catch (e) { return { err: e.code, reason: e.details && e.details.reason }; } };
+const call = async (fn, uid, data, token) => { try { return await AS[fn].run({ auth: uid ? { uid, token: token || {} } : null, data: data || {} }); } catch (e) { return { err: e.code, reason: e.details && e.details.reason, msg: e.message, supportUrl: e.details && e.details.supportUrl }; } };
 const ADMIN = ['admin_1', { admin: true }];
 const reset = (docs) => { DOCS = clone(docs || {}); CLAIMS = {}; REVOKED = []; };
 const prov = (uid) => DOCS['providers/' + uid] || {};
@@ -94,12 +94,15 @@ const shop = (uid) => DOCS['shops/' + uid] || {};
   /* A-9 no freeze record (never deactivated through accountDeactivate) → refused */
   reset({ 'users/u9': { uid: 'u9', deactivated: true, accountStatus: 'deactivated' }, 'providers/u9': { status: 'deactivated', preDeactivationStatus: 'active' } });
   const r9 = await call('accountReactivate', 'u9');
-  ck('A-9', r9.err === 'failed-precondition' && prov('u9').status === 'deactivated', 'no server freeze record → reactivation refused (a forged deactivated state cannot be "restored" to active)', [r9, prov('u9')]);
+  ck('A-9', r9.err === 'failed-precondition' && r9.reason === 'NOT_SELF_DEACTIVATED' && prov('u9').status === 'deactivated', 'no server freeze record → reactivation refused (a forged deactivated state cannot be "restored" to active)', [r9, prov('u9')]);
 
   /* A-10 a deactivated provider with NO server stash restores PENDING, never active */
   reset({ 'users/u10': { uid: 'u10' }, 'providers/u10': { status: 'deactivated', deactivated: true }, 'accountFreezes/u10': { active: true, by: 'self' } });
   const r10 = await call('accountReactivate', 'u10');
   ck('A-10', !r10.err && prov('u10').status === 'pending', 'a deactivated provider with NO stash restores PENDING (restore never invents active)', [r10, prov('u10')]);
+
+  /* A-11 owner 2026-10-03: the refusal sends the user to IN-APP support, never WhatsApp */
+  ck('A-11', r9.supportUrl === '/support' && /Support/.test(r9.msg || '') && !/whatsapp|wa.me/i.test(r9.msg || ''), 'the refusal points to in-app Support (/support), never WhatsApp', r9);
 
   /* S-1 a MODERATION-hidden shop stays hidden after a self round-trip */
   reset({ 'users/s1': { uid: 's1' }, 'shops/s1': { isVisible: false } });

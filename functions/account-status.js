@@ -160,7 +160,9 @@ exports.accountReactivate = onCall({ region: REGION }, async (request) => {
     throw new HttpsError('permission-denied', 'This account is suspended. Contact support.', { reason: 'ACCOUNT_SUSPENDED' });
   }
   if (!freeze || freeze.active !== true || freeze.by !== 'self') {
-    throw new HttpsError('failed-precondition', 'This account can only be reactivated by SOKONI support.', { reason: freeze && freeze.by === 'admin' ? 'ADMIN_FROZEN' : 'NOT_SELF_DEACTIVATED' });
+    /* Owner 2026-10-03: legacy deactivations (no freeze record) and admin freezes are restored by support via
+       adminSetAccountActive(true). Point the user to the IN-APP support ticket — never WhatsApp. */
+    throw new HttpsError('failed-precondition', 'This account can only be reactivated by SOKONI Support. Open Support in the app (/support) and choose Submit Ticket.', { reason: freeze && freeze.by === 'admin' ? 'ADMIN_FROZEN' : 'NOT_SELF_DEACTIVATED', supportUrl: '/support' });
   }
   await _setDeactivatedClaim(uid, false);
   await db.collection('accountFreezes').doc(uid).set({ active: false, by: 'self', liftedAt: admin.firestore.FieldValue.serverTimestamp() });
