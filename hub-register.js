@@ -13,6 +13,9 @@
     { id:'retail-shop',      label:'Retail Shop / Boutique',         hub:'shopping',      emoji:'🛍️' },
     { id:'wholesale',        label:'Wholesale / Distributor',         hub:'shopping',      emoji:'📦' },
     { id:'supermarket',      label:'Supermarket / Minimart',          hub:'shopping',      emoji:'🏪' },
+    /* 2026-10-03 (sokoni-e3, Digital = device RETAIL on merchant-v2): a phone / laptop SHOP had no intake id — the only
+       'electronics' option was phone-repair (it_services → a repair dashboard). Maps to C1 'electronics' → seller. */
+    { id:'electronics',      label:'Phones, Laptops & Electronics Shop', hub:'shopping',    emoji:'📱' },
     { id:'hardware',         label:'Hardware / Building Materials',    hub:'construction',  emoji:'🧱' },
     { id:'water-supplier',   label:'Water Supplier / Refill Station', hub:'shopping',      emoji:'💧' },
     /* Food & Beverage */
@@ -199,6 +202,9 @@
       { id: 'rentalMode', label: 'Rental type *', type: 'select', options: ['Self-drive', 'With driver', 'Both'], required: true }, Q.area],
     'car-wash': [Q.services(['Exterior wash', 'Interior cleaning', 'Full detailing', 'Engine wash', 'Mobile car wash']), Q.mode, Q.area],
     'auto-parts': [Q.services(['New parts', 'Used parts', 'Tyres', 'Batteries', 'Accessories']), { id: 'makes', label: 'Makes you stock for', type: 'text', max: 120 }],
+    'electronics': [{ id: 'kraPin', label: 'KRA PIN (optional — AdminOS verifies)', type: 'text', max: 20 },
+      { id: 'businessPermit', label: 'Business permit number (optional)', type: 'text', max: 40 },
+      { id: 'sells', label: 'What you sell', type: 'multi', options: ['Phones', 'Laptops & computers', 'Tablets', 'Accessories', 'TVs & audio', 'Other electronics'] }],
     'driving-school': [{ id: 'licenceNo', label: 'NTSA driving school licence number (AdminOS verifies) *', type: 'text', required: true, max: 60 },
       Q.services(['Class B (car)', 'Class A (motorcycle)', 'Class C/D (commercial)', 'Refresher lessons']), Q.area],
   };
