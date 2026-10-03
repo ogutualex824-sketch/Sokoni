@@ -960,8 +960,20 @@ exports.getWalletTransactions = onCall({ cors: true, enforceAppCheck: true }, as
 
 // ─── 6. requestSellerPayout ────────────────────────────────────────────────
 
+/* WITHDRAWALS ARE OFF (owner 2026-10-03): the payout PIN is advisory and the external-draw check has open issues, so NO
+   withdrawal may run until the owner opens it. A direct call is refused SERVER-side — the UI's disabled button is not the
+   control. Opening requires platformConfig/withdrawals { enabled: true } written deliberately (no endpoint toggles it);
+   anything else, including an unreadable flag, refuses (fail closed). */
+async function _withdrawalsOpen(db) {
+  try { const s = await db.collection('platformConfig').doc('withdrawals').get(); return s.exists && s.data().enabled === true; }
+  catch (_) { return false; }
+}
+
 exports.requestSellerPayout = onCall({ cors: true, enforceAppCheck: true, secrets: [INTASEND_KEY] }, async (request) => {
   _requireAuth(request);
+  if (!(await _withdrawalsOpen(getFirestore()))) {
+    throw new HttpsError('failed-precondition', 'Withdrawals are not available yet. Your balance is safe and remains in your SOKONI wallet.', { code: 'WITHDRAWALS_DISABLED' });
+  }
   /* HIGH-06: throttle a money/privilege endpoint. Throws resource-exhausted. */
   await checkRateLimit(request, 'payment');
 

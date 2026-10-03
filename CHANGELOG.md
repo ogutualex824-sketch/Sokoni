@@ -1,3 +1,11 @@
+## 2026-10-03 — Withdrawals OFF server-side; old provider payout route hard-retired (NOT deployed)
+
+- **Owner rule:** keep withdrawals off; a direct call must not withdraw; the old provider-payout route stays dead.
+- **Change:** wallet.requestSellerPayout refuses (WITHDRAWALS_DISABLED) unless `platformConfig/withdrawals.enabled === true` (no endpoint toggles it; unreadable → refuse). provider-ops.providerRequestPayout refuses unconditionally (PAYOUT_ROUTE_RETIRED) — its body (batch-marking stray 'pending' providerPayouts) removed. Census: requestWithdrawal / finosRequestBankPayout / requestPayout are already RETIRED both here and in their LIVE 09-09 archives (verified); initiateSellerPayout is admin-only. Scheduled payout jobs (autoScheduledPayouts, processPendingPayouts) and admin approve paths are NOT gated — owner decision (they may carry live seller payouts).
+- **Files:** functions/wallet.js, functions/provider-ops.js, scripts/test-withdrawals-off.js (W1–W4; mutant without the gate FAILS W1/W2 — a direct call then writes a payout request).
+- **Security:** closes the only live self-service withdrawal path once deployed. **DB:** platformConfig/withdrawals (absent = OFF). **Breaking:** withdrawals refuse until the owner writes the flag.
+- **Tests:** withdrawals-off 4/0.
+
 ## 2026-10-03 — Settlement authority: settle the HELD amount with the booking-time commission snapshot (NOT deployed)
 
 - **Owner rule:** settlement base = the amount actually held (never booking/service/quote/browser price); commission = the snapshot captured at booking (never today's catalogue).
