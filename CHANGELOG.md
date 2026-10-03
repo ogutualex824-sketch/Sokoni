@@ -1,3 +1,8 @@
+## 2026-10-03 — Construction commission rows: materials 15%, contractor work 0% fixed, unpriced products refused (NOT deployed)
+
+- **Change:** commission-config construction rows/aliases + UNPRICED_CATEGORIES; finos-utils refuses unpriced categories; client snapshot rebuilt.
+- **Test:** test-construction-commercial 6/0.
+
 ## 2026-10-03 — Security: bookingCreate refuses every client-supplied paymentId (venue money-path audit, defect A) (NOT deployed)
 
 - **Defect:** any of the caller's terminal payments that covered the total (a marketplace payment, or one already used for another booking) marked a venue booking paid with no venueSettlements row, so the owner was never paid and a refund could target a foreign payment.

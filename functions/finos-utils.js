@@ -347,6 +347,10 @@ async function _resolveSellerPlan(sellerId) {
 }
 
 async function calculateCommission(db, opts) {
+  /* UNPRICED (owner 2026-10-03): a product that is OFF until priced must never be charged — not 0%, not the default. */
+  if (opts && CC.isUnpricedCategory(opts.category)) {
+    const e = new Error('This product has no price configured yet.'); e.code = 'category_unpriced'; throw e;
+  }
   /* Two call sites forgot the `db` argument and called calculateCommission({...}). `db` then
      bound to the options object, `opts` was undefined, and destructuring it threw a TypeError
      that BOTH call sites caught and treated as "commission = 0" (financial-os.js) or "charge

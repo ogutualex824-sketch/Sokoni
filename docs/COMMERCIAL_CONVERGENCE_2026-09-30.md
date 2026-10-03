@@ -884,3 +884,14 @@ No duplicate authority was found on the money side.
 - **Policy version:** `COMMISSION_POLICY_VERSION` is `2026-10-03.sports`.
 - **Not changed:** the engine still takes the provider plan rate when a caller passes `subscriptionRole` (`PROVIDER_PLAN_RATES`, kept for non-booking callers that name a provider plan; `test-provider-plan-ladder`). No booking caller passes it: `provider-hub.commissionArgsForHub` omits it for every booking lane. Sports venue and coach bookings must follow the same rule.
 - **Tests:** `scripts/test-sports-commercial.js` 4/0. The commission sweep is green; the only failures (commercial-facts 3b, pos-fixed-rate-bypass ×1) are identical on base.
+
+## 22 · Construction (owner 2026-10-03, via sokoni-f3)
+
+- **Materials = marketplace 15%:** cement, steel, timber, roofing, bricks, tiles, paint, plumbing-materials, electrical-materials, windows-doors, construction-tools, sand-gravel, safety-ppe, building-materials, hardware and bare `construction` all resolve to `marketplace`. None falls to the default.
+- **Contractor work:** contractor, welding, fabrication and the electrical / plumbing / construction contractors resolve to `construction_service`, a FIXED, floor-exempt **0%** lane. There is never a % of contract value; SOKONI earns from subscription + per-lead fee. There is **no bare `service` / `job` alias**.
+- **Unpriced and OFF:** `construction_equipment_rental` (aliases `equipment-rental`, `equipment_rental`, `plant-hire`), `construction_featured` and `construction_delivery_margin` are in `UNPRICED_CATEGORIES`.
+  - `finos-utils.calculateCommission` **refuses** them (`category_unpriced`). They are never charged 0% and never the default.
+  - They switch on when the owner sets a price: remove the row from the set and give it a rate.
+- **Not built yet (needs owner prices):** the construction per-lead fee (it will reuse the b2b-leads pattern: supplier pays, monthly invoice, recovery from settlement) and the Free / Professional / Business-Contractor plans. A project/milestone fee is NOT added (it needs an explicit owner number).
+- **Policy version:** `2026-10-03.construction`.
+- **Tests:** `scripts/test-construction-commercial.js` 6/0. The commission sweep is green; the only failure (commercial-facts 3b) was already on base.

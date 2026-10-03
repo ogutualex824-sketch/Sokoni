@@ -105,6 +105,15 @@ const RATES = {
   sports_venue_bookings:   { pct: 5, fixedKES: 0, _was: 'new 2026-10-03 — owner: venue bookings 5% (flat booking lane)' },
   sports_coaching:         { pct: 5, fixedKES: 0, _was: 'new 2026-10-03 — owner: coaching 5% (flat booking lane)' },
   sports_tournament_entry: { pct: 5, fixedKES: 0, _was: 'new 2026-10-03 — owner: tournament entry fees 5% (like event tickets)' },
+  /* CONSTRUCTION (owner 2026-10-03, via sokoni-f3).
+     • construction_service: contractor projects / services earn SOKONI a subscription + a per-lead fee, NEVER a % of contract
+       value → a FIXED, floor-exempt 0% lane (like b2b_order). The lead fee is configured separately (unpriced, OFF).
+     • Equipment rental / featured placement / delivery margin: products exist but are UNPRICED and OFF → their rows are in
+       UNPRICED_CATEGORIES and the engine REFUSES to price them (never a silent 0% and never the 5% default). */
+  construction_service:          { pct: 0, fixedKES: 0, _was: 'new 2026-10-03 — owner: subscription + per-lead fee, no % of contract value' },
+  construction_equipment_rental: { pct: 0, fixedKES: 0, _was: 'new 2026-10-03 — owner: unpriced, OFF (refused by the engine)' },
+  construction_featured:         { pct: 0, fixedKES: 0, _was: 'new 2026-10-03 — owner: unpriced, OFF (refused by the engine)' },
+  construction_delivery_margin:  { pct: 0, fixedKES: 0, _was: 'new 2026-10-03 — owner: unpriced, OFF (refused by the engine)' },
   electronics:      { pct: 15,  fixedKES: 0,    _was: 'no row — fell to the 5% default (phones / laptops / electronics labels)' },
   education:        { pct: 5,   fixedKES: 0,    _was: "15% 'category only' (never owner-set)" },
   /* Owner 2026-10-03 (via sokoni-f3): Jobs carries NO commission — applications are free; SOKONI earns only from employer
@@ -183,6 +192,15 @@ const ALIASES = {
   /* Electronics retail (owner 2026-10-03). Device accessories are ELECTRONICS taxonomy, never fashion accessories. */
   phones: 'electronics', phone: 'electronics', smartphones: 'electronics', laptops: 'electronics', laptop: 'electronics',
   tablets: 'electronics', tablet: 'electronics', computers: 'electronics', device_accessories: 'electronics',
+  /* Construction MATERIALS = marketplace 15% (owner 2026-10-03). Contractor work = construction_service (0%). No bare
+     'service' / 'job' alias — those would zero other hubs. */
+  cement: 'marketplace', steel: 'marketplace', timber: 'marketplace', roofing: 'marketplace', bricks: 'marketplace', tiles: 'marketplace',
+  paint: 'marketplace', 'plumbing-materials': 'marketplace', 'electrical-materials': 'marketplace', 'windows-doors': 'marketplace',
+  'construction-tools': 'marketplace', 'sand-gravel': 'marketplace', 'safety-ppe': 'marketplace', 'building-materials': 'marketplace',
+  hardware: 'marketplace', construction: 'marketplace',
+  contractor: 'construction_service', welding: 'construction_service', fabrication: 'construction_service',
+  'electrical-contractor': 'construction_service', 'plumbing-contractor': 'construction_service', 'construction-contractor': 'construction_service',
+  'equipment-rental': 'construction_equipment_rental', equipment_rental: 'construction_equipment_rental', 'plant-hire': 'construction_equipment_rental',
   freelancer: 'jobs', freelance: 'jobs', gig: 'jobs', gigs: 'jobs',   /* no bare 'job' alias: the work engine's 'job' is a service job, never this 0% lane */
   logistics: 'hub', delivery: 'hub', driver: 'hub',
   digital: 'digital_products', ai_services: 'digital_products',
@@ -194,7 +212,7 @@ const MIN_COMMISSION_KES = 10;
 
 /* The commercial policy version a commission was priced under — recorded on every ledger row with the resolved category,
    so "order → category → policy version → commission → seller net" is reproducible. Bump on ANY rate/alias change. */
-const COMMISSION_POLICY_VERSION = '2026-10-03.sports';
+const COMMISSION_POLICY_VERSION = '2026-10-03.construction';
 
 /* ══════════════════════════════════════════════════════════════════════════════════════════
    SUBSCRIPTION PLAN ADJUSTMENTS — CAPABILITY SHIPPED, POLICY OFF
@@ -393,12 +411,20 @@ function resolveRate(key) {
    the finos-utils chain. Restored 2026-09-30 — docs/COMMERCIAL_CONVERGENCE_2026-09-30.md. */
 /* 'fitness' added 2026-10-03 (owner: 5% per booking). Same absolute semantics as POS: RATES.fitness and nothing else. */
 /* 'b2b_order' added 2026-10-03 (owner: lead model, no commission on wholesale orders). */
-const FIXED_RATE_CATEGORIES = Object.freeze(['pos', 'fitness', 'b2b_order', 'jobs']);   /* jobs: owner 2026-10-03, 0% */
+const FIXED_RATE_CATEGORIES = Object.freeze(['pos', 'fitness', 'b2b_order', 'jobs', 'construction_service']);   /* construction_service: owner 2026-10-03, 0% */   /* jobs: owner 2026-10-03, 0% */
 
 /* Fixed lanes that carry NO platform minimum. Fitness is a provider BOOKING lane, and provider bookings never had the
    KES 10 floor (finos-utils: "a KES 20 booking at 20% charged KES 4"); the owner set "5% commission per booking", so a
    KES 100 session pays KES 5, not KES 10. POS keeps its floor (POS_PLAN_RATES.floorExempt false) — unchanged. */
-const FIXED_RATE_FLOOR_EXEMPT = Object.freeze(['fitness', 'b2b_order', 'jobs']);
+const FIXED_RATE_FLOOR_EXEMPT = Object.freeze(['fitness', 'b2b_order', 'jobs', 'construction_service']);
+
+/* UNPRICED products (owner 2026-10-03): they exist so nothing falls to the default, but they are OFF until the owner sets a
+   price. finos-utils.calculateCommission REFUSES them (code 'category_unpriced') — a payment for one must not proceed. */
+const UNPRICED_CATEGORIES = Object.freeze(['construction_equipment_rental', 'construction_featured', 'construction_delivery_margin']);
+function isUnpricedCategory(key) {
+  const r = resolveRate(key);
+  return r.matched === true && UNPRICED_CATEGORIES.indexOf(r.category) !== -1;
+}
 function isFloorExemptFixedCategory(key) {
   const r = resolveRate(key);
   return r.matched === true && FIXED_RATE_FLOOR_EXEMPT.indexOf(r.category) !== -1;
@@ -812,6 +838,8 @@ module.exports = {
   categoryForHub,
   MIN_COMMISSION_KES,
   COMMISSION_POLICY_VERSION,
+  UNPRICED_CATEGORIES,
+  isUnpricedCategory,
   PLAN_ADJUSTMENTS_DOC,
   applyPlanAdjustment,
   planRolloutEnabled,

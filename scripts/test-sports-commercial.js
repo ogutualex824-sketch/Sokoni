@@ -29,7 +29,7 @@ Module.prototype.require = orig;
   ck('S2a venue bookings + coaching are FLAT bookings; tournament entry is not', CC.FLAT_BOOKING_CATEGORIES.includes('sports_venue_bookings') && CC.FLAT_BOOKING_CATEGORIES.includes('sports_coaching') && !CC.FLAT_BOOKING_CATEGORIES.includes('sports_tournament_entry'));
   /* called exactly as provider-hub.commissionArgsForHub calls it for bookings: NO subscriptionRole (flat 5%). */
   const c = await FU.calculateCommission(db, { orderAmountCents: 200000, category: 'sports_venue_bookings', sellerId: 'V1' });
-  ck('S2b real engine: KES 2,000 venue booking → KES 100 (5%), policy 2026-10-03.sports recorded', c.commissionCents === 10000 && c.effectiveRate === 5 && c.policyVersion === '2026-10-03.sports' && c.resolvedCategory === 'sports_venue_bookings',
+  ck('S2b real engine: KES 2,000 venue booking → KES 100 (5%), current policy version recorded', c.commissionCents === 10000 && c.effectiveRate === 5 && c.policyVersion === CC.COMMISSION_POLICY_VERSION && c.resolvedCategory === 'sports_venue_bookings',
     { cents: c.commissionCents, rate: c.effectiveRate, pv: c.policyVersion });
   const sportsFiles = fs.readdirSync(FN).filter((f) => /^sports.*\.js$/.test(f));
   const bare = sportsFiles.filter((f) => /category:\s*['"]sports['"]/.test(fs.readFileSync(path.join(FN, f), 'utf8')));

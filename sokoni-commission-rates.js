@@ -103,6 +103,22 @@
       "pct": 5,
       "fixedKES": 0
     },
+    "construction_service": {
+      "pct": 0,
+      "fixedKES": 0
+    },
+    "construction_equipment_rental": {
+      "pct": 0,
+      "fixedKES": 0
+    },
+    "construction_featured": {
+      "pct": 0,
+      "fixedKES": 0
+    },
+    "construction_delivery_margin": {
+      "pct": 0,
+      "fixedKES": 0
+    },
     "electronics": {
       "pct": 15,
       "fixedKES": 0
@@ -189,6 +205,31 @@
     "tablet": "electronics",
     "computers": "electronics",
     "device_accessories": "electronics",
+    "cement": "marketplace",
+    "steel": "marketplace",
+    "timber": "marketplace",
+    "roofing": "marketplace",
+    "bricks": "marketplace",
+    "tiles": "marketplace",
+    "paint": "marketplace",
+    "plumbing-materials": "marketplace",
+    "electrical-materials": "marketplace",
+    "windows-doors": "marketplace",
+    "construction-tools": "marketplace",
+    "sand-gravel": "marketplace",
+    "safety-ppe": "marketplace",
+    "building-materials": "marketplace",
+    "hardware": "marketplace",
+    "construction": "marketplace",
+    "contractor": "construction_service",
+    "welding": "construction_service",
+    "fabrication": "construction_service",
+    "electrical-contractor": "construction_service",
+    "plumbing-contractor": "construction_service",
+    "construction-contractor": "construction_service",
+    "equipment-rental": "construction_equipment_rental",
+    "equipment_rental": "construction_equipment_rental",
+    "plant-hire": "construction_equipment_rental",
     "freelancer": "jobs",
     "freelance": "jobs",
     "gig": "jobs",
