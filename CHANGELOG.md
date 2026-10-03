@@ -1,3 +1,26 @@
+## [2026-10-03] - Construction: approval from the ONE authority + read-only mode (P0-F) (hosting only; NOT deployed)
+
+**Owner invariant (2026-10-03):** application status is WORKFLOW, not authorization. **DEPENDENCY:** sokoni-5b `f85039a`
+(one approval authority; P0-H migration first) and `1a5c9e5` (`ownerState` + `editable`). Until `1a5c9e5` is live every
+Construction edit is read-only (owner rule: anything other than `editable === true` is read-only).
+
+- **Verification:** "Approved" only when `providerDispatch {op:'businessWorkspace'}` answers `approval.state ===
+  'VALID_APPROVAL'` AND `modules.services.state === 'AVAILABLE'` (no construction key exists on the capability line;
+  construction trades are quoted-service providers). `applications.status` is shown only as "Application progress"
+  (approved → "Review complete"); the `verified === true` badge is removed. One businessWorkspace call per page load
+  (`_conWorkspace`, memoised per uid, shared by all ten views).
+- **Read-only (P0-F):** new shared `sokoni-edit-authority.js`; lead moves/notes, equipment create/publish/pause, rental
+  accept/decline/start/return/complete/cancel render disabled with "Your account can't make changes right now
+  (<reason>)" (+ reactivate link for deactivated); every action re-checks before writing/dispatching; staff read-only.
+- **Tests:** construction 52/0 → 71/0 (rows V1–V7, RO1–RO9; controls N9 approval from status → V1, N10 fails open on
+  missing answer → RO6, N11 verified badge → V3). Unchanged before/after: merchant-routes 65/0, mv2-1-sidebar 14/0,
+  v2-panels 20/0, entry 59/0, exit-contract 18/0, dashboard 117/0, module-authorities 15/0, inshell-chrome 30/0;
+  merchant-capability 44/2 and shell-callables 18/1 are PRE-EXISTING (identical before). Browser certification QUEUED.
+- **Database / API / rules / functions:** none; consumes `providerDispatch businessWorkspace` (existing op).
+  **Security:** approval never from client-writable application fields; read-only fails closed.
+- **Files:** `sokoni-merchant-construction.js`, `sokoni-edit-authority.js` (new), `merchant-v2.html`,
+  `scripts/test-merchant-construction-workspace.js`, `docs/CONSTRUCTION_WORKSPACE.md`, `CHANGELOG.md`.
+
 ## [2026-10-03] - Construction workspace on sokoni-f3's owner rental lifecycle (bb8634d) — listing Draft/Available/Paused, full seller booking lifecycle, payment from status only (hosting only; NOT deployed)
 
 - **Listings:** create → Draft; "Make available" (`rentalProductPublish`) and "Pause" (`rentalProductPause`); Draft / Paused say

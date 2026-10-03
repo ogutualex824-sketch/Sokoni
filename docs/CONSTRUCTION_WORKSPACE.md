@@ -29,7 +29,7 @@ of the shell. It is not a second dashboard.
 | `con-equipment` | Equipment | `commerceDispatch` `rentalProductCreate`, plus a direct read of `rentalProducts` |
 | `con-availability` | Equipment availability | `commerceDispatch` `rentalGetAvailability` |
 | `con-rentals` | Rentals | `commerceDispatch` `rentalList` / `rentalConfirm` / `rentalComplete` / `rentalCancel` |
-| `con-verification` | Construction application | `applications where uid == uid`, filtered to `hub == 'construction'` |
+| `con-verification` | SOKONI approval + application progress | approval: `providerDispatch {op:'businessWorkspace'}` (one call per page load); progress: `applications where uid == uid`, filtered to `hub == 'construction'` |
 
 ### Owner layout (via sokoni-f3)
 
@@ -203,24 +203,58 @@ handled under SOKONI's refund policy…".
 
 ## Verification
 
-The page reads `applications where uid == S.uid` (owner-only read) and keeps only `hub == 'construction'`.
+**Owner invariant (2026-10-03): application status is WORKFLOW, not authorization.** Every hub consumes ONE
+authoritative approval answer — never `application.status`, `adminApproved`, `approvedBy` or `verified`; no hub-local
+interpretation, no fallback.
 
-- **Status:** shown as the application records it:
+- **SOKONI approval** comes only from `providerDispatch {op:'businessWorkspace'}` (sokoni-5b `f85039a`, whose
+  `approval.state` is derived by `shared/approval-authority.js isAuthoritativelyApproved`). The page shows **Approved**
+  only when `approval.state === 'VALID_APPROVAL'` **and** `modules.services.state === 'AVAILABLE'`.
+  - **Why `services`:** neither `f85039a` nor the capability line (`1a5c9e5`) has a construction module key.
+    Construction trades classify to existing quoted-service provider categories (5b `cf44fc3`: trades /
+    service_business / professional_services), whose capability is the `services` module. Swap the one constant
+    `APPROVAL_MODULE` if 5b adds a construction key. A materials supplier (products lane) gets `OWN_WORKSPACE` modules
+    and therefore "Not approved yet" here — honest, fail closed; its approval is the shop's.
+  - Otherwise: "Not approved yet" with the server's message or the plain words for the approval state
+    (PENDING / NO / INVALID_LEGACY / REFUSED / BUYER_ONLY / UNREADABLE). A failed or malformed answer shows `—` with
+    the reason and a retry — never a guess.
+  - **One call per page load:** the shell memoises `_conWorkspace` per uid (shared by all ten views); a failure is
+    forgotten so "Try again" can ask once more.
+- **Application progress** reads `applications where uid == S.uid` (owner-only), `hub == 'construction'`, and shows the
+  status as workflow words only — it never says "Approved":
 
-  | Recorded status | Label |
+  | Recorded status | Application progress |
   |---|---|
   | pending | Submitted — awaiting review |
   | info_requested | More information requested |
-  | approved | Approved |
-  | rejected | Not approved |
-  | suspended | Suspended |
+  | under_review | In review |
+  | approved | Review complete |
+  | rejected | Closed by review |
+  | suspended | On hold |
+  | withdrawn | Withdrawn |
   | anything else | title-cased |
 
-- **"✓ Verified"** appears only when `verified === true`. `verified` is in `noAdminFields()`.
-- **Finding for the rules line:** `status`, `decidedBy` and `decidedAt` are **not** admin-only fields. Under the current
-  rules the applicant can rewrite their own application's status label. That is cosmetic, because roles are granted on
-  the server, but the label alone is not proof. That is why "Verified" depends on `verified === true` and not on
-  `status`.
+- The old "✓ Verified" badge (`verified === true`) is **removed**: `verified` is an application field, not the authority.
+
+## Read-only mode (P0-F)
+
+Deactivated / suspended / revoked / frozen owners cannot edit providers or shops (f3 `1896712`), so the edit UIs render
+read-only rather than offering refused saves. The decision is `sokoni-edit-authority.js` (shared byte-identical with the
+provider-session and fitness branches) over the SAME businessWorkspace answer plus the ID-token claims:
+
+| Answer | Result |
+|---|---|
+| `editable === true` | editable — wins over the interim signals |
+| `editable` false / missing / non-boolean | read-only; reason from `ownerState`: frozen → "frozen by SOKONI", suspended → "suspended", deactivated → "deactivated — reactivate your account" (+ link to `/profile.html`), unknown → "status unknown", active → "your business status does not allow changes yet" |
+| old server (no `ownerState`/`editable`) | still read-only; reason: claim `deactivated === true` → deactivated; `approval.state !== 'VALID_APPROVAL'` → "your business approval is not valid (<state>)"; else "status unknown" |
+| answer missing / failed / authority not loaded | read-only, "status unknown" |
+| staff (role ≠ owner) | read-only, "the shop owner's account status is not available to staff yet" — the answer describes the signed-in account, not the owner |
+
+Controls rendered **disabled** when read-only: lead moves and the private note, List equipment / Save listing,
+Make available / Pause, rental Accept / Decline / Start / Confirm return / Complete / Cancel. A banner states
+"Your account can't make changes right now (<reason>)". Every action function re-checks and refuses before any write
+or dispatch. Figures and lists are unaffected. **Consequence until 5b `1a5c9e5` is live:** the field is absent, so
+Construction edits are read-only for everyone (owner rule) — the hosting change must ship with or after `1a5c9e5`.
 
 ## Commercial (sokoni-2f line)
 
@@ -238,7 +272,9 @@ The page reads `applications where uid == S.uid` (owner-only read) and keeps onl
 
 ## Tests
 
-`scripts/test-merchant-construction-workspace.js` passes **52/0**: 44 rows plus 8 of 8 negative controls caught. It runs
+`scripts/test-merchant-construction-workspace.js` passes **71/0**: 60 rows plus 11 of 11 negative controls caught
+(N9 "Approved" from applications.status → V1; N10 read-only fails open on a missing answer → RO6; N11 a badge from
+`verified === true` → V3). It runs
 in a node VM. The rental fixtures come from **running the real handlers** over an in-memory Firestore, with the
 dispatcher's error wrapping reproduced:
 
@@ -254,7 +290,9 @@ dispatcher's error wrapping reproduced:
 | O | Unknown shows `—`, loaded zero shows `0`, capped shows `N+`; three layouts; every section resolves; reused routes exist; plan price only from a construction-priced entry; fees copy |
 | L | Legal lead buttons per status (owner matrix ⊆ rules `leadNext`); labels; exact payloads; shell writer refusals; chat runtime gate; permission, staff and failure copy; exact `hasMore`; refused write |
 | R | f3 bb8634d handlers: every booking state produced by the real handlers (payment-authority states written as that authority would); seller button matrix incl. legacy pending/confirmed; payment from STATUS only; method "—" until the webhook sets it; no Cancel on paid_held, refund-policy refusal verbatim; decline reason required; Accept → rentalConfirm alias on an old server; Start / Confirm return / Complete / seller Cancel; listing Draft / Available / Paused + publish / pause; Equipment via rentalOwnerListings (hasMore); direct read only on an unknown-op answer; reasons verbatim |
-| H | Projects, RFQs, Quotes and Services are honest; Verification never claims "Verified" without `verified === true` |
+| H | Projects, RFQs, Quotes and Services are honest; staff Verification copy |
+| V | Status is "Application progress" only; Approved only for VALID_APPROVAL + services AVAILABLE; verified/adminApproved/approvedBy/status alone → not approved; failed/malformed/unwired answer → `—`; one businessWorkspace call per page load (module + shell memo) |
+| RO | Claim deactivated; approval not valid; editable false (frozen); editable true overrides interim; every ownerState × editable true/false/missing/"true"; missing answer fails closed; staff; figures untouched |
 | S | No `wa.me`, `tel:` or `mailto:`; escaping; no Firestore write API or browser storage in the module; dispatch ops limited to the seller rental ops (never rentalBook / rentalReportReturn) |
 | G | Ten `con-*` routes; Construction group last; `validate()` clean; `MODULES` wiring; no duplicate module ids; script tag |
 
@@ -303,7 +341,8 @@ owner.
 3. Leads: a real `contactRequests` row moves pending → responded and the rules accept it. The rules must be f9a5c45.
 4. Chat opens `messages.html?tx=product_enquiry` once b2 `74c9d50` is assembled.
 5. Equipment and Rentals show the rules-pending copy on the current production rules.
-6. The Verification status matches AdminOS.
+6. The Verification approval matches the account's `applicationDecisions` record (VALID only after an admin decision).
+7. A deactivated test owner (claim `deactivated`) sees every Construction edit control disabled with the reason.
 
 ## Release dependencies (nothing deploys without the owner)
 
@@ -319,3 +358,5 @@ owner.
 | Server role or module answer (contractor / supplier / rental) | sokoni-5b | Per-role sections in place of all three |
 | RFQ module `sokoni-merchant-rfq.js` (`hosting/b2b-on-7b5171e`) | sokoni-f3 | RFQs and Quotes linking to `rfqs` |
 | SOKONI Work engine | owner programme | Projects |
+| ONE approval authority `f85039a` (`hotfix/approval-authority-on-c7e26b6`; P0-H migration first) | sokoni-5b | "Approved" meaning server evidence |
+| `ownerState` + `editable` on businessWorkspace `1a5c9e5` (`feat/education-workspace-on-d377b28`) | sokoni-5b | Construction edits being enabled at all (without it everything is read-only) |
