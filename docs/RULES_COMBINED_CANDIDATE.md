@@ -205,3 +205,15 @@ No live client depends on the removed paths: `git grep` on 72dca56 finds only `s
 ruleset as their own release if the owner wants them before the combined release. Owner decision.
 Suite `scripts/zz-test-jobs-rules.js` (JR-J*, JR-A*, JR-P*, with controls). **EMULATOR PENDING** (196 MB free).
 Baseline f259c0b5: JR-J1/J2/J3, JR-A1/A2 and JR-P1 must FAIL there.
+
+## HELD 2026-10-03: providerAvailability server-only (sokoni-b2, owner: availability is server-authoritative), NOT APPLIED
+
+Proposed: `providerAvailability/{uid}` read isAuthed, create/update/delete false; `/overrides/{date}` read isAuthed,
+write false. Server writer: bookingDispatch availability callables (b2 feat/legal-hub-on-9cab901 @ 610d707, AV1–AV3).
+- **It must REPLACE the existing block** at source line ~3823 (owner create/update, overrides owner write). A second
+  `match` would OR with that block and keep client writes open.
+- **BLOCKER:** `availability-manager.html` on the e3/techhub hosting chain is still a client-writing editor shared with
+  the Merchant V2 shop schedule (6775b09; test-availability-convergence 34/0 asserts those writes). 2f's line replaces
+  it with an A2 router (8d127ab). Until the owner or the assembly picks one, denying the writes breaks that page.
+  b2 is asking 2f who owns the shop-availability choice. Apply only once that is resolved, with an emulator suite and a
+  served baseline.
