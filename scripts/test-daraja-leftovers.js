@@ -60,7 +60,10 @@ for (const f of ['payments.html', 'seller.html', 'sokoni-endpoints.js', 'sokoni-
      send.length > 0 && !/httpsCallable|SIMULATED_|darajaSTKPush|verifyPaymentStatus/.test(send)
      && /SokoniPosStk/.test(send) && /S\.callStk\(factory\)/.test(send) && /S\.callVerify\(factory\)/.test(send)
      && /st === 'completed'[\s\S]*payment\.complete\(/.test(send) && (send.match(/payment\.complete\(/g) || []).length === 1
-     && /Nothing was charged/.test(send));
+     && /Nothing was charged/.test(send)
+     /* the TEXT check cannot prove "completes only on 'completed'" (a `|| st === 'pending'` sabotage survives it);
+        the executed control is scripts/test-pos-mpesa-intasend.js — it must exist and run the real sendSTK. */
+     && (() => { try { const t = fs.readFileSync(path.join(ROOT, 'scripts', 'test-pos-mpesa-intasend.js'), 'utf8'); return t.length > 1000 && /async sendSTK\(amountOverride\)/.test(t) && /status === 'completed'|st === 'completed'|statuses/.test(t); } catch (_) { return false; } })());
   ck('D6  POS never completes a sale on a simulated M-PESA confirmation', !/SIMULATED_|mpesaRef\s*=\s*'SIM'/.test(pos));
   ck('D7  POS collects no Safaricom API keys', !/mpesa-ck|mpesa-cs|mpesa-passkey|cfg-mpesa-ck|cfg-mpesa-passkey/.test(pos + strip(fs.readFileSync(path.join(ROOT, 'pos.html'), 'utf8'))));
   const eng = strip(fs.readFileSync(path.join(ROOT, 'sokoni-mpesa.js'), 'utf8'));
