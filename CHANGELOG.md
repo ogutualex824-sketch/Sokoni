@@ -1,3 +1,13 @@
+## [2026-10-03] — Tech Hub slice 4Q (server): AdminOS sees service leads & quotes — NOT deployed
+
+- functions/admin-os.js `_h.adminGetServiceLeads`:
+  - admin-only, read-only;
+  - routed by adminOsDispatch (handler only, no new export / deploy target);
+  - filters by status or providerId;
+  - returns status, parties, the server-validated quote (amount, version, validity, mode), the bookingId, monetization (not_configured) and an
+    event count, plus open / converted / declined counts.
+- Test: test-service-leads L-12 (13/0).
+
 ## [2026-10-03] — Tech Hub slice 4M (server): calling = a booking-bound, logged phone reveal — NOT deployed
 
 - **Census:** SOKONI has no voice / call-masking provider (Africa's Talking is used for SMS only; no Twilio). The only contact path was

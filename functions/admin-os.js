@@ -1034,6 +1034,33 @@ exports.adminUpdateProductStatus = onCall({ region: 'us-central1', maxInstances:
 /* ─────────────────────────────────────────────────────────────────────────
    Bookings
 ──────────────────────────────────────────────────────────────────────────── */
+/* Tech Hub 4Q (2026-10-03): AdminOS visibility of service leads & quotes (serviceLeads — server-written, no client read
+   path). Read-only and routed through adminOsDispatch (no new deploy target). The quote amount shown is the provider's
+   server-validated quote; monetization is what the lead recorded (not_configured — no lead fee exists). */
+exports._h.adminGetServiceLeads = async (req) => {
+  _requireAdmin(req);
+  const { status, providerId, limit: lim } = req.data || {};
+  const db = getFirestore();
+  const cap = Math.min(Number(lim) || 100, 300);
+  let q = db.collection('serviceLeads');
+  if (providerId) q = q.where('providerId', '==', String(providerId).slice(0, 128));
+  else if (status) q = q.where('status', '==', String(status).slice(0, 40));
+  const snap = await q.limit(cap).get().catch(() => ({ docs: [] }));
+  const items = (snap.docs || []).map((d) => {
+    const x = d.data() || {}; const qt = x.quote || null;
+    return {
+      id: d.id, status: x.status || '', customerUid: x.customerUid || '', providerId: x.providerId || '', serviceId: x.serviceId || null,
+      message: String(x.message || '').slice(0, 280),
+      quote: qt ? { amountCents: Number(qt.amountCents) || 0, version: qt.version || 1, validUntil: qt.validUntil || null, serviceMode: qt.serviceMode || '' } : null,
+      bookingId: x.bookingId || null, monetization: (x.monetization && x.monetization.status) || 'not_configured',
+      createdAtMs: Number(x.createdAtMs) || null, events: Array.isArray(x.history) ? x.history.length : 0,
+    };
+  }).sort((p, q2) => (q2.createdAtMs || 0) - (p.createdAtMs || 0));
+  const by = (st) => items.filter((i) => i.status === st).length;
+  return _env('serviceLeads', items, { open: items.filter((i) => ['created', 'viewed', 'quote_sent', 'clarification_requested', 'quote_accepted'].includes(i.status)).length,
+    converted: by('converted'), declined: by('declined') + by('quote_declined') });
+};
+
 exports.adminGetBookings = onCall({ region: 'us-central1', maxInstances: 10, enforceAppCheck: true }, exports._h.adminGetBookings = async (req) => {
   _requireAdmin(req);
   const { status, limit: lim } = req.data;

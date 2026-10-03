@@ -118,6 +118,15 @@ const tomorrow = () => new Date(Date.now() + 2 * 86400000).toISOString().slice(0
   ck('L-11', !!(lp.ok && lp.ok.leads.length === 1) && lpp.code === 'failed-precondition'
     && ['leadCreate', 'leadListMine', 'leadListForProvider', 'leadMarkViewed', 'leadDecline', 'leadSendQuote', 'leadRespond', 'leadClose'].every((op) => PD.includes("'" + op + "'")),
     'the provider lists its leads (a pending provider cannot); every op is a providerDispatch route', { list: lp.code || lp.ok.leads.length, pend: lpp.code });
+  /* L-12 AdminOS sees the leads (read-only); a non-admin does not */
+  const AO = require(path.join(FN, 'admin-os.js'))._h;
+  if (!AO.adminGetServiceLeads) ck('L-12', false, 'admin-os adminGetServiceLeads exists');
+  else {
+    const ad = await call(AO.adminGetServiceLeads, 'admin1', {}, { admin: true });
+    const na = await call(AO.adminGetServiceLeads, 'cust', {}, {});
+    ck('L-12', !!(ad.ok && ad.ok.items.length >= 1 && ad.ok.items.every((i) => i.monetization === 'not_configured')) && !na.ok && (!!na.code || /admin required/.test(na.msg || '')),   /* admin-os _requireAdmin throws a plain Error (pre-existing) */
+      'AdminOS lists service leads (monetization not_configured); a non-admin is refused', { admin: ad.ok && { n: ad.ok.items.length, open: ad.ok.open }, nonAdmin: na.code || na.msg });
+  }
   done();
 })().catch((e) => { console.log('CRASH (no verdict): ' + (e && e.stack || e)); process.exit(2); });
 function done() { console.log('\nRESULT: ' + pass + ' passed, ' + fail + ' failed'); process.exit(fail ? 1 : 0); }
