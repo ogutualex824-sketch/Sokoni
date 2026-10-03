@@ -1,3 +1,67 @@
+## [2026-10-04] - Supplier invoices: payment is a CLAIM until VERIFIED — hosting copy and states (hosting only; NOT deployed)
+
+The owner ruled on 2026-10-04 that a supplier-invoice payment stays a claim until it is verified. The server change is
+functions `feat/parcel-rail-fn-on-5a0935e` @ `de9fb9d`, which is **NOT deployed**. This hosting slice **ships with
+those functions** and must not go out ahead of them: `listSupplierInvoices` is not on the live functions line yet,
+which is why the Supply workspace keeps Invoices and Payments marked unbacked.
+
+**`procurement.html`:**
+- "Approve & Pay" is now **Approve**, and the toast says "Invoice approved — payment not verified".
+- Approving no longer needs a payment method. An optional field, **"Payment reference (claim, optional)"**, is
+  sent as `paymentRef`, and the server records it as a claim. An invoice that is approved but unclaimed shows
+  "Record claim".
+- Payment badges are rendered from the server's `paymentStatus` and `paymentVerified`:
+  - `unpaid` shows "Unpaid".
+  - `claimed` shows "Payment claimed — not verified".
+  - `verified_paid` shows "Paid — verified", but only when `paymentVerified` is true.
+  - `recorded_unverified` shows "Recorded as paid — not verified".
+  - An invoice's `status: 'paid'` is never shown on its own.
+- The PO filter option "Paid" is relabelled **"Paid (verified)"**.
+- **Bug fixed:** the Invoices tab read `merchants/{m}/procInvoices`, a collection nothing writes, so the tab was
+  always empty. It now reads the `listSupplierInvoices` callable.
+- **Bug fixed:** the KPI read `d.pendingInvoicesTotal ?? 0`, a field that doesn't exist, so it always showed a made-up
+  KES 0.00. It now reads `pendingInvoices.totalValue`; null shows `—`.
+- A new KPI, "Payment claimed — not verified", reads `claimedInvoices.totalValue`.
+- The other KPI fields now read the engine's `{count}` objects. Before, `openPOs ?? 0` and similar fields rendered
+  an object.
+- Top-supplier spend reads `spend`, which counts verified payments only. Orders and rating show `—` when absent.
+- Reorder-alert cells no longer turn missing values into `0`.
+- Invoice ids now travel in data attributes and the clicks are delegated. Before, the ids were concatenated into
+  inline `onclick`.
+- All text is escaped.
+
+**`sokoni-merchant-supply.js`:**
+- **Invoices:** the Status column shows the lifecycle stage plus the payment label, and never echoes `paid`.
+- **Payments:**
+  - `verified_paid` shows **Verified** and `recorded_unverified` shows **Recorded — not verified**. The two are
+    never merged into one "paid" label.
+  - The "Recorded" column is now **Verified**, read from `paymentVerified`.
+  - The subtitle explains verified vs claimed. The note says supplier payments are verified only through a
+    verified payment event, and none exists yet.
+- **Overview:** "Pending invoices" is renamed to **Outstanding invoices**, and claims are included in it. A new tile,
+  **"Payment claimed — not verified"**, reads `claimedInvoices`, and `money(null)` shows `—`.
+- Due dates accept ISO strings or serialized Timestamps.
+
+**Tests:**
+- New: `scripts/test-supplier-invoice-ui.js`. It is browser-free (Node + vm) and its fixtures use de9fb9d's real
+  list, dashboard and approve shapes. Result: **17/17**, including 2 negative controls:
+  - (a) "Paid" shown for claimed → L2 fails.
+  - (b) `pendingInvoicesTotal ?? 0` → D1 fails.
+- `test-mv2-2a-supply.js`: the static rows R1/B1/B2/S1 pass 4/4. Its U block was **not run**, because it launches
+  Chromium.
+
+**Files:** `procurement.html`, `sokoni-merchant-supply.js`, `scripts/test-supplier-invoice-ui.js` (new), `CHANGELOG.md`.
+**Database:** none. **API:** this slice consumes the de9fb9d contract:
+- `approveAndPayInvoice` now takes `paymentRef` only, with no required method.
+- `listSupplierInvoices` returns `paymentStatus`, `paymentVerified` and `paymentClaim`.
+- `getProcurementDashboard` returns `claimedInvoices`, `verifiedPaidLast30d` and `recordedUnverifiedLast30d`.
+
+**Security:**
+- The UI can no longer present a typed reference as payment.
+- Inline-JS id injection is removed.
+
+**Breaking:** none on its own, but deploy this only together with or after de9fb9d.
+
 ## [2026-10-04] - AdminOS Orders redesigned to the owner's reference layout — every figure from the server (hosting only; NOT deployed)
 
 Owner 2026-10-04: "same for orders". Marketplace → Orders now uses the Platform Health style: dark panels, header row,

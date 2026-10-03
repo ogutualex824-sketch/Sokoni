@@ -118,6 +118,83 @@
     return n.toLocaleString('en-KE');
   }
   function text (v) { return (v === null || v === undefined || v === '') ? NEUTRAL : esc(v); }
+
+  /* ── Supplier-invoice payment state (owner 2026-10-04: payment is a CLAIM until VERIFIED) ──
+     The engine reports paymentStatus: 'unpaid' | 'claimed' | 'verified_paid' |
+     'recorded_unverified', plus paymentVerified. Labels are rendered from THAT field only —
+     never from invoice.status, never from paidAt. "Paid" appears only when the server says
+     verified_paid AND paymentVerified === true; anything else that looks paid is worded as
+     not verified. An absent paymentStatus (older engine) is unknown → the neutral dash. */
+  var PAY_LABEL = {
+    unpaid:              'Unpaid',
+    claimed:             'Payment claimed — not verified',
+    verified_paid:       'Paid — verified',
+    recorded_unverified: 'Recorded as paid — not verified',
+  };
+  function payState (r) {
+    var s = r && r.paymentStatus;
+    if (s === 'verified_paid') return r.paymentVerified === true ? 'verified_paid' : 'recorded_unverified';
+    return Object.prototype.hasOwnProperty.call(PAY_LABEL, s) ? s : null;
+  }
+  function invoicePaymentLabel (r) {
+    var s = payState(r);
+    return s ? esc(PAY_LABEL[s]) : NEUTRAL;
+  }
+  /* The invoice lifecycle word ahead of the payment label. 'paid' is never echoed: whether
+     an invoice is paid is the payment label's job, and only a verified one says so. */
+  var INV_STAGE = { pending: 'Awaiting approval', approved: 'Approved', disputed: 'Disputed', cancelled: 'Cancelled' };
+  function invoiceStatusCell (r) {
+    var stage = r && Object.prototype.hasOwnProperty.call(INV_STAGE, r.status) ? INV_STAGE[r.status] : null;
+    var pay = invoicePaymentLabel(r);
+    if (!stage) return pay;
+    return esc(stage) + (pay === NEUTRAL ? '' : ' · ' + pay);
+  }
+  /* Payments list: the two "paid" states are never merged into one label. */
+  function paymentRecordLabel (r) {
+    var s = payState(r);
+    if (s === 'verified_paid') return 'Verified';
+    if (s === 'recorded_unverified') return 'Recorded — not verified';
+    return s ? esc(PAY_LABEL[s]) : NEUTRAL;
+  }
+  function paymentVerifiedCell (r) {
+    if (!r || typeof r.paymentVerified !== 'boolean') return NEUTRAL;
+    return (r.paymentVerified === true && r.paymentStatus === 'verified_paid') ? 'Yes' : 'No';
+  }
+  /* A date the server may send as an ISO string or as a serialized Timestamp. */
+  function dayText (v) {
+    if (v == null || v === '') return NEUTRAL;
+    if (typeof v === 'string') return esc(v.slice(0, 10));
+    var sec = typeof v._seconds === 'number' ? v._seconds : (typeof v.seconds === 'number' ? v.seconds : null);
+    if (sec == null) return NEUTRAL;
+    return esc(new Date(sec * 1000).toISOString().slice(0, 10));
+  }
+
+  var INVOICE_COLS = [
+    { h: 'Invoice', strong: true, f: function (r) { return text(r.invoiceNumber); } },
+    { h: 'PO',     f: function (r) { return text(r.poId); } },
+    { h: 'Total',  f: function (r) { return money(r.total); } },
+    { h: 'Status', f: invoiceStatusCell },
+    { h: 'Due',    f: function (r) { return dayText(r.dueDate); } },
+  ];
+  var PAYMENT_COLS = [
+    { h: 'Invoice', strong: true, f: function (r) { return text(r.invoiceNumber); } },
+    { h: 'Total',    f: function (r) { return money(r.total); } },
+    { h: 'Payment',  f: paymentRecordLabel },
+    { h: 'Method',   f: function (r) { return text(r.paymentMethod); } },
+    { h: 'Verified', f: paymentVerifiedCell },
+  ];
+
+  /* Overview tiles — every value from getProcurementDashboard; money(null) is the dash. */
+  function overviewTiles (d) {
+    return [
+      { k: 'Open purchase orders', v: count(d.openPOs && d.openPOs.count), s: money(d.openPOs && d.openPOs.totalValue) },
+      { k: 'Pending approval',     v: count(d.pendingApproval && d.pendingApproval.count) },
+      { k: 'Goods to receive',     v: count(d.goodsToReceive && d.goodsToReceive.count) },
+      { k: 'Outstanding invoices', v: count(d.pendingInvoices && d.pendingInvoices.count), s: money(d.pendingInvoices && d.pendingInvoices.totalValue) },
+      { k: 'Payment claimed — not verified', v: count(d.claimedInvoices && d.claimedInvoices.count), s: money(d.claimedInvoices && d.claimedInvoices.totalValue) },
+      { k: 'Overdue invoices',     v: count(d.overdueInvoices && d.overdueInvoices.count) },
+    ];
+  }
   /* How the server-reported total relates to VAT. The engine never infers VAT: it follows the
      supplier's own status (vatBasis), and when that is unknown the total EXCLUDES VAT. This
      only words the server's basis — it computes nothing. Absent basis = an older engine. */
@@ -411,26 +488,18 @@
       invoices: { op: 'listSupplierInvoices', title: 'Invoices',
         sub: 'Supplier invoices raised against your orders.',
         empty: 'No supplier invoices yet.',
-        cols: [
-          { h: 'Invoice', strong: true, f: function (r) { return text(r.invoiceNumber); } },
-          { h: 'PO',     f: function (r) { return text(r.poId); } },
-          { h: 'Total',  f: function (r) { return money(r.total); } },
-          { h: 'Status', f: function (r) { return text(r.status); } },
-          { h: 'Due',    f: function (r) { return text(r.dueDate); } },
-        ] },
+        cols: INVOICE_COLS },
       payments: { op: 'listSupplierInvoices', title: 'Payments',
-        sub: 'Invoices recorded as paid. This is a BOOKKEEPING record — it does not itself move money.',
-        empty: 'No payments recorded yet.',
+        sub: 'Invoices marked paid. "Verified" means a verified payment event settled it; ' +
+             '"Recorded — not verified" means it was marked paid from a typed reference and ' +
+             'nothing confirmed money moved. A payment claim made at approval is not listed ' +
+             'here — it stays an outstanding invoice until verified.',
+        empty: 'No paid invoices recorded yet.',
         query: { status: 'paid' },
-        cols: [
-          { h: 'Invoice', strong: true, f: function (r) { return text(r.invoiceNumber); } },
-          { h: 'Total',  f: function (r) { return money(r.total); } },
-          { h: 'Method', f: function (r) { return text(r.paymentMethod); } },
-          { h: 'Recorded', f: function (r) { return r.paidAt ? 'Yes' : NEUTRAL; } },
-        ],
-        note: 'Recording a payment writes the ledger and the supplier balance. Settlement over ' +
-              'M-Pesa, bank or wallet is a separate capability that does not exist yet, so ' +
-              'nothing here should be read as funds having moved.' },
+        cols: PAYMENT_COLS,
+        note: 'A supplier payment is verified ONLY by a verified payment event. No verified ' +
+              'supplier-payment rail exists yet, so no invoice can be verified paid today; a ' +
+              'reference typed at approval is recorded as a claim, never as payment.' },
       mysupply: { op: 'listWarehouseStock', title: 'Products I Supply',
         sub: 'What this business holds and can offer other businesses.',
         empty: 'No stock recorded for this business yet.',
@@ -673,15 +742,10 @@
       if (!d) return '';
       var head = '<h2 class="sup-h2">Overview</h2>' +
         '<p class="sup-sub">Live procurement position for this business.</p>';
-      return head + tiles([
-        { k: 'Open purchase orders', v: count(d.openPOs && d.openPOs.count), s: money(d.openPOs && d.openPOs.totalValue) },
-        { k: 'Pending approval',     v: count(d.pendingApproval && d.pendingApproval.count) },
-        { k: 'Goods to receive',     v: count(d.goodsToReceive && d.goodsToReceive.count) },
-        { k: 'Pending invoices',     v: count(d.pendingInvoices && d.pendingInvoices.count), s: money(d.pendingInvoices && d.pendingInvoices.totalValue) },
-        { k: 'Overdue invoices',     v: count(d.overdueInvoices && d.overdueInvoices.count) },
-      ]) + '<p class="sup-note">Every figure is read from the procurement engine for this ' +
+      return head + tiles(overviewTiles(d)) + '<p class="sup-note">Every figure is read from the procurement engine for this ' +
            'business. A dash means the server did not report that figure — never zero standing ' +
-           'in for unknown.</p>';
+           'in for unknown. Outstanding invoices include those with a payment claim: a claim ' +
+           'is not payment until a verified payment event settles it.</p>';
     }
 
     function renderUnavailable (id) {
@@ -1158,5 +1222,8 @@
     };
   }
 
-  global.SokoniMerchantSupply = { mount: mount, NAV: NAV, UNAVAILABLE: UNAVAILABLE };
+  global.SokoniMerchantSupply = { mount: mount, NAV: NAV, UNAVAILABLE: UNAVAILABLE,
+    /* Exposed for certification — never for display logic. */
+    _invoiceUi: { PAY_LABEL: PAY_LABEL, INVOICE_COLS: INVOICE_COLS, PAYMENT_COLS: PAYMENT_COLS,
+                  overviewTiles: overviewTiles, invoicePaymentLabel: invoicePaymentLabel } };
 })(typeof window !== 'undefined' ? window : this);

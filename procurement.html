@@ -108,7 +108,8 @@ tr:hover td{background:#1f1f35}
       <div class="kpi"><div class="label">Open POs</div><div class="value" id="kpi-open">—</div></div>
       <div class="kpi"><div class="label">Pending Approval</div><div class="value orange" id="kpi-approval">—</div></div>
       <div class="kpi"><div class="label">Goods to Receive</div><div class="value blue" id="kpi-grn">—</div></div>
-      <div class="kpi"><div class="label">Pending Invoices (KES)</div><div class="value" id="kpi-invoices">—</div></div>
+      <div class="kpi"><div class="label">Outstanding Invoices (KES)</div><div class="value" id="kpi-invoices">—</div></div>
+      <div class="kpi"><div class="label">Payment claimed — not verified (KES)</div><div class="value orange" id="kpi-claimed">—</div></div>
     </div>
     <div class="section">
       <div class="section-header">Reorder Alerts</div>
@@ -138,7 +139,7 @@ tr:hover td{background:#1f1f35}
           <option value="approved">Approved</option>
           <option value="sent">Sent</option>
           <option value="received">Received</option>
-          <option value="paid">Paid</option>
+          <option value="paid">Paid (verified)</option>
         </select>
       </div>
       <div class="table-wrap"><table>
@@ -271,14 +272,39 @@ const ProcurementPortal = (() => {
     ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
   const _fmt = n => 'KES ' + Number(n || 0).toLocaleString('en-KE',
     {minimumFractionDigits: 2, maximumFractionDigits: 2});
+  /* A figure the server did not report is the neutral dash — never KES 0.00. */
+  const _money = n => (typeof n === 'number' && isFinite(n)) ? _fmt(n) : '—';
+  const _num   = n => (typeof n === 'number' && isFinite(n)) ? String(n) : '—';
   const _stars = r => '&#9733;'.repeat(Math.round(r || 0)) + '&#9734;'.repeat(5 - Math.round(r || 0));
   const _badge = s => {
     const map = {
       draft:'gray', pending_approval:'orange', approved:'green', sent:'blue',
       partially_received:'teal', received:'green', paid:'blue', cancelled:'red',
-      pending:'gray', overdue:'red'
+      pending:'gray', overdue:'red',
+      /* Supplier-invoice payment states (owner 2026-10-04: payment is a CLAIM until VERIFIED) */
+      claimed:'orange', verified_paid:'green', recorded_unverified:'orange', unpaid:'gray'
     };
-    return '<span class="badge badge-' + (map[s] || 'gray') + '">' + _esc((s || '').replace(/_/g, ' ')) + '</span>';
+    return '<span class="badge badge-' + (map[s] || 'gray') + '">' + _esc((Object.prototype.hasOwnProperty.call(PAY_LABEL, s) ? PAY_LABEL[s] : String(s || '')).replace(/_/g, ' ')) + '</span>';
+  };
+  /* Rendered from the server's paymentStatus ONLY — never from invoice.status or paidAt.
+     "Paid" appears only for verified_paid with paymentVerified === true. */
+  const PAY_LABEL = {
+    unpaid:'Unpaid',
+    claimed:'Payment claimed — not verified',
+    verified_paid:'Paid — verified',
+    recorded_unverified:'Recorded as paid — not verified'
+  };
+  const _payState = inv => {
+    const s = inv && inv.paymentStatus;
+    if (s === 'verified_paid') return inv.paymentVerified === true ? 'verified_paid' : 'recorded_unverified';
+    return Object.prototype.hasOwnProperty.call(PAY_LABEL, s) ? s : null;
+  };
+  const _payBadge = inv => { const s = _payState(inv); return s ? _badge(s) : '—'; };
+  const _day = v => {
+    if (v == null || v === '') return '';
+    if (typeof v === 'string') return v.substring(0, 10);
+    const sec = typeof v._seconds === 'number' ? v._seconds : (typeof v.seconds === 'number' ? v.seconds : null);
+    return sec == null ? '' : new Date(sec * 1000).toISOString().substring(0, 10);
   };
   const _call = name => fn.httpsCallable(name);
   const _q    = id   => document.getElementById(id);
@@ -303,6 +329,15 @@ const ProcurementPortal = (() => {
     });
     document.querySelectorAll('.modal-bg').forEach(bg => {
       bg.addEventListener('click', e => { if (e.target === bg) bg.classList.remove('open'); });
+    });
+    /* Invoice actions are delegated: ids travel in data attributes, never in inline JS. */
+    const invBody = _q('invoice-tbody');
+    if (invBody) invBody.addEventListener('click', async e => {
+      const btn = e.target && e.target.closest && e.target.closest('[data-approve-invoice]');
+      if (!btn || btn.disabled) return;
+      btn.disabled = true;
+      try { await approveInvoice(btn.getAttribute('data-approve-invoice')); }
+      finally { btn.disabled = false; }
     });
   };
 
@@ -335,19 +370,22 @@ const ProcurementPortal = (() => {
     try {
       const res = await _call('getProcurementDashboard')({merchantId: m});
       const d = res.data;
-      _q('kpi-open').textContent     = d.openPOs ?? 0;
-      _q('kpi-approval').textContent = d.pendingApproval ?? 0;
-      _q('kpi-grn').textContent      = d.goodsToReceive ?? 0;
-      _q('kpi-invoices').textContent = _fmt(d.pendingInvoicesTotal ?? 0);
+      /* The engine returns {count,...} objects and per-bucket totalValue (null when any
+         invoice total is unknown). Absent → '—', never a fabricated 0. */
+      _q('kpi-open').textContent     = _num(d.openPOs && d.openPOs.count);
+      _q('kpi-approval').textContent = _num(d.pendingApproval && d.pendingApproval.count);
+      _q('kpi-grn').textContent      = _num(d.goodsToReceive && d.goodsToReceive.count);
+      _q('kpi-invoices').textContent = _money(d.pendingInvoices && d.pendingInvoices.totalValue);
+      _q('kpi-claimed').textContent  = _money(d.claimedInvoices && d.claimedInvoices.totalValue);
 
       const alerts = Array.isArray(d.reorderAlerts) ? d.reorderAlerts : [];
       _q('reorder-tbody').innerHTML = alerts.length
         ? alerts.map(r => '<tr>' +
-            '<td>' + _esc(r.product) + '</td>' +
+            '<td>' + _esc(r.product ?? r.productId) + '</td>' +
             '<td>' + _esc(r.sku) + '</td>' +
-            '<td>' + (r.currentStock ?? 0) + '</td>' +
-            '<td>' + (r.reorderPoint ?? 0) + '</td>' +
-            '<td>' + (r.suggestedQty ?? 0) + '</td>' +
+            '<td>' + _num(r.currentStock) + '</td>' +
+            '<td>' + _num(r.reorderPoint) + '</td>' +
+            '<td>' + _num(r.suggestedQty ?? r.reorderQty) + '</td>' +
             '<td><button class="btn btn-primary btn-sm" onclick="ProcurementPortal.openNewPOFor(' +
               JSON.stringify(_esc(r.product)) + ',' +
               JSON.stringify(_esc(r.sku || '')) + ',' +
@@ -359,9 +397,10 @@ const ProcurementPortal = (() => {
       _q('top-suppliers-tbody').innerHTML = suppliers.length
         ? suppliers.map(s => '<tr>' +
             '<td>' + _esc(s.name) + '</td>' +
-            '<td>' + _fmt(s.totalSpend) + '</td>' +
-            '<td>' + (s.orders ?? 0) + '</td>' +
-            '<td class="stars">' + _stars(s.rating) + '</td>' +
+            /* spend = VERIFIED supplier payments only (engine, 2026-10-04) */
+            '<td>' + _money(s.spend ?? s.totalSpend) + '</td>' +
+            '<td>' + _num(s.orders) + '</td>' +
+            '<td class="stars">' + (typeof s.rating === 'number' ? _stars(s.rating) : '—') + '</td>' +
           '</tr>').join('')
         : '<tr><td colspan="4" class="empty">No supplier data</td></tr>';
     } catch (e) { _toast('Dashboard error: ' + e.message); }
@@ -583,34 +622,60 @@ const ProcurementPortal = (() => {
     if (!m) return;
     const today = new Date().toISOString().substring(0, 10);
     try {
-      const snap = await db.collection('merchants').doc(m)
-        .collection('procInvoices').orderBy('createdAt', 'desc').limit(50).get();
-      _q('invoice-tbody').innerHTML = snap.empty
+      /* The canonical merchant-scoped read. (This tab used to read merchants/{m}/procInvoices,
+         a collection nothing writes — it was always empty.) */
+      const res = await _call('listSupplierInvoices')({merchantId: m});
+      const items = (res && res.data && Array.isArray(res.data.items)) ? res.data.items : [];
+      _q('invoice-tbody').innerHTML = !items.length
         ? '<tr><td colspan="7" class="empty">No invoices</td></tr>'
-        : snap.docs.map(d => {
-            const inv = d.data();
-            const due = inv.dueDate || '';
+        : items.map(inv => {
+            const id = String(inv.invoiceId || '');
+            const due = _day(inv.dueDate);
+            const pay = _payState(inv);
             const overdue = inv.status === 'pending' && due && due < today;
-            const statusKey = overdue ? 'overdue' : (inv.status || 'pending');
+            const stage = inv.status === 'paid' ? '' : _badge(overdue ? 'overdue' : (inv.status || 'pending'));
+            /* An approve may carry an OPTIONAL reference. It is recorded as a CLAIM — it is not
+               payment and nothing here verifies it. An approved invoice with no claim may
+               gain one later; a claimed or paid one may not. */
+            const canApprove = inv.status === 'pending';
+            const canClaim   = inv.status === 'approved' && pay === 'unpaid';
+            const actions = (canApprove || canClaim)
+              ? '<input type="text" maxlength="200" class="claim-ref" data-claim-ref="' + _esc(id) + '"' +
+                  ' placeholder="Payment reference (claim, optional)"' +
+                  ' aria-label="Payment reference — recorded as a claim, not verified payment"' +
+                  ' style="width:190px;margin-right:6px">' +
+                '<button type="button" class="btn btn-success btn-sm" data-approve-invoice="' + _esc(id) + '">' +
+                  (canApprove ? 'Approve' : 'Record claim') + '</button>'
+              : '—';
             return '<tr>' +
-              '<td>' + _esc(inv.invoiceNumber || d.id.substring(0,8).toUpperCase()) + '</td>' +
-              '<td>' + _esc(inv.supplierName) + '</td>' +
-              '<td>' + _esc(inv.poNumber) + '</td>' +
-              '<td>' + _fmt(inv.amount) + '</td>' +
-              '<td>' + (due || '—') + '</td>' +
-              '<td>' + _badge(statusKey) + '</td>' +
-              '<td>' + (inv.status === 'pending' || overdue
-                ? '<button class="btn btn-success btn-sm" onclick="ProcurementPortal.approveInvoice(\'' + d.id + '\')">Approve &amp; Pay</button>'
-                : '—') + '</td>' +
+              '<td>' + _esc(inv.invoiceNumber || id.substring(0,8).toUpperCase()) + '</td>' +
+              '<td>' + _esc(inv.supplierName || inv.supplierId || '—') + '</td>' +
+              '<td>' + _esc(inv.poNumber || inv.poId || '—') + '</td>' +
+              '<td>' + _money(inv.total) + '</td>' +
+              '<td>' + _esc(due || '—') + '</td>' +
+              '<td>' + stage + (stage ? ' ' : '') + _payBadge(inv) + '</td>' +
+              '<td>' + actions + '</td>' +
             '</tr>';
           }).join('');
     } catch (e) { _toast('Invoices error: ' + e.message); }
   };
 
   const approveInvoice = async invoiceId => {
+    const input = Array.from(document.querySelectorAll('[data-claim-ref]'))
+      .find(el => el.getAttribute('data-claim-ref') === String(invoiceId));
+    const ref = input ? String(input.value || '').trim().substring(0, 200) : '';
+    /* No payment method is required. The reference, if typed, is a CLAIM. */
+    const payload = { merchantId: mid, invoiceId };
+    if (ref) payload.paymentRef = ref;
     try {
-      await _call('approveAndPayInvoice')({merchantId: mid, invoiceId});
-      _toast('Invoice approved for payment');
+      const res = await _call('approveAndPayInvoice')(payload);
+      const r = (res && res.data) || {};
+      const st = _payState({ paymentStatus: r.paymentStatus, paymentVerified: r.verified === true });
+      _toast(r.duplicate
+        ? 'No change — ' + (st ? PAY_LABEL[st] : 'invoice already recorded')
+        : (st === 'claimed'
+            ? 'Invoice approved — payment claimed, not verified'
+            : 'Invoice approved — payment not verified'));
       loadInvoices(mid);
     } catch (e) { _toast('Error: ' + e.message); }
   };
