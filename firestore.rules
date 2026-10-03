@@ -262,7 +262,11 @@ service cloud.firestore {
   return ['verified','suspended','approved','featured','providerVerified','isVerified','badges',
   'rating','reviewCount','jobsCompleted','verifiedFacets','verifiedName','verificationReviewRequired',
   'verificationProjectedAt','searchable','business','sourceApplicationId','approvedAt','suspendedAt',
-  'category','linkedBusinessId'];
+  'category','linkedBusinessId',
+  /* 2026-10-03 sokoni-5b census: business-category.categoryOf() falls back to healthcare.category and to
+     provisionedBy=='legal-verification' + legalProviderId — owner-writable, an unstamped provider could self-classify
+     as clinic / lawyer and flip the !!p.healthcare boundary bizAdminClassify relies on. */
+  'healthcare','legalProviderId','provisionedBy','legalVerification'];
   }
   allow create: if isActive() && isAuthed() && request.resource.data.uid == request.auth.uid && noAdminFields()
   && (!request.resource.data.keys().hasAny(['status'])

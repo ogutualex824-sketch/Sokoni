@@ -235,7 +235,8 @@ service cloud.firestore {
   return ['verified','suspended','approved','featured','providerVerified','isVerified','badges',
   'rating','reviewCount','jobsCompleted','verifiedFacets','verifiedName','verificationReviewRequired',
   'verificationProjectedAt','searchable','business','sourceApplicationId','approvedAt','suspendedAt',
-  'category','linkedBusinessId'];
+  'category','linkedBusinessId',
+  'healthcare','legalProviderId','provisionedBy','legalVerification'];
   }
   allow create: if isActive() && isAuthed() && request.resource.data.uid == request.auth.uid && noAdminFields()
   && (!request.resource.data.keys().hasAny(['status'])

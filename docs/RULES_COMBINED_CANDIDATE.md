@@ -157,3 +157,5 @@ Suite: `scripts/zz-test-provider-trust.js` (PT-R1/R2, PT-C*, PT-D-* one row per 
 ## 2026-10-03: Car Hub C2, `trackingSubscriptions` admin-only
 
 The owner could write their own `plan` / `vehicleLimit` (sokoni-tracking.js `saveSubscription`), which meant free self-activation of paid tracking tiers. Now `allow write: if isAdmin()`; owner read is unchanged. No server writer exists yet: a plan activates only through a verified IntaSend payment plus canonical subscription activation (sub-billing, Car Hub C6). The Car Hub page stops calling `saveSubscription` (C1b). Suite `scripts/zz-test-tracking-subscription.js` (TS-*), **EMULATOR PENDING**. Baseline f259c0b5: the TS-D rows must fail there.
+
+**Provider trust lock, extended (sokoni-5b census, 2026-10-03):** `providerTrustKeys()` now also refuses `healthcare`, `legalProviderId`, `provisionedBy` and `legalVerification` on owner create and update. Without them, `business-category.categoryOf()`'s fallbacks let an unstamped approved provider self-classify as a clinic or lawyer, and flip the `!!p.healthcare` boundary that `bizAdminClassify` relies on. PT-D rows were added for each key. **EMULATOR PENDING.**

@@ -34,6 +34,7 @@ const LOCKED_UPDATE = {
   verifiedName: 'Forged Name', verificationReviewRequired: false, verificationProjectedAt: 1, searchable: true,
   business: { category: 'it_services' }, sourceApplicationId: 'app-forged', approvedAt: 1, suspendedAt: null,
   category: 'mechanic', linkedBusinessId: 'biz-someone-else',
+  healthcare: { category: 'facility' }, legalProviderId: 'lp-forged', provisionedBy: 'legal-verification', legalVerification: { state: 'verified' },
 };
 
 (async () => {
