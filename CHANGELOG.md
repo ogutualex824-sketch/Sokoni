@@ -1,3 +1,31 @@
+## [2026-10-03] - Security hotfix DE-2: commerceDispatch stops serving digitalProductPurchase / digitalProductDownload (NOT deployed)
+
+**What was wrong.** Through the live `commerceDispatch` (`commercedispatch-00009-tub`), any signed-in caller with App Check could do two things with no payment:
+
+- mint a digital purchase and licence (`digitalProductPurchase`);
+- obtain a signed Storage URL for it (`digitalProductDownload`).
+
+Evidence: DE-0, 2026-10-03, read-only. Owner decision 2026-10-03: the digital-downloads store is RETIRED.
+
+**Fix.** The two op names are deleted from the merged handler map in `functions/commerce-dispatch.js`. They now return the dispatcher's normal `not-found` "Unknown commerce operation" error. The handlers stay dormant in `marketplace-extensions.js`, and nothing else references them. The other 56 ops are unchanged.
+
+**Lineage.** No repo ref matches the serving source: 72dca56 is 13 files off, origin/main 130. So `functions/` on this branch is the serving archive byte-for-byte (generation 1787386112495406, 379/379 by `git hash-object`), plus the one hunk.
+
+**Blocker.** `guard-functions-safety.js` FAILS on the serving archive, with 11 payment-path protections absent from that 09-09 lineage. It passes on 72dca56. The owner chooses between this branch, which needs a guard exception, and `hotfix/commerce-dispatch-retire-digital-ops-on-72dca56`, where the guard passes but 18 loaded-but-unreachable modules are swapped. See `docs/HOTFIX_COMMERCE_DISPATCH_DIGITAL_OPS.md`.
+
+- **Files:**
+  - `functions/commerce-dispatch.js`
+  - `firebase.json` (functions block only: relative predeploy hooks, `functions.ignore` incl. `.env`)
+  - `scripts/infra/env-parity-check.js` (copied from 7091029)
+  - `scripts/test-commerce-dispatch-retired-digital.js` (new)
+  - `docs/HOTFIX_COMMERCE_DISPATCH_DIGITAL_OPS.md` (new)
+- **Tests:** hermetic 12/12. The negative control on the unmodified archive gives 7 FAIL: the handler reaches `db.collection`.
+- **Database:** none. A follow-up owner-authorised read-only count of `digitalPurchases` (all unpaid by construction) is pending.
+- **API:** two `commerceDispatch` ops removed. Callers get `not-found`. The shipped UI never reached them: it calls undeployed standalone callables.
+- **Security:** closes value-without-payment and fabricated seller revenue (`salesCount` / `digitalProductGetSales`).
+- **Breaking:** only for crafted callers of the two retired ops.
+- **Deploy:** NOT deployed. Scoped `firebase deploy --only functions:commerceDispatch` only, after the guard decision. Rollback: update-traffic to `commercedispatch-00009-tub` by name.
+
 ## [2026-09-30] - Entry experience E1: "Create Free Account" opens the one account wizard; the premium colour-journey splash returns, once per visit, full screen
 
 **Branch `hosting/entry-experience-on-2bcdae2`, built DIRECTLY on live `2bcdae2`** (owner 2026-09-30: ship only this slice;
