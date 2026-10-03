@@ -548,6 +548,18 @@
     .hidden { display: none !important; }
     .section-gap { margin-top: 28px; }
     .center { text-align: center; }
+    /* Learner profile (Education, 2026-10-03) — mobile-first, inherits the page tokens */
+    #eduLearnerProfile{display:flex;flex-direction:column;gap:6px;margin-bottom:18px;padding-bottom:14px;border-bottom:1px solid rgba(255,255,255,0.08);}
+    .edu-section-title{font-size:16px;margin:0 0 4px;}
+    .edu-label{font-size:12px;color:var(--muted);margin-top:6px;}
+    .edu-input{width:100%;box-sizing:border-box;padding:9px 11px;border-radius:10px;border:1px solid rgba(255,255,255,0.15);background:rgba(255,255,255,0.04);color:inherit;font:inherit;}
+    .edu-chip-row{display:flex;flex-wrap:wrap;gap:6px;}
+    .edu-chip-check{display:inline-flex;align-items:center;gap:4px;font-size:12px;padding:4px 8px;border:1px solid rgba(255,255,255,0.12);border-radius:999px;}
+    .edu-muted{font-size:12px;color:var(--muted);margin:4px 0;}
+    .edu-access{font-size:13px;padding:8px 10px;border-radius:10px;background:rgba(113,255,0,0.06);}
+    .edu-subsection{margin-top:12px;display:flex;flex-direction:column;gap:6px;}
+    .edu-subsection h4{margin:0;font-size:14px;}
+    .edu-code{font-weight:700;letter-spacing:1px;}
   </style>
 </head>
 <body>
@@ -890,6 +902,9 @@
     >&#x2715;</button>
   </div>
   <div class="panel-body">
+    <!-- EDUCATION learner profile (owner 2026-10-03): instant, no application. Rendered by SokoniEducation from the
+         educationLearner callable; access (self-paced vs interactive) comes from the SERVER, never this page. -->
+    <section id="eduLearnerProfile" aria-label="My learner profile"></section>
     <div id="eduMyEnrollmentsList" role="list" aria-label="My enrolled courses"></div>
   </div>
 </aside>

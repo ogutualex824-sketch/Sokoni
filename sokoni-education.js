@@ -394,6 +394,164 @@ window.SokoniEducation = (() => {
 
     await _loadMyEnrollments();
     renderMyEnrollments(_myEnrollments);
+    loadLearnerProfile().catch(() => {});
+  }
+
+  /* ─── Learner profile + guardian links (owner decisions 2026-10-03) ─────────
+     A learner is a profile, not an application. Everything here goes through the educationLearner callable; this page
+     never decides age, access or a guardian. 'unverified' = free self-paced courses only; live classes, tutoring,
+     messaging teachers and paid learning need the adult age check or a guardian link (confirmed by a verified adult). */
+  const LEARNER_FORMATS = [['self_paced', 'Self-paced'], ['live_online', 'Live online'], ['in_person', 'In person']];
+  const ACCESS_TEXT = {
+    verified_adult:  'Age verified — full access as features open.',
+    guardian_linked: 'Guardian linked — full access as features open.',
+    unverified:      'Free self-paced courses. Live classes, tutoring, messaging teachers and paid learning need an age check or a guardian link.',
+  };
+  let _learner = null;
+
+  async function loadLearnerProfile() {
+    const box = document.getElementById('eduLearnerProfile');
+    if (!box || !_uid) return;
+    box.innerHTML = '<p class="edu-muted">Loading your learner profile…</p>';
+    try {
+      const res = await _callable('educationLearner')({ op: 'load' });
+      _learner = res.data || {};
+      renderLearnerProfile(_learner);
+    } catch (err) {
+      /* Unknown is shown as unknown — never as an access level the server did not state. */
+      box.innerHTML = '<p class="edu-muted">Your learner profile is unavailable right now (—).</p>';
+    }
+  }
+
+  function renderLearnerProfile(state) {
+    const box = document.getElementById('eduLearnerProfile');
+    if (!box) return;
+    const p = (state && state.profile) || {};
+    const a = (state && state.access) || {};
+    const status = a.ageStatus || null;
+    const interests = Array.isArray(p.interests) ? p.interests : [];
+    const formats = Array.isArray(p.formats) ? p.formats : [];
+    const chips = CATEGORIES.filter((c) => c.key !== 'all').map((c) =>
+      `<label class="edu-chip-check"><input type="checkbox" name="eduLpInterest" value="${_esc(c.key)}"${interests.includes(c.key) ? ' checked' : ''}> ${_esc(c.label)}</label>`).join('');
+    const fmt = LEARNER_FORMATS.map(([k, l]) =>
+      `<label class="edu-chip-check"><input type="checkbox" name="eduLpFormat" value="${k}"${formats.includes(k) ? ' checked' : ''}> ${l}</label>`).join('');
+    const opt = (v, cur, l) => `<option value="${v}"${cur === v ? ' selected' : ''}>${l}</option>`;
+    box.innerHTML = `
+      <h3 class="edu-section-title">My learner profile</h3>
+      <p class="edu-access" data-age-status="${_esc(status || 'unknown')}">${_esc(status ? ACCESS_TEXT[status] || '—' : '—')}</p>
+      <label class="edu-label" for="eduLpName">Name</label>
+      <input id="eduLpName" class="edu-input" maxlength="80" value="${_esc(p.displayName || '')}">
+      <div class="edu-label">Interests</div><div class="edu-chip-row">${chips}</div>
+      <label class="edu-label" for="eduLpLevel">Learning level</label>
+      <select id="eduLpLevel" class="edu-input">${opt('', p.level || '', 'Choose…')}${opt('beginner', p.level, 'Beginner')}${opt('intermediate', p.level, 'Intermediate')}${opt('advanced', p.level, 'Advanced')}</select>
+      <label class="edu-label" for="eduLpSubjects">Subjects / skills (comma separated)</label>
+      <input id="eduLpSubjects" class="edu-input" maxlength="300" value="${_esc((p.subjects || []).join(', '))}">
+      <div class="edu-label">How you like to learn</div><div class="edu-chip-row">${fmt}</div>
+      <label class="edu-label" for="eduLpLang">Language</label>
+      <select id="eduLpLang" class="edu-input">${opt('', p.language || '', 'Choose…')}${opt('en', p.language, 'English')}${opt('sw', p.language, 'Kiswahili')}</select>
+      <label class="edu-label" for="eduLpLoc">Town / county (optional)</label>
+      <input id="eduLpLoc" class="edu-input" maxlength="80" value="${_esc(p.location || '')}">
+      <label class="edu-label" for="eduLpGoals">Learning goals</label>
+      <textarea id="eduLpGoals" class="edu-input" rows="2" maxlength="300">${_esc(p.goals || '')}</textarea>
+      <button id="eduLpSave" class="btn btn-primary btn-sm" onclick="SokoniEducation.saveLearnerProfile()">Save profile</button>
+      ${status === 'unverified' ? `
+        <div class="edu-subsection">
+          <h4>Unlock live classes and tutoring</h4>
+          <p class="edu-muted">18 or over? Verify with your date of birth and national ID — SOKONI keeps only the result, not the numbers.</p>
+          <input id="eduAgeDob" class="edu-input" type="date" aria-label="Date of birth">
+          <input id="eduAgeId" class="edu-input" inputmode="numeric" maxlength="8" placeholder="National ID number" aria-label="National ID number">
+          <button class="btn btn-outline btn-sm" onclick="SokoniEducation.verifyLearnerAge()">Verify my age</button>
+          <p class="edu-muted">Under 18? Ask a parent or guardian with an age-verified SOKONI account to link to you.</p>
+          <button class="btn btn-outline btn-sm" onclick="SokoniEducation.requestGuardianCode()">Get a guardian code</button>
+          <p id="eduGuardianCode" class="edu-code" aria-live="polite"></p>
+        </div>` : ''}
+      <div class="edu-subsection">
+        <h4>I am a parent or guardian</h4>
+        <input id="eduGuardianConfirmCode" class="edu-input" maxlength="8" placeholder="Learner's 8-character code" aria-label="Learner's guardian code" style="text-transform:uppercase">
+        <button class="btn btn-outline btn-sm" onclick="SokoniEducation.confirmGuardianCode()">Link to this learner</button>
+        <div id="eduGuardedList" aria-live="polite"></div>
+      </div>`;
+    loadGuardedLearners().catch(() => {});
+  }
+
+  async function saveLearnerProfile() {
+    const v = (id) => { const el = document.getElementById(id); return el ? el.value : ''; };
+    const checked = (name) => Array.from(document.querySelectorAll('input[name="' + name + '"]:checked')).map((x) => x.value);
+    const btn = document.getElementById('eduLpSave');
+    if (btn) { btn.disabled = true; btn.textContent = 'Saving…'; }
+    try {
+      const res = await _callable('educationLearner')({ op: 'save', profile: {
+        displayName: v('eduLpName'), interests: checked('eduLpInterest'), level: v('eduLpLevel') || null,
+        subjects: v('eduLpSubjects').split(',').map((x) => x.trim()).filter(Boolean), formats: checked('eduLpFormat'),
+        language: v('eduLpLang') || null, location: v('eduLpLoc'), goals: v('eduLpGoals'),
+      } });
+      /* success is shown only after the server has saved it */
+      if (res && res.data && res.data.ok) { toast('Learner profile saved.', 'success'); await loadLearnerProfile(); }
+    } catch (err) {
+      toast(err.message || 'Could not save your profile.', 'error');
+    } finally {
+      if (btn) { btn.disabled = false; btn.textContent = 'Save profile'; }
+    }
+  }
+
+  async function verifyLearnerAge() {
+    const dob = (document.getElementById('eduAgeDob') || {}).value || '';
+    const idNumber = (document.getElementById('eduAgeId') || {}).value || '';
+    try {
+      /* the platform's ONE age authority (functions/age-verification.js): 18+ and ID format, server-written */
+      await _callable('ageVerifySubmit')({ dob, idNumber, brand: 'education' });
+      toast('Age verified.', 'success');
+      await loadLearnerProfile();
+    } catch (err) {
+      toast(err.message || 'Age verification failed.', 'error');
+    }
+  }
+
+  async function requestGuardianCode() {
+    const out = document.getElementById('eduGuardianCode');
+    try {
+      const res = await _callable('educationLearner')({ op: 'guardianCode' });
+      const code = res && res.data && res.data.code;
+      if (out && code) out.textContent = 'Show this code to your guardian: ' + code + ' (valid ' + res.data.expiresInHours + ' hours, one use).';
+    } catch (err) {
+      toast(err.message || 'Could not create a code.', 'error');
+    }
+  }
+
+  async function confirmGuardianCode() {
+    const el = document.getElementById('eduGuardianConfirmCode');
+    const code = el ? String(el.value || '').trim().toUpperCase() : '';
+    try {
+      const res = await _callable('educationLearner')({ op: 'guardianConfirm', code });
+      if (res && res.data && res.data.linked) { toast('You are now linked as this learner\'s guardian.', 'success'); if (el) el.value = ''; await loadGuardedLearners(); }
+    } catch (err) {
+      toast(err.message || 'Could not link.', 'error');
+    }
+  }
+
+  async function loadGuardedLearners() {
+    const box = document.getElementById('eduGuardedList');
+    if (!box) return;
+    try {
+      const res = await _callable('educationLearner')({ op: 'guardianOf' });
+      const list = (res && res.data && res.data.learners) || [];
+      box.innerHTML = list.length
+        ? '<p class="edu-muted">Learners you guard:</p><ul>' + list.map((l) =>
+            `<li>${_esc(l.displayName || '—')} <button class="btn btn-sm" data-learner-uid="${_esc(l.learnerUid)}" onclick="SokoniEducation.revokeGuardian(this.dataset.learnerUid)">Unlink</button></li>`).join('') + '</ul>'
+        : '';
+    } catch (_) {
+      box.innerHTML = '';
+    }
+  }
+
+  async function revokeGuardian(learnerUid) {
+    try {
+      await _callable('educationLearner')({ op: 'guardianRevoke', learnerUid });
+      toast('Guardian link removed.', 'success');
+      await loadGuardedLearners();
+    } catch (err) {
+      toast(err.message || 'Could not remove the link.', 'error');
+    }
   }
 
   function closeMyLearning() {
@@ -1007,6 +1165,13 @@ window.SokoniEducation = (() => {
     renderMyEnrollments,
     renderCourseDetail,
     renderStars,
+    loadLearnerProfile,
+    renderLearnerProfile,
+    saveLearnerProfile,
+    verifyLearnerAge,
+    requestGuardianCode,
+    confirmGuardianCode,
+    revokeGuardian,
   };
 
 })();
