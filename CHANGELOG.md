@@ -1,3 +1,16 @@
+## 2026-10-03 — Profile: buyer only; floating Active Role card readable; every link resolves; real order counts; Recent Activity in sync (NOT deployed)
+
+- **Floating Active Role card:** it still floats and now has an opaque background.
+- **Buyer only:** business blocks never render on the profile (Executive Commands incl. the broken "Go Online" link, POS/staff actions, business health, listings/rating).
+- **Doorways:** the identities card shows a doorway for every HELD role (Business, Services, Delivery, AdminOS).
+- **Business Management:** links go to merchant-v2 routes, AdminOS and Financial OS.
+- **Dead links fixed:** 13 links pointed at the missing driver-dashboard.html or legacy merchant.html#; all repointed.
+- **Edit profile:** the M-Pesa Till field is removed.
+- **Stats:** Orders comes from real orders, not the unscoped browser cache. Spent shows — until a server total exists.
+- **Recent Activity:** a single writer, honest loading/empty/error states, and escaped text (XSS fix).
+- **Files:** profile.html, scripts/test-profile-buyer-only.js (new, 20/0; production fails 18), scripts/test-profile-wallet-instant.js (O4 = nothing from production lost), docs/PROFILE_BUYER_ONLY.md.
+- **Database / API / rules:** none.
+
 ## 2026-10-03 — Profile + Wallet: identities on top, wallet opens inside the profile (no reload, no splash) — built on live 72dca56, NOT deployed
 
 Owner request: keep the production profile as it is; order = Profile → role switcher (unchanged) → identities (Business, Services, Super Admin) → the rest; the wallet opens inside the profile as a quick switch with no reload or splash; personal wallet Home → `index.html`; BOS (Financial OS) wallet Home → the wallet.

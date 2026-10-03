@@ -29,7 +29,14 @@ const strip = (s) => s.replace(/\r/g, '').replace(/<style id="skProfileWalletCss
   .replace(/\n  try\{ skWaConsentLoad\(\); \}catch\(_\)\{\}/, '')
   .replace(/<script>\n\/\* WhatsApp consent \(2026-10-03\)[\s\S]*?<\/script>\n/, '')
   .replace(/\s+/g, ' ');
-ck('O4', 'apart from the moved card, the wallet host and the WhatsApp consent switch, profile.html is identical to production', strip(P) === strip(live('profile.html')));
+/* O4 (revised 2026-10-03 with the buyer-only pass, which deliberately changes more than the two edits the original
+   byte-equality covered): NOTHING production has is lost — every element id on the live profile still exists,
+   except the till field the owner asked to remove. (strip() is kept for O4b below.) */
+const ids = (s) => new Set((s.match(/\bid="([A-Za-z][\w-]*)"/g) || []).map((x) => x.slice(4, -1)));
+const liveIds = ids(live('profile.html')), branchIds = ids(P);
+const lost = [...liveIds].filter((i) => !branchIds.has(i) && i !== 'ieTillInput');
+ck('O4', 'every element on the production profile is still there (only the till field removed, by owner request)', lost.length === 0 && !branchIds.has('ieTillInput'), lost.join(','));
+void strip;
 
 /* in-profile wallet */
 ck('W1', 'every same-origin wallet link on the profile opens the in-profile wallet (one delegated handler; no navigation)',

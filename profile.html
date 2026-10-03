@@ -10,7 +10,7 @@
      the floating search/inbox buttons and .menu-toggle. Those are position:fixed at
      top:20px / z-index 9950 and would otherwise land on top of nav.upn — the same
      overlap already documented for seller.html. -->
-<html lang="en" class="sk-no-header" data-splash="1" data-require-auth="true" data-own-header>
+<html lang="en" class="sk-no-header" data-splash="1" data-require-auth="true" data-own-header data-sk-profile-view="buyer">
 <head>
   <script src="sokoni-crash-sentinel.js"></script>
   <!-- ── Auth gate ──────────────────────────────────────────────────────────
@@ -273,9 +273,21 @@ body{font-family:'Inter','Segoe UI',Arial,sans-serif;background:var(--bg);color:
 }
 .up-edit-btn:hover{background:rgba(113,255,0,0.2);}
 
+/* ── BUYER-ONLY PROFILE (owner 2026-10-03) ─────────────────────────────────────────────
+   The profile is the PERSON's page. Business and services operations (POS, products, staff, go-online,
+   business health, listings, ratings, executive commands) live in their dashboards (merchant-v2.html,
+   provider-dashboard.html, driver.html, admin-os.html) — reached from "Your SOKONI identities" and
+   "Business Management", which are doorways only. .sk-biz-only blocks never render here, whatever role is
+   active or whatever a later script sets inline. (93af1fc made this depend on the acting role; the owner
+   has since ruled the profile buyer-only in every role, so the rule is unconditional.) */
+.sk-biz-only{display:none !important;}
+
 /* ── Role Switcher ── */
 .up-role-switcher{
-  background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.08);
+  /* 2026-10-03: it floats (sticky) over the page, so it needs an OPAQUE surface — at 3% white the blur
+     alone left the cards behind readable through it. Solid --sur at 97% + a shadow separates it. */
+  background:rgba(13,13,13,0.97);border:1px solid rgba(255,255,255,0.10);
+  box-shadow:0 10px 28px rgba(0,0,0,0.55);
   border-radius:18px;padding:14px 18px;margin-bottom:12px;
   position:sticky;top:58px;z-index:90;
   backdrop-filter:blur(18px);-webkit-backdrop-filter:blur(18px);
@@ -1874,10 +1886,6 @@ html.sk-wallet-open,html.sk-wallet-open body{overflow:hidden}
             <img id="ieCoverPreview" alt="" style="display:none;margin-top:8px;width:100%;height:52px;border-radius:10px;object-fit:cover;border:1px solid rgba(255,255,255,0.12);">
           </div>
         </div>
-        <div class="up-field">
-          <label>M-Pesa Till / Paybill (Sellers)</label>
-          <input id="ieTillInput" type="tel" inputmode="numeric" placeholder="e.g. 522522">
-        </div>
         <div style="display:flex;gap:10px;margin-top:4px;">
           <button type="button" class="up-save-btn" onclick="saveInlineEdit()">&#128190; Save Changes</button>
           <button type="button" onclick="toggleInlineEdit()" style="padding:13px 18px;background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.1);color:rgba(255,255,255,0.5);border-radius:13px;cursor:pointer;font-family:inherit;font-size:13px;font-weight:700;">Cancel</button>
@@ -1917,6 +1925,16 @@ html.sk-wallet-open,html.sk-wallet-open body{overflow:hidden}
         <span style="font-size:20px;">&#128296;</span>
         <span style="flex:1;min-width:0;"><span style="display:block;font-size:13px;font-weight:800;">Services</span><span style="display:block;font-size:11px;color:rgba(255,255,255,0.45);">Manage your services &amp; bookings</span></span>
         <span style="color:#00d4ff;font-size:16px;">&#8250;</span>
+      </a>
+      <a href="driver.html" id="upIdRider" style="display:none;align-items:center;gap:10px;padding:12px 14px;background:rgba(255,185,0,0.05);border:1px solid rgba(255,185,0,0.18);border-radius:12px;text-decoration:none;color:#fff;">
+        <span style="font-size:20px;">&#128757;</span>
+        <span style="flex:1;min-width:0;"><span style="display:block;font-size:13px;font-weight:800;">Delivery</span><span style="display:block;font-size:11px;color:rgba(255,255,255,0.45);">Go online, jobs &amp; earnings — in the driver portal</span></span>
+        <span style="color:#ffb900;font-size:16px;">&#8250;</span>
+      </a>
+      <a href="admin-os.html" id="upIdAdmin" style="display:none;align-items:center;gap:10px;padding:12px 14px;background:rgba(255,84,112,0.05);border:1px solid rgba(255,84,112,0.18);border-radius:12px;text-decoration:none;color:#fff;">
+        <span style="font-size:20px;">&#128737;</span>
+        <span style="flex:1;min-width:0;"><span style="display:block;font-size:13px;font-weight:800;">AdminOS</span><span style="display:block;font-size:11px;color:rgba(255,255,255,0.45);">Platform administration</span></span>
+        <span style="color:#ff5470;font-size:16px;">&#8250;</span>
       </a>
       <a href="super-admin.html" id="superAdminLink" style="display:none;align-items:center;gap:10px;padding:12px 14px;background:rgba(224,64,251,0.05);border:1px solid rgba(224,64,251,0.2);border-radius:12px;text-decoration:none;color:#e040fb;">
         <span style="font-size:20px;">&#x1F451;</span>
@@ -2003,12 +2021,12 @@ html.sk-wallet-open,html.sk-wallet-open body{overflow:hidden}
         <div class="pi-cmd-lbl">Profile Complete</div>
         <div class="pi-cmd-sub" id="cmdComplSub"></div>
       </div>
-      <div class="pi-cmd-card">
+      <div class="pi-cmd-card sk-biz-only">
         <div class="pi-cmd-val" id="cmdBusinesses">&#8212;</div>
         <div class="pi-cmd-lbl">Businesses</div>
         <div class="pi-cmd-sub">Registered</div>
       </div>
-      <div class="pi-cmd-card">
+      <div class="pi-cmd-card sk-biz-only">
         <div class="pi-cmd-val" id="cmdWorkspaces">&#8212;</div>
         <div class="pi-cmd-lbl">Workspaces</div>
         <div class="pi-cmd-sub">Active</div>
@@ -2056,7 +2074,7 @@ html.sk-wallet-open,html.sk-wallet-open body{overflow:hidden}
     </div>
 
     <!-- ── S7: Business Health ── -->
-    <div class="up-card" id="pi7BizHealth" style="padding:14px 16px;display:none;"></div>
+    <div class="up-card sk-biz-only" id="pi7BizHealth" style="padding:14px 16px;display:none;"></div>
 
     <!-- ── S5: Smart Insights Strip ── -->
     <div class="up-card" style="padding:12px 16px;">
@@ -2084,7 +2102,7 @@ html.sk-wallet-open,html.sk-wallet-open body{overflow:hidden}
     <div class="up-card" id="pi7PinsWrap" style="padding:14px 16px;display:none;"></div>
 
     <!-- ── S6: Executive Commands ── -->
-    <div class="up-card" id="pi6ExecCmdsWrap" style="padding:14px 16px;display:none;"></div>
+    <div class="up-card sk-biz-only" id="pi6ExecCmdsWrap" style="padding:14px 16px;display:none;"></div>
 
     <!-- ── Quick Actions ── -->
     <div class="up-card" style="padding:16px;">
@@ -2116,7 +2134,7 @@ html.sk-wallet-open,html.sk-wallet-open body{overflow:hidden}
         </button>
       </div>
       <!-- Seller / Business Owner actions (shown after auth) -->
-      <div class="pi-qa-grid" id="piQaRoleActions" style="display:none;margin-top:8px;">
+      <div class="pi-qa-grid sk-biz-only" id="piQaRoleActions" style="display:none;margin-top:8px;">
         <a class="pi-qa-item" href="merchant-v2.html" data-sk-merchant-entry>
           <span class="pi-qa-icon">&#43;</span><span class="pi-qa-lbl">Add Product</span>
         </a>
@@ -2146,7 +2164,7 @@ html.sk-wallet-open,html.sk-wallet-open body{overflow:hidden}
     </div>
 
     <!-- ── S7: Cross-Module Summaries ── -->
-    <div class="up-card" id="pi7ModuleCards" style="padding:14px 16px;display:none;"></div>
+    <div class="up-card sk-biz-only" id="pi7ModuleCards" style="padding:14px 16px;display:none;"></div>
 
     <!-- ── Wallet Snapshot (populated after auth) ── -->
     <div class="up-card" id="piWalletSnap" style="display:none;padding:16px;">
@@ -2169,10 +2187,10 @@ html.sk-wallet-open,html.sk-wallet-open body{overflow:hidden}
     </div>
 
     <div class="up-stats" id="upOverviewStats">
-      <div class="up-stat"><div class="up-stat-val" id="statOrders">0</div><div class="up-stat-lbl">Orders</div></div>
-      <div class="up-stat"><div class="up-stat-val" id="statSpent">0</div><div class="up-stat-lbl">Spent (K)</div></div>
-      <div class="up-stat"><div class="up-stat-val" id="statListings">0</div><div class="up-stat-lbl">Listings</div></div>
-      <div class="up-stat"><div class="up-stat-val" id="statRating">&#8212;</div><div class="up-stat-lbl">Rating</div></div>
+      <div class="up-stat"><div class="up-stat-val" id="statOrders">&#8212;</div><div class="up-stat-lbl">Orders</div></div>
+      <div class="up-stat" title="Shown once SOKONI totals your paid orders on the server"><div class="up-stat-val" id="statSpent">&#8212;</div><div class="up-stat-lbl">Spent (K)</div></div>
+      <div class="up-stat sk-biz-only"><div class="up-stat-val" id="statListings">0</div><div class="up-stat-lbl">Listings</div></div>
+      <div class="up-stat sk-biz-only"><div class="up-stat-val" id="statRating">&#8212;</div><div class="up-stat-lbl">Rating</div></div>
     </div>
 
     <div class="up-card">
@@ -2186,7 +2204,7 @@ html.sk-wallet-open,html.sk-wallet-open body{overflow:hidden}
       <div class="up-card-title">My Hubs <a href="/" class="up-card-link">Browse All</a></div>
       <div class="up-quick-links" id="upQuickLinks">
         <a class="up-ql" href="/"><span class="up-ql-emoji">&#128722;</span><span class="up-ql-label">Shop</span></a>
-        <a class="up-ql" href="merchant-v2.html" data-sk-merchant-entry><span class="up-ql-emoji">&#128234;</span><span class="up-ql-label">Seller</span></a>
+        <a class="up-ql" href="food.html"><span class="up-ql-emoji">&#127828;</span><span class="up-ql-label">Food</span></a>
         <a class="up-ql" href="services.html"><span class="up-ql-emoji">&#128295;</span><span class="up-ql-label">Services</span></a>
         <a class="up-ql" href="delivery.html"><span class="up-ql-emoji">&#128666;</span><span class="up-ql-label">Delivery</span></a>
         <a class="up-ql" href="property-hub.html"><span class="up-ql-emoji">&#127968;</span><span class="up-ql-label">Property</span></a>
@@ -3530,6 +3548,12 @@ function _renderBusinessHub(u){
      acting context — it stays entitlement-based. */
   var seller=_actingAs('seller', u), provider=_actingAs('provider', u), rider=_actingAs('rider', u),
       admin=_isAdminUser(u);
+  /* 2026-10-03 (owner: profile is buyer-only). TWO surfaces, two rules:
+       • "Your SOKONI identities" = DOORWAYS to each dashboard → the roles the account HOLDS, whatever it is acting
+         as, so a seller browsing as a buyer always has the way back to their shop (held* below).
+       • "Business Management" modules = the acting-role view (unchanged; test-business-hub-acting-role.js) —
+         switching to Buyer still clears it. Neither operates anything; every link opens that dashboard. */
+  var heldSeller=_isSellerUser(u), heldProvider=_isProviderUser(u), heldRider=_isRiderUser(u);
   var anyBiz=seller||provider, mods=[];
 
   /* Identity entry points in the header card — links out to the operational
@@ -3538,26 +3562,34 @@ function _renderBusinessHub(u){
   var _idB = document.getElementById('upIdBusiness');
   var _idS = document.getElementById('upIdServices');
   var _idCard = document.getElementById('upAnalyticsCard');
-  if(_idB) _idB.style.display = seller   ? 'flex' : 'none';
-  if(_idS) _idS.style.display = provider ? 'flex' : 'none';
-  if(_idCard) _idCard.style.display = (seller || provider || admin) ? '' : 'none';
-  if(seller) mods.push({icon:'🛍',title:'Marketplace',accent:'#71ff00',items:[
-    {label:'My Shops',href:'merchant.html#shop'},{label:'Products',href:'merchant.html#products'},
-    {label:'Orders',href:'merchant.html#orders'},{label:'Open POS',href:'pos.html'}]});
+  if(_idB) _idB.style.display = heldSeller   ? 'flex' : 'none';
+  if(_idS) _idS.style.display = heldProvider ? 'flex' : 'none';
+  var _idR = document.getElementById('upIdRider'), _idA = document.getElementById('upIdAdmin');
+  if(_idR) _idR.style.display = heldRider ? 'flex' : 'none';
+  if(_idA) _idA.style.display = admin ? 'flex' : 'none';
+  if(_idCard) _idCard.style.display = (heldSeller || heldProvider || heldRider || admin) ? '' : 'none';
+  /* Marketplace → merchant-v2.html routes (sokoni-merchant-routes.js): shop, products, orders, pos, staff. */
+  if(seller) mods.push({icon:'🛍',title:'Marketplace',accent:'#71ff00',merchant:true,items:[
+    {label:'My Shop',href:'merchant-v2.html#shop'},{label:'Products',href:'merchant-v2.html#products'},
+    {label:'Orders',href:'merchant-v2.html#orders'},{label:'POS',href:'merchant-v2.html#pos'},
+    {label:'Staff',href:'merchant-v2.html#staff'}]});
   if(provider) mods.push({icon:'🛠',title:'Services',accent:'#f97316',items:[
     {label:'My Services',href:'provider-dashboard.html#services',id:'bizSvcMain'},
     {label:'Availability',href:'availability-manager.html'},
     {label:'Bookings',href:'provider-dashboard.html#bookings'},
     {label:'Reviews',href:'provider-dashboard.html#reviews'}]});
-  if(anyBiz) mods.push({icon:'💰',title:'Finance',accent:'#22d3ee',items:[
-    {label:'Wallet',href:'wallet.html'},{label:'Payouts',href:'wallet.html'},{label:'Transactions',href:'wallet.html'}]});
-  if(anyBiz) mods.push({icon:'📊',title:'Insights',accent:'#a78bfa',items:[{label:'Analytics',href:'analytics.html'}]});
-  if(rider) mods.push({icon:'🛵',title:'Rider',accent:'#71ff00',items:[{label:'Rider Dashboard',href:'driver.html'}]});
-  if(admin) mods.push({icon:'🛡',title:'Admin',accent:'#ff5470',items:[{label:'Admin OS',href:'admin.html'}]});
+  /* Business money is NOT the personal wallet (Financial Core 09-28: personal ≠ business): payments and revenue
+     open in the merchant dashboard; the Financial OS wallet holds the business balance. */
+  if(anyBiz) mods.push({icon:'💰',title:'Finance',accent:'#22d3ee',merchant:seller,items:(seller?[
+    {label:'Payments',href:'merchant-v2.html#payments'},{label:'Revenue',href:'merchant-v2.html#revenue'}]:[]).concat([
+    {label:'Financial OS',href:'sfos-wallet.html'}])});
+  if(seller) mods.push({icon:'📊',title:'Insights',accent:'#a78bfa',merchant:true,items:[{label:'Analytics',href:'merchant-v2.html#analytics'}]});
+  if(rider) mods.push({icon:'🛵',title:'Rider',accent:'#ffb900',items:[{label:'Driver portal',href:'driver.html'}]});
+  if(admin) mods.push({icon:'🛡',title:'Admin',accent:'#ff5470',items:[{label:'AdminOS',href:'admin-os.html'}]});
   if(!mods.length){ wrap.style.display='none'; return; }
   grid.innerHTML=mods.map(function(m){
     var chips=m.items.map(function(it){
-      return '<a href="'+it.href+'"'+(it.id?' id="'+it.id+'"':'')+' style="padding:8px 12px;background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.1);border-radius:10px;color:rgba(255,255,255,0.82);font-size:12px;font-weight:700;text-decoration:none;white-space:nowrap;">'+escHtml(it.label)+'</a>';
+      return '<a href="'+it.href+'"'+(it.id?' id="'+it.id+'"':'')+(/^merchant-v2\.html/.test(it.href)?' data-sk-merchant-entry':'')+' style="padding:8px 12px;background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.1);border-radius:10px;color:rgba(255,255,255,0.82);font-size:12px;font-weight:700;text-decoration:none;white-space:nowrap;">'+escHtml(it.label)+'</a>';
     }).join('');
     return '<div><div style="font-size:11px;font-weight:800;text-transform:uppercase;letter-spacing:.06em;color:'+m.accent+';margin:0 0 8px;">'+m.icon+' '+escHtml(m.title)+'</div>'
       +'<div style="display:flex;flex-wrap:wrap;gap:8px;">'+chips+'</div></div>';
@@ -3838,7 +3870,6 @@ function toggleInlineEdit(){
     document.getElementById('ieHandleInput').value = escHtml(_user.username || slugify(_user.name||''));
     document.getElementById('iePhoneInput').value = escHtml(_user.phone || '');
     document.getElementById('ieLocationInput').value = escHtml(_user.location || '');
-    document.getElementById('ieTillInput').value = escHtml(_user.tillNumber || '');
     var bio = document.getElementById('ieBioInput');
     if(bio){ bio.value = _user.bio || ''; var bc=document.getElementById('ieBioCount'); if(bc) bc.textContent = bio.value.length; }
     /* Staged photos live here until Save, so Cancel discards them. */
@@ -3947,7 +3978,6 @@ function saveInlineEdit(){
   var username = (document.getElementById('ieHandleInput').value||'').trim().replace(/^@/,'');
   var phone    = (document.getElementById('iePhoneInput').value||'').trim();
   var location = (document.getElementById('ieLocationInput').value||'').trim();
-  var till     = (document.getElementById('ieTillInput').value||'').replace(/\D/g,'').trim();
 
   if(!name){ upToast('Name cannot be empty', false); return; }
 
@@ -3970,7 +4000,6 @@ function saveInlineEdit(){
   /* phone deliberately NOT written — the field is read-only, and persisting it here only
      ever updated the Firestore mirror while Firebase Auth kept the real credential. */
   if(location) _user.location = location;
-  if(till) _user.tillNumber = till; else delete _user.tillNumber;
   _user.bio = bio;
   if(_ieAvatarData) _user.avatarUrl = _ieAvatarData;
   if(_ieCoverData)  _user.coverUrl  = _ieCoverData;
@@ -3981,7 +4010,7 @@ function saveInlineEdit(){
      so saving a bio never blanks an existing photo. listenFirestoreProfile() already reads
      bio/avatarUrl/coverUrl back, so every surface refreshes without a reload. */
   var payload = {name:name, username:_user.username, location:location,
-                 tillNumber:till||null, bio:bio, updatedAt:_user.updatedAt,
+                 bio:bio, updatedAt:_user.updatedAt,
                  /* consume one edit — persisted atomically with the edit, so a
                     failed write costs nothing (the count only advances if the
                     whole setDoc lands) */
@@ -4136,42 +4165,14 @@ window.addEventListener('hashchange', _openTabFromHash);
    3. OVERVIEW
 ══════════════════════════════════════════════════════════════ */
 function loadOverview(){
-  /* orders count */
-  var orders = [];
-  try{ orders = JSON.parse(localStorage.getItem('sokoniOrders')||'[]'); }catch(e){}
-  document.getElementById('statOrders').textContent = orders.length;
-
-  /* total spent */
-  var spent = orders.reduce(function(acc,o){ return acc + Number(o.total||0); }, 0);
-  document.getElementById('statSpent').textContent = spent>=1000 ? (spent/1000).toFixed(1)+'K' : spent;
-
-  /* listings */
-  var listings = [];
-  try{ listings = JSON.parse(localStorage.getItem('sokoniProducts')||'[]'); }catch(e){}
-  document.getElementById('statListings').textContent = listings.length;
-
-  /* rating placeholder */
-  document.getElementById('statRating').textContent = _user.averageRating ? _user.averageRating.toFixed(1) : '—';
-
-  /* timeline */
-  buildTimeline(orders);
+  /* 2026-10-03: Orders is set by loadOrders() from the account's real orders (Firestore, uid OR buyerUid);
+     until then it reads "—". Spent stays "—" until a server total exists — summing a browser cache was a
+     made-up figure (and the cache is not even scoped to this account). Listings / Rating are business-only.
+     Recent Activity is owned by profileGetActivityTimeline (_enhanceTimeline); until it answers, it says so. */
+  var _tl = document.getElementById('upTimeline');
+  if(_tl && !_tl.querySelector('.pi-tl-event')) _tl.innerHTML = '<div class="up-empty"><div class="up-empty-icon">&#128337;</div>Loading your activity…</div>';
 }
 
-function buildTimeline(orders){
-  var el = document.getElementById('upTimeline');
-  if(!el) return;
-  var events = [];
-  orders.slice(0,5).forEach(function(o){
-    events.push({emoji:'&#128230;', text:'Placed order #'+escHtml(o.id||'—')+' · KES '+Number(o.total||0).toLocaleString(), ts:o.createdAt});
-  });
-  if(!events.length){
-    el.innerHTML = '<div class="up-empty"><div class="up-empty-icon">&#128337;</div>Activity will appear here as you use SOKONI.</div>';
-    return;
-  }
-  el.innerHTML = events.map(function(ev){
-    return '<div class="up-tl-item"><div class="up-tl-icon">'+ev.emoji+'</div><div class="up-tl-body"><div class="up-tl-text">'+ev.text+'</div><div class="up-tl-time">'+timeAgo(ev.ts)+'</div></div></div>';
-  }).join('');
-}
 
 /* ══════════════════════════════════════════════════════════════
    ORDERS PANEL
@@ -4183,9 +4184,10 @@ function loadOrders(){
   var el = document.getElementById('ordersPanel');
   if(!el) return;
 
-  /* Local orders */
+  /* Real orders only. The old local cache ('sokoniOrders') is not scoped to the signed-in account, so on a
+     shared phone it showed someone else's orders; it is no longer read here. */
   var orders = [];
-  try{ orders = JSON.parse(localStorage.getItem('sokoniOrders')||'[]'); }catch(e){}
+  el.innerHTML = '<div class="up-empty"><div class="up-empty-icon">&#128230;</div>Loading your orders…</div>';
 
   /* Firestore orders via SokoniDB */
   var _rendered = false;
@@ -4206,8 +4208,8 @@ function loadOrders(){
         +'<div class="up-order-right"><div class="up-order-amt">KES '+Number(o.total||0).toLocaleString()+'</div>'
         +'<span class="up-status-badge '+(STATUS_CLASS[o.status||'placed']||'status-placed')+'">'+(STATUS_LABELS[o.status||'placed']||status)+'</span></div></div>';
     }).join('');
-    document.getElementById('statOrders').textContent = list.length;
   }
+  function _count(n){ var c=document.getElementById('statOrders'); if(c) c.textContent = n>=200 ? '200+' : String(n); }
 
   if(orders.length){ _render(orders); _rendered=true; }
 
@@ -4215,13 +4217,11 @@ function loadOrders(){
   if(window.SokoniDB && _user && _user.uid){
     try{
       window.SokoniDB.listenUserOrders(_user.uid, function(fsOrders){
-        if(!fsOrders||!fsOrders.length) return;
-        var merged = [...fsOrders];
-        orders.forEach(function(lo){ if(!merged.find(function(fo){ return fo.id===lo.id; })) merged.push(lo); });
-        merged.sort(function(a,b){ return (b.createdAt&&b.createdAt.seconds?b.createdAt.seconds:0)-(a.createdAt&&a.createdAt.seconds?a.createdAt.seconds:0); });
-        try{ localStorage.setItem('sokoniOrders', JSON.stringify(merged)); }catch(e){}
-        _render(merged);
-        buildTimeline(merged);
+        var list = Array.isArray(fsOrders) ? fsOrders : [];
+        /* A real 0 is a real answer: render the empty state and count 0 (no stale cache left on screen). */
+        _render(list); _rendered = true; _count(list.length);
+        /* Recent Activity is NOT redrawn from here: profileGetActivityTimeline owns it, and two writers
+           racing for one element is what made it look out of sync. */
       });
     }catch(e){}
   } else if(!_rendered){
@@ -6302,8 +6302,8 @@ window.logoutUser = logoutUser;
       _searchIndex.push({ icon: '📊', text: 'Sales Analytics', sub: 'Merchant', href: 'seller-analytics.html' });
     }
     if (roles.indexOf('driver') !== -1) {
-      _searchIndex.push({ icon: '🚗', text: 'Driver Dashboard', sub: 'Logistics', href: 'driver-dashboard.html' });
-      _searchIndex.push({ icon: '📍', text: 'Active Deliveries', sub: 'Logistics', href: 'driver-dashboard.html#deliveries' });
+      _searchIndex.push({ icon: '🚗', text: 'Driver Dashboard', sub: 'Logistics', href: 'driver.html' });
+      _searchIndex.push({ icon: '📍', text: 'Active Deliveries', sub: 'Logistics', href: 'driver.html' });
     }
     if (roles.indexOf('employer') !== -1) {
       _searchIndex.push({ icon: '📋', text: 'Job Postings', sub: 'HR', href: 'jobs.html#employer' });
@@ -6431,7 +6431,7 @@ window.logoutUser = logoutUser;
       chips.push({ cls: 'action', icon: '🏪', text: 'View your store →', href: 'merchant.html' });
     }
     if (roles.indexOf('driver') !== -1) {
-      chips.push({ cls: 'action', icon: '🚗', text: 'Open Driver Hub →', href: 'driver-dashboard.html' });
+      chips.push({ cls: 'action', icon: '🚗', text: 'Open Driver Hub →', href: 'driver.html' });
     }
     if (roles.indexOf('employer') !== -1) {
       chips.push({ cls: 'action', icon: '📋', text: 'Post a job →', href: 'jobs.html#employer' });
@@ -6479,7 +6479,7 @@ window.logoutUser = logoutUser;
       items.push({ icon: '📊', text: 'Review your store performance', href: 'seller-analytics.html', badge: null });
     }
     if (roles.indexOf('driver') !== -1) {
-      items.push({ icon: '🚗', text: 'Check active delivery assignments', href: 'driver-dashboard.html', badge: null });
+      items.push({ icon: '🚗', text: 'Check active delivery assignments', href: 'driver.html', badge: null });
     }
     if (roles.indexOf('buyer') !== -1 || !roles.length) {
       items.push({ icon: '🛍️', text: 'Browse the marketplace', href: '/', badge: null });
@@ -6513,7 +6513,10 @@ window.logoutUser = logoutUser;
     if (!wrap) return;
     _call('profileGetActivityTimeline', { limit: 12 }).then(function(data) {
       var events = (data && (data.events || data.timeline || data.items || data.activities)) || [];
-      if (!events.length) return;
+      if (!events.length) {
+        wrap.innerHTML = '<div class="up-empty"><div class="up-empty-icon">&#128337;</div>Activity will appear here as you use SOKONI.</div>';
+        return;
+      }
 
       /* Merge customer + seller events already joined by CF */
       var typeMap = {
@@ -6541,22 +6544,24 @@ window.logoutUser = logoutUser;
                  ' · ' + d.toLocaleTimeString('en-GB', { hour:'2-digit', minute:'2-digit' });
         }
         var amount = ev.amount || ev.total || ev.grandTotal || null;
-        var amountHtml = amount ? ' <span class="pi-tl-amount">KES ' + Number(amount).toLocaleString() + '</span>' : '';
+        var amountHtml = (amount && isFinite(Number(amount))) ? ' <span class="pi-tl-amount">KES ' + Number(amount).toLocaleString() + '</span>' : '';
         var status = ev.status || '';
         var statusClass = (status === 'completed' || status === 'delivered' || status === 'paid') ? 'pi-tl-completed' :
                           (status === 'active' || status === 'in_progress') ? 'pi-tl-active' :
                           (status === 'pending') ? 'pi-tl-pending' : '';
-        var statusHtml = status ? '<span class="pi-tl-status ' + statusClass + '">' + status.replace(/_/g,' ') + '</span>' : '';
+        var statusHtml = status ? '<span class="pi-tl-status ' + statusClass + '">' + escHtml(String(status).replace(/_/g,' ')) + '</span>' : '';
 
         return '<div class="pi-tl-event">' +
                '<div class="pi-tl-icon">' + meta.icon + '</div>' +
                '<div class="pi-tl-body">' +
-               '<div class="pi-tl-label">' + (ev.title || ev.description || ev.label || meta.label) + amountHtml + '</div>' +
-               '<div class="pi-tl-sub">' + (ev.subtitle || when) + '</div>' +
+               /* escaped: titles carry seller-typed names (product, shop), never trusted as HTML */
+               '<div class="pi-tl-label">' + escHtml(ev.title || ev.description || ev.label || meta.label) + amountHtml + '</div>' +
+               '<div class="pi-tl-sub">' + escHtml(ev.subtitle || when) + '</div>' +
                '</div>' + statusHtml + '</div>';
       }).join('');
     }).catch(function() {
-      /* Timeline enhancement failed silently — original content preserved */
+      /* Say so instead of leaving "Loading…" (or a stale list) on screen. */
+      if (!wrap.querySelector('.pi-tl-event')) wrap.innerHTML = '<div class="up-empty"><div class="up-empty-icon">&#128337;</div>Couldn\'t load your activity right now.</div>';
     });
   }
 
@@ -6608,26 +6613,9 @@ window.logoutUser = logoutUser;
     var roles = ov ? (ov.roles || []) : [];
     var links = [];
 
-    /* Primary role-specific hubs */
-    if (roles.indexOf('seller') !== -1 || roles.indexOf('vendor') !== -1) {
-      links.push({ icon: '🏬', label: 'My Store', href: 'merchant.html', primary: true });
-      links.push({ icon: '📊', label: 'Analytics', href: 'seller-analytics.html' });
-      links.push({ icon: '📦', label: 'Orders', href: null, tab: 'orders' });
-    }
-    if (roles.indexOf('driver') !== -1) {
-      links.push({ icon: '🚗', label: 'Driver Hub', href: 'driver-dashboard.html', primary: true });
-      links.push({ icon: '📍', label: 'Navigate', href: 'driver-dashboard.html#nav' });
-    }
-    if (roles.indexOf('employer') !== -1) {
-      links.push({ icon: '📋', label: 'Post Job', href: 'jobs.html#employer', primary: true });
-      links.push({ icon: '👥', label: 'Applicants', href: 'jobs.html#applications' });
-    }
-    if (roles.indexOf('provider') !== -1) {
-      /* "My Services" = the provider's OWN service management (Rate Cards tab), not the
-         customer-facing services browse page. Matches the canonical target used elsewhere. */
-      links.push({ icon: '🔧', label: 'My Services', href: 'provider-dashboard.html#services', primary: true });
-    }
-
+    /* 2026-10-03 (buyer-only profile): no role-specific entries here. They linked to the legacy merchant.html and
+       to driver-dashboard.html, which does not exist (the "Go Online" crash); every held role's dashboard is in
+       "Your SOKONI identities" at the top. */
     /* Universal hubs */
     links.push({ icon: '🛍️', label: 'Shop', href: '/' });
     links.push({ icon: '🍔', label: 'Food', href: 'food.html' });
@@ -6971,16 +6959,16 @@ window.logoutUser = logoutUser;
                   {i:'🤖',l:'Ask KASS',       act:'if(window.piOpenKass)piOpenKass()'},
                   {i:'🎫',l:'Bookings',       tab:'bookings'} ],
     merchant:   [ {i:'🖥️',l:'Open POS',      href:'pos.html'},
-                  {i:'📦',l:'New Product',   href:'merchant.html#products'},
+                  {i:'📦',l:'New Product',   href:'merchant-v2.html#products'},
                   {i:'📊',l:'Orders',         tab:'orders'},
                   {i:'💸',l:'Withdraw',       href:'wallet.html'},
                   {i:'📈',l:'Analytics',      href:'seller-analytics.html'},
                   {i:'👥',l:'Staff',          href:'staff-management.html'} ],
-    driver:     [ {i:'🟢',l:'Go Online',     href:'driver-dashboard.html'},
-                  {i:'📍',l:'Navigate',       href:'driver-dashboard.html#nav'},
-                  {i:'💵',l:'Earnings',       href:'driver-dashboard.html#earnings'},
+    driver:     [ {i:'🟢',l:'Go Online',     href:'driver.html'},
+                  {i:'📍',l:'Navigate',       href:'driver.html'},
+                  {i:'💵',l:'Earnings',       href:'driver.html'},
                   {i:'💳',l:'Wallet',         tab:'wallet'},
-                  {i:'📊',l:'Performance',    href:'driver-dashboard.html#stats'},
+                  {i:'📊',l:'Performance',    href:'driver.html'},
                   {i:'🆘',l:'Support',        href:'help.html'} ],
     provider:   [ {i:'📅',l:'New Booking',   href:'services.html#book'},
                   {i:'🗓️',l:'Availability',   href:'services.html#calendar'},
@@ -7478,7 +7466,7 @@ window.logoutUser = logoutUser;
     analytics:     { icon:'📊', lbl:'Analytics',    key:'analyticsScore',     href:'seller-analytics.html' },
     legal:         { icon:'⚖️', lbl:'Legal',        key:'legalStatus',        href:'legal-hub.html' },
     notifications: { icon:'🔔', lbl:'Notifications',key:'unreadNotifs',        sfx:' new', href:'notifications.html' },
-    logistics:     { icon:'🚗', lbl:'Deliveries',   key:'activeDeliveries',   sfx:' active', href:'driver-dashboard.html' },
+    logistics:     { icon:'🚗', lbl:'Deliveries',   key:'activeDeliveries',   sfx:' active', href:'driver.html' },
     jobs:          { icon:'📋', lbl:'Jobs',         key:'activeJobs',         sfx:' open', href:'jobs.html' },
     bookings:      { icon:'📅', lbl:'Bookings',     key:'bookingsToday',      sfx:' today', tab:'bookings' },
     loyalty:       { icon:'🏅', lbl:'Loyalty',      key:'loyaltyPoints',      sfx:' pts', tab:'wallet' },
@@ -7538,7 +7526,7 @@ window.logoutUser = logoutUser;
     { p:["bookings","my bookings","appointments"],         icon:'📅', lbl:'My Bookings',         tab:'bookings' },
     { p:["analytics","performance","stats","reports"],     icon:'📊', lbl:'Analytics',           href:'seller-analytics.html' },
     { p:["staff","team","employees","workforce"],          icon:'👥', lbl:'My Team',             href:'staff-management.html' },
-    { p:["inventory","stock","restock"],                   icon:'📦', lbl:'Inventory',           href:'merchant.html#inventory' },
+    { p:["inventory","stock","restock"],                   icon:'📦', lbl:'Inventory',           href:'merchant-v2.html#inventory' },
     { p:["pending approvals","approvals","approve"],       icon:'✅', lbl:'Pending Approvals',   href:'staff-management.html#approvals' },
     { p:["notifications","alerts","activity"],             icon:'🔔', lbl:'Notifications',       href:'notifications.html' },
     { p:["security","password","mfa","2fa"],               icon:'🔐', lbl:'Security Settings',  tab:'security' },
@@ -7558,7 +7546,7 @@ window.logoutUser = logoutUser;
     { p:["home","dashboard","overview"],                   icon:'🏠', lbl:'Home / Overview',     tab:'overview' },
     { p:["following","subscriptions","saved stores"],      icon:'❤️', lbl:'Following',           tab:'following' },
     { p:["employment","work history","experience"],        icon:'💼', lbl:'Employment',          tab:'employment' },
-    { p:["driver","deliveries","logistics"],               icon:'🚗', lbl:'Driver Hub',          href:'driver-dashboard.html' },
+    { p:["driver","deliveries","logistics"],               icon:'🚗', lbl:'Driver Hub',          href:'driver.html' },
     { p:["services","book service","provider"],            icon:'🔧', lbl:'Services',            href:'services.html' },
     { p:["events","tickets","entertainment"],              icon:'🎭', lbl:'Events Hub',          href:'event-hub.html' },
     { p:["healthcare","medical","clinic","doctor"],        icon:'🏥', lbl:'Healthcare',          href:'services.html#healthcare' },
