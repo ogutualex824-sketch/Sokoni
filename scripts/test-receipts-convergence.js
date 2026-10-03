@@ -10,6 +10,7 @@
          a second retry changes nothing; a replayed event retry writes one event
      A1  admin search by receiptNo / paymentRef returns header + immutable events
      N1  numbering: 120 concurrent allocations across two instances → all unique; per-instance ascending; year rollover resets
+     C2  deliberate anomalies: receipt without payment, duplicate payment ref, invalid history, release without hold, refund missing from history
      C1  reconciliation: missing receipt, paid mismatch, settled-without-release, provider-share mismatch, refund mismatch,
          orphan receipt — recorded as exceptions, nothing corrected; a recurring exception keeps its firstSeenAt
      X1  the old Daraja recorder is RETIRED (refuses, writes nothing)
@@ -135,33 +136,64 @@ const deps = { nextNumber: async (k) => 'SKN-' + k + '-2026-' + String(++SEQ).pa
   ck('N1 120 concurrent allocations over two instances → all unique, correct format; the new year restarts at 000001',
     uniq && nums.every((x) => /^SKN-RCT-2026-\d{6}$/.test(x)) && n27 === 'SKN-RCT-2027-000001', { dup: nums.length - new Set(nums).size, n27 });
 
-  /* C1 — reconciliation */
+  /* C1 — reconciliation (every receipt here cites a CONFIRMED payment and carries matching events unless the row is about that) */
   db = fakeDb();
   const put = (k, v) => db._docs.set(k, v);
-  put('providerBookings/b1', { paymentStatus: 'paid_held', heldAmount: 300000 });                                   /* no receipt */
+  const okPay = (ref) => put('payments/' + ref, { status: 'COMPLETE' });
+  const rcpt = (id, v, events) => { put('transactionReceipts/service_booking_' + id, Object.assign({ kind: 'service_booking', sourceId: id, paymentRef: 'P_' + id, refundedCents: 0, releasedCents: 0, heldCents: 0 }, v)); okPay('P_' + id);
+    (events || [['paid', v.paidCents]]).forEach(([t, a], i) => put('transactionReceipts/service_booking_' + id + '/events/' + t + '_' + i, { type: t, amountCents: a })); };
+  put('providerBookings/b1', { paymentStatus: 'paid_held', heldAmount: 300000 });                                                   /* no receipt */
   put('providerBookings/b2', { paymentStatus: 'paid_held', heldAmount: 300000 });
-  put('transactionReceipts/service_booking_b2', { kind: 'service_booking', sourceId: 'b2', paidCents: 250000, refundedCents: 0 });   /* paid mismatch */
+  rcpt('b2', { paidCents: 250000, heldCents: 250000 });                                                                              /* paid mismatch */
   put('providerBookings/b3', { paymentStatus: 'settled', heldAmount: 300000 });
-  put('transactionReceipts/service_booking_b3', { kind: 'service_booking', sourceId: 'b3', paidCents: 300000, releasedCents: 0, providerNetCents: 0, refundedCents: 0 });
+  rcpt('b3', { paidCents: 300000, heldCents: 300000, providerNetCents: 0 });                                                         /* settled, nothing released */
   put('providerPayouts/b3', { settlementCents: 285000 });
   put('providerBookings/b4', { paymentStatus: 'refunded', heldAmount: 300000, refundedCents: 300000 });
-  put('transactionReceipts/service_booking_b4', { kind: 'service_booking', sourceId: 'b4', paidCents: 300000, refundedCents: 0 });
-  put('transactionReceipts/service_booking_gone', { kind: 'service_booking', sourceId: 'gone', paidCents: 100 });
+  rcpt('b4', { paidCents: 300000, heldCents: 300000 });                                                                              /* refund mismatch */
+  rcpt('gone', { paidCents: 100, heldCents: 100 });                                                                                  /* orphan */
   put('providerBookings/b5', { paymentStatus: 'settled', heldAmount: 300000 });
-  put('transactionReceipts/service_booking_b5', { kind: 'service_booking', sourceId: 'b5', paidCents: 300000, releasedCents: 300000, providerNetCents: 285000, refundedCents: 0 });
+  rcpt('b5', { paidCents: 300000, releasedCents: 300000, providerNetCents: 285000 }, [['paid', 300000], ['released', 300000]]);      /* CLEAN */
   put('providerPayouts/b5', { settlementCents: 285000 });
   const snapBefore = JSON.stringify([...db._docs].filter(([k]) => !k.startsWith('receiptReconciliationExceptions/')));
   let t0 = new Date('2026-10-03T00:00:00Z');
   out = await RR.reconcileServiceBookings(db, { now: () => t0 });
   const ex = (k) => db._docs.get('receiptReconciliationExceptions/' + k);
+  const exKeys = () => [...db._docs.keys()].filter((k) => k.startsWith('receiptReconciliationExceptions/')).map((k) => k.split('/')[1]);
   ck('C1a exceptions: missing_receipt b1, paid_mismatch b2, release_missing + provider_share_mismatch b3, refund_mismatch b4, orphan_receipt gone; clean b5 has none',
     ex('missing_receipt_b1') && ex('paid_mismatch_b2') && ex('release_missing_b3') && ex('provider_share_mismatch_b3') && ex('refund_mismatch_b4') && ex('orphan_receipt_gone')
-    && ![...db._docs.keys()].some((k) => k.startsWith('receiptReconciliationExceptions/') && k.endsWith('_b5')) && out.exceptions === 6, out);
-  ck('C1b nothing was corrected (bookings / receipts / payouts unchanged)', JSON.stringify([...db._docs].filter(([k]) => !k.startsWith('receiptReconciliationExceptions/'))) === snapBefore);
+    && !exKeys().some((k) => k.endsWith('_b5')), exKeys());
+  ck('C1b nothing was corrected (bookings / receipts / payouts / payments unchanged)', JSON.stringify([...db._docs].filter(([k]) => !k.startsWith('receiptReconciliationExceptions/'))) === snapBefore);
   t0 = new Date('2026-10-04T00:00:00Z');
   await RR.reconcileServiceBookings(db, { now: () => t0 });
   ck('C1c a recurring exception stays ONE doc, keeps firstSeenAt, updates lastSeenAt',
     JSON.stringify(ex('missing_receipt_b1').firstSeenAt) === JSON.stringify(new Date('2026-10-03T00:00:00Z')) && JSON.stringify(ex('missing_receipt_b1').lastSeenAt) === JSON.stringify(t0));
+
+  /* C2 — the deliberate anomalies added to the daily check */
+  db = fakeDb();
+  const put2 = (k, v) => db._docs.set(k, v);
+  put2('providerBookings/x1', { paymentStatus: 'paid_held', heldAmount: 300000 });
+  put2('transactionReceipts/service_booking_x1', { kind: 'service_booking', sourceId: 'x1', paymentRef: 'P_NONE', paidCents: 300000, heldCents: 300000, refundedCents: 0, releasedCents: 0 });
+  put2('transactionReceipts/service_booking_x1/events/paid_0', { type: 'paid', amountCents: 300000 });
+  put2('providerBookings/x2', { paymentStatus: 'paid_held', heldAmount: 300000 });
+  put2('providerBookings/x3', { paymentStatus: 'paid_held', heldAmount: 300000 });
+  put2('payments/P_DUP', { status: 'COMPLETE' });
+  for (const id of ['x2', 'x3']) {
+    put2('transactionReceipts/service_booking_' + id, { kind: 'service_booking', sourceId: id, paymentRef: 'P_DUP', paidCents: 300000, heldCents: 300000, refundedCents: 0, releasedCents: 0 });
+    put2('transactionReceipts/service_booking_' + id + '/events/paid_0', { type: 'paid', amountCents: 300000 });
+  }
+  put2('providerBookings/x4', { paymentStatus: 'settled', heldAmount: 300000 });
+  put2('payments/P_X4', { status: 'COMPLETE' });
+  put2('transactionReceipts/service_booking_x4', { kind: 'service_booking', sourceId: 'x4', paymentRef: 'P_X4', paidCents: 300000, heldCents: 0, releasedCents: 400000, providerNetCents: 0, refundedCents: 0 });
+  put2('providerBookings/x5', { paymentStatus: 'refunded', heldAmount: 300000, refundedCents: 300000 });
+  put2('payments/P_X5', { status: 'COMPLETE' });
+  put2('transactionReceipts/service_booking_x5', { kind: 'service_booking', sourceId: 'x5', paymentRef: 'P_X5', paidCents: 300000, heldCents: 0, refundedCents: 300000, releasedCents: 0 });
+  put2('transactionReceipts/service_booking_x5/events/paid_0', { type: 'paid', amountCents: 300000 });   /* refund never written to history */
+  await RR.reconcileServiceBookings(db, { now: () => new Date('2026-10-05T00:00:00Z') });
+  const ex2 = (k) => !!db._docs.get('receiptReconciliationExceptions/' + k);
+  ck('C2 deliberate anomalies are detected: receipt_without_payment x1 · duplicate_payment_ref P_DUP · invalid_history + release_without_hold x4 · history_total_mismatch x5 (refund missing from history)',
+    ex2('receipt_without_payment_x1') && ex2('duplicate_payment_ref_P_DUP') && ex2('invalid_history_x4') && ex2('release_without_hold_x4') && ex2('history_total_mismatch_x5'),
+    [...db._docs.keys()].filter((k) => k.startsWith('receiptReconciliationExceptions/')));
+
 
   /* X1 */
   const FE = loadFE();

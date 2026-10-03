@@ -134,7 +134,7 @@ Every call is made **after** the money step has committed, wrapped in `safely(db
 
 **Payment method:** the commercial line's `webhookIntasend` carries 5b's `providerMethod` byte for byte. The Quick Charge receipt, the IntaSend order receipt, the merchant receipt and the marketplace order now record it, with null meaning not reported (`test-webhook-provider-method-commercial.js` 3/0).
 
-**Reconciliation:** `receipt-reconciliation.js` (daily, 04:30 EAT) records exceptions and never corrects them.
+**Reconciliation:** `receipt-reconciliation.js` (daily, 04:30 EAT) records exceptions and never corrects them. Added on the second pass: `receipt_without_payment`, `duplicate_payment_ref`, `invalid_history`, `history_total_mismatch` (stored totals must equal the immutable events) and `release_without_hold`.
 - **Checks:** `missing_receipt`, `orphan_receipt`, `paid_mismatch`, `release_missing`, `provider_share_mismatch`, `refund_mismatch`.
 - **Storage:** exceptions go to `receiptReconciliationExceptions`, one document per check and source, with `firstSeenAt` kept.
 - **Scope:** service bookings first. Other kinds join as their hooks land. Wallet-movement-without-ledger checks belong to the wallet authority (Financial Core; wallet.js frozen) and are not done here.

@@ -1,3 +1,7 @@
+## 2026-10-03 — Receipt reconciliation: receipt without payment, duplicate payment ref, invalid history, history≠events, release without hold (NOT deployed)
+
+- **Test:** test-receipts-convergence 15/0 (C2 injects each anomaly).
+
 ## 2026-10-03 — Receipts convergence: retired the old recorder, Legal links, B2B deductions, balanced releases, replayable retry queue, audited admin search, reconciliation job, burst-safe numbering, real IntaSend method on the commercial webhook copy (NOT deployed)
 
 - **Files:** transaction-receipts.js, receipt-reconciliation.js (new), financial-engine.js (retired recorder + in-flight block share), index.js (providerMethod + exports).

@@ -4,7 +4,8 @@
    Finds disagreements and records them as EXCEPTIONS. It never corrects anything: a mismatch is an investigation,
    not a write. A receipt never decides who owns money — the payment / webhook and the ledger do.
 
-   Checks (service bookings first — the flow whose hooks land first; other kinds join as their hooks land):
+   Checks (service bookings first — the flow whose hooks land first; other kinds join as their hooks land). Added 2026-10-03:
+     receipt_without_payment · invalid_history · history_total_mismatch · release_without_hold · duplicate_payment_ref.
      missing_receipt        a paid booking (paid_held / settled / refunded*) has no receipt
      orphan_receipt         a receipt whose booking does not exist
      paid_mismatch          receipt.paidCents ≠ booking.heldAmount (the verified amount)
@@ -48,11 +49,34 @@ async function reconcileServiceBookings(db, opts) {
   }
   /* From the receipts side: a receipt must point at a real booking. */
   const rs = await db.collection(RECEIPTS).where('kind', '==', 'service_booking').limit(lim).get();
+  const byRef = new Map();
   for (const r of rs.docs) {
-    const id = (r.data() || {}).sourceId;
+    const rc = r.data() || {};
+    const id = rc.sourceId;
     const b = await db.collection('providerBookings').doc(String(id)).get();
     if (!b.exists) flag('orphan_receipt', id, 'booking', null);
+    /* receipt_without_payment: the payment it cites must be a CONFIRMED payment (payments/{ref} COMPLETE or the intent paid). */
+    if (rc.paymentRef) {
+      const [pay, intent] = await Promise.all([
+        db.collection('payments').doc(String(rc.paymentRef)).get(),
+        db.collection('paymentIntents').doc(String(rc.paymentRef)).get(),
+      ]);
+      const ok = (pay.exists && String((pay.data() || {}).status || '').toUpperCase() === 'COMPLETE') || (intent.exists && (intent.data() || {}).status === 'paid');
+      if (!ok) flag('receipt_without_payment', id, 'confirmed payment ' + rc.paymentRef, null);
+      byRef.set(rc.paymentRef, (byRef.get(rc.paymentRef) || []).concat([id]));
+    }
+    /* invalid_history: the position must be possible — nothing released or refunded beyond what was paid, held never negative,
+       and the stored totals must equal the sum of the immutable events. */
+    const p = { paid: rc.paidCents || 0, held: rc.heldCents || 0, rel: rc.releasedCents || 0, ref: rc.refundedCents || 0 };
+    if (p.held < 0 || p.rel > p.paid || p.ref > p.paid || p.held > p.paid) flag('invalid_history', id, 'held/released/refunded within paid', p);
+    const ev = await db.collection(RECEIPTS).doc(r.id).collection('events').limit(200).get();
+    const sum = { paid: 0, rel: 0, ref: 0 };
+    for (const e of ev.docs) { const x = e.data() || {}; if (x.type === 'paid') sum.paid += x.amountCents || 0; else if (x.type === 'released') sum.rel += x.amountCents || 0; else if (x.type === 'refunded') sum.ref += x.amountCents || 0; }
+    if (sum.paid !== p.paid || sum.rel !== p.rel || sum.ref !== p.ref) flag('history_total_mismatch', id, sum, { paid: p.paid, rel: p.rel, ref: p.ref });
+    if (p.rel > 0 && sum.paid === 0) flag('release_without_hold', id, 'a paid/held event before release', null);
   }
+  /* duplicate_payment_ref: one confirmed payment can back only ONE receipt. */
+  for (const [ref, ids] of byRef) if (ids.length > 1) flag('duplicate_payment_ref', ref, 1, ids);
 
   for (const f of found) {
     const ref = db.collection(EXC).doc(f.check + '_' + f.sourceId);
