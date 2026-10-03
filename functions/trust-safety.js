@@ -190,6 +190,61 @@ function _iso(ts) {
   return ts && typeof ts.toMillis === 'function' ? new Date(ts.toMillis()).toISOString() : null;
 }
 
+/* ═════════════════════════════════════════════════════════════════════════
+   TAKEDOWN ENFORCEMENT (2026-10-02, owner spec "takedown / hidden product enforcement")
+
+   THE HOLD IS PUBLIC-SAFE. `products/{id}` is world-readable (rules: read if true), so `moderationHold` carries NO
+   reporter-derived value and no moderator identity: the report id embeds the reporter's uid, and the reason would tell
+   the public "this seller was reported for X". The hold stores only an opaque ref (sha256 prefix of the report id),
+   the correlation id, the time and the visibility before it. Who decided and why lives in the report and in
+   `trustSafetyAudit` (both server-only). A hold written by the pre-2026-10-02 code (reportId) is still recognised —
+   none exists in production (C2/C3 never deployed; the live trust-safety.js never writes products).
+
+   OTHER ENFORCEMENT. A restore only lifts THIS moderation hold. If another enforcement still applies to the listing —
+   the seller account banned / suspended / deactivated, the shop deactivated, or the product removed by an admin —
+   the restore is REFUSED (failed-precondition, with the enforcement named), so a moderation restore can never become
+   the moment a suspended seller's listing goes public again.
+
+   PROMOTIONS. Paid placement never bypasses moderation: a take-down moves the listing's ACTIVE `featuredListings`
+   rows to `paused_by_moderation` (status only — payment, price, dates and billing are untouched), and a restore moves
+   exactly those rows back to `active`. The public reader (sokoni-featured.js) shows status=='active' only.
+   ═════════════════════════════════════════════════════════════════════════ */
+const PROMO_PAUSED = 'paused_by_moderation';
+function _holdOwnedBy(hold, ids) {
+  if (!hold) return null;
+  for (const id of ids) {
+    if (!id) continue;
+    if ((hold.ref && hold.ref === _opaqueRef(id)) || (hold.reportId && hold.reportId === id)) return id;
+  }
+  return null;
+}
+/* Reads (transaction-safe: all reads, no writes) the enforcement that is NOT this moderation hold. */
+async function _otherEnforcement(tx, db, p) {
+  const out = [];
+  const st = String((p && p.status) || '').toLowerCase();
+  if (['removed', 'banned', 'suspended', 'deleted', 'rejected'].includes(st)) out.push('PRODUCT_' + st.toUpperCase());
+  const sellerUid = p && (p.sellerUid || p.sellerId);
+  if (sellerUid && _safeId(sellerUid)) {
+    const us = await tx.get(db.collection('users').doc(String(sellerUid)));
+    const u = us.exists ? (us.data() || {}) : {};
+    if (u.status === 'banned') out.push('SELLER_BANNED');
+    if (u.status === 'suspended') out.push('SELLER_SUSPENDED');
+    if (u.deactivated === true) out.push('SELLER_DEACTIVATED');
+  }
+  const shopId = p && p.shopId;
+  if (shopId && _safeId(shopId)) {
+    const ss = await tx.get(db.collection('shops').doc(String(shopId)));
+    const s = ss.exists ? (ss.data() || {}) : {};
+    if (s.deactivated === true) out.push('SHOP_DEACTIVATED');
+    if (['suspended', 'banned'].includes(String(s.status || ''))) out.push('SHOP_' + String(s.status).toUpperCase());
+  }
+  return out;
+}
+async function _promotionsFor(tx, db, productId, status) {
+  const qs = await tx.get(db.collection('featuredListings').where('itemId', '==', String(productId)).limit(50));
+  return qs.docs.filter((d) => { const x = d.data() || {}; return (x.itemType || 'product') === 'product' && x.status === status; });
+}
+
 /* ─────────────────────────────────────────────────────────────────────────
    0. tsGetReportReasons — the reason catalogue for a report type (no client copy exists)
 ──────────────────────────────────────────────────────────────────────────── */
@@ -548,7 +603,8 @@ exports.tsGetReportCase = onCall(OPT, async (req) => {
         exists: true, id: ps.id, name: String(p.name || '').slice(0, 160) || null, category: p.category || p.categoryId || null,
         images: imgs, price: typeof p.price === 'number' ? p.price : null, status: p.status || null,
         isVisible: p.isVisible !== false, sellerUid: p.sellerUid || p.sellerId || null, shopId: p.shopId || null,
-        moderationHold: h ? { reportId: h.reportId || null, reason: h.reason || null, by: h.by || null, at: _iso(h.at) } : null,
+        /* admins see which report holds it — resolved from the opaque ref against the reports on this listing below */
+        moderationHold: h ? { ref: h.ref || null, reportId: h.reportId || null, at: _iso(h.at) } : null,
       };
       if (product.shopId && _safeId(product.shopId)) {
         const ss = await db.collection('shops').doc(String(product.shopId)).get();
@@ -577,12 +633,21 @@ exports.tsGetReportCase = onCall(OPT, async (req) => {
     ? (await auditRows('entityId', report.entityId)).filter((x) => _normEntityType(x.entityType) === target.type && (x.productHidden || x.enforcement))
     : [];
 
+  if (product && product.moderationHold) {
+    product.moderationHold.reportId = _holdOwnedBy(product.moderationHold, reports.map((r) => r.id)) || product.moderationHold.reportId || null;
+    delete product.moderationHold.ref;
+  }
+  const heldByThis = !!(product && product.moderationHold && product.moderationHold.reportId === reportId);
+  const actions = _allowedActions(report, req.auth.uid, isSuper);
+  /* RESTORE (takedown spec §22): offered on the upheld report that owns the hold. The server re-checks everything. */
+  if (heldByThis && report.status === 'actioned' && target.enforcement === 'listing_visibility'
+      && (!report.assignedTo || report.assignedTo === req.auth.uid || isSuper)) actions.push('restore');
   return {
     report, target, product, shop, reports, history, listingHistory,
-    actions: _allowedActions(report, req.auth.uid, isSuper),
+    actions,
     openOnListing: reports.filter((r) => OPEN_STATUSES.includes(r.status)).length,
     /* the listing's take-down belongs to THIS report — dismissing it may restore the listing (restoreListing:true) */
-    listingHeldByThisReport: !!(product && product.moderationHold && product.moderationHold.reportId === reportId),
+    listingHeldByThisReport: heldByThis,
     sellerResponse: SELLER_RESPONSE,
   };
 });
@@ -604,14 +669,20 @@ exports.tsReviewReport = onCall(OPT, async (req) => {
   const action = String(data.action || '');
   if (!reportId || !action) throw new HttpsError('invalid-argument', 'reportId and action are required.');
   const isAssign = ASSIGN_ACTIONS.includes(action);
-  const newStatus = isAssign ? null : REPORT_ACTIONS[action];
-  if (!isAssign && !newStatus) {
-    throw new HttpsError('invalid-argument', 'action must be one of ' + Object.keys(REPORT_ACTIONS).concat(ASSIGN_ACTIONS).join('|'));
+  /* RESTORE (takedown spec §3, §22): the explicit AdminOS / Super Admin reverse of an upheld take-down. It is not a
+     report status change — the report stays upheld; its history says the listing was restored, by whom and why. */
+  const isRestore = action === 'restore';
+  const newStatus = (isAssign || isRestore) ? null : REPORT_ACTIONS[action];
+  if (!isAssign && !isRestore && !newStatus) {
+    throw new HttpsError('invalid-argument', 'action must be one of ' + Object.keys(REPORT_ACTIONS).concat(ASSIGN_ACTIONS, ['restore']).join('|'));
   }
   const resolution = _cleanText(data.resolution, 500);          /* the OUTCOME note — the seller sees it once decided */
   const internalNote = _cleanText(data.internalNote, 1000);     /* moderators only — never sent to a seller */
   if (action === 'reopen' && internalNote.length < 10) {
     throw new HttpsError('invalid-argument', 'Reopening a decided report needs an internal note (at least 10 characters) saying why.');
+  }
+  if (isRestore && internalNote.length < 10) {
+    throw new HttpsError('invalid-argument', 'Restoring a taken-down listing needs an internal note (at least 10 characters) saying why.');
   }
   const requestId = data.requestId == null ? null : (/^[A-Za-z0-9_-]{8,64}$/.test(String(data.requestId)) ? String(data.requestId) : undefined);
   if (requestId === undefined) throw new HttpsError('invalid-argument', 'Bad requestId.');
@@ -620,11 +691,11 @@ exports.tsReviewReport = onCall(OPT, async (req) => {
   const isSuper = !!req.auth.token.superAdmin;
   const actorRole = _actorRole(req);
   const takeover = action === 'claim' && data.takeover === true;
-  const wantHide = !isAssign && REPORT_STATE[newStatus] === 'approved' && data.hideProduct === true;
-  const applyToListing = !isAssign && (newStatus === 'actioned' || newStatus === 'dismissed') && data.applyToListing === true;
+  const wantHide = !isAssign && !isRestore && REPORT_STATE[newStatus] === 'approved' && data.hideProduct === true;
+  const applyToListing = !isAssign && !isRestore && (newStatus === 'actioned' || newStatus === 'dismissed') && data.applyToListing === true;
   /* RESTORE — the explicit reverse of a take-down, through the same canonical fields: only when DISMISSING the report
      (or listing group) that owns the listing's moderationHold, and only to the visibility the server recorded before it. */
-  const wantRestore = !isAssign && newStatus === 'dismissed' && data.restoreListing === true;
+  const wantRestore = isRestore || (!isAssign && newStatus === 'dismissed' && data.restoreListing === true);
 
   const db = getFirestore();
   const ref = db.collection('reports').doc(reportId);
@@ -657,6 +728,9 @@ exports.tsReviewReport = onCall(OPT, async (req) => {
         if (!owner) return { noop: true, report, result: { assignedTo: null } };
         if (owner !== uid && !isSuper) throw new HttpsError('permission-denied', 'Only the reviewer who holds this report, or a super admin, can release it.');
       }
+    } else if (isRestore) {
+      if (from !== 'actioned') throw new HttpsError('failed-precondition', `This report is ${REPORT_STATE[from] || from}; only an upheld take-down can be restored from it.`);
+      if (lockedOut(report)) throw new HttpsError('failed-precondition', 'Another moderator has this report under review.');
     } else {
       if (!(REPORT_TRANSITIONS[newStatus] || []).includes(from)) {
         throw new HttpsError('failed-precondition', `This report is already ${REPORT_STATE[from] || from}; it cannot be moved to ${REPORT_STATE[newStatus]}.`);
@@ -677,15 +751,21 @@ exports.tsReviewReport = onCall(OPT, async (req) => {
     /* enforcement exists for listings only; hideProduct on any other target is ignored (C2 behaviour) */
     const hide = wantHide && target.enforcement === 'listing_visibility';
     const restore = wantRestore && target.enforcement === 'listing_visibility';
-    let pref = null, psnap = null;
+    if (isRestore && !restore) throw new HttpsError('failed-precondition', 'Only a listing take-down can be restored.');
+    let pref = null, psnap = null, other = [], promos = [];
     if (hide || restore) {
       pref = db.collection('products').doc(String(report.entityId));
       psnap = await tx.get(pref);
+      const p0 = psnap.exists ? (psnap.data() || {}) : null;
+      /* every read before any write: the other enforcement (restore only) and the listing's paid placements */
+      if (restore && p0) other = await _otherEnforcement(tx, db, p0);
+      if (p0) promos = await _promotionsFor(tx, db, report.entityId, hide ? 'active' : PROMO_PAUSED);
     }
 
     /* ── writes ── */
     const now = FieldValue.serverTimestamp();
     let enforcement = 'none';
+    let promotionsChanged = 0;
     if (hide) {
       if (!psnap || !psnap.exists) enforcement = 'product_missing';
       else {
@@ -694,8 +774,14 @@ exports.tsReviewReport = onCall(OPT, async (req) => {
         if (p.isVisible === false && p.moderationHold) enforcement = 'already_hidden';
         else {
           enforcement = 'listing_hidden';
-          tx.set(pref, { isVisible: false, moderationHold: { reportId, reason: report.reason || null, by: uid, at: now, correlationId,
+          const holdRef = _opaqueRef(reportId);
+          tx.set(pref, { isVisible: false, moderationHold: { active: true, ref: holdRef, at: now, correlationId,
             previousIsVisible: p.isVisible !== false }, updatedAt: now }, { merge: true });
+          /* paid placement never bypasses moderation: pause it (status only — financial history untouched) */
+          for (const d of promos) {
+            tx.update(d.ref, { status: PROMO_PAUSED, pausedFromStatus: 'active', pausedAt: now, pausedByRef: holdRef, updatedAt: now });
+          }
+          promotionsChanged = promos.length;
         }
       }
     }
@@ -704,16 +790,29 @@ exports.tsReviewReport = onCall(OPT, async (req) => {
       const hold = p && p.moderationHold;
       if (!hold) throw new HttpsError('failed-precondition', 'This listing is not held by moderation; there is nothing to restore.');
       const owners = [reportId].concat(siblings.map((s) => s.id));
-      if (!owners.includes(hold.reportId)) {
+      const ownerId = _holdOwnedBy(hold, owners);
+      if (!ownerId) {
         throw new HttpsError('failed-precondition', 'The listing is held by a different report. Restore it by deciding that report.');
       }
-      const holder = hold.reportId === reportId ? report : (siblings.find((s) => s.id === hold.reportId) || {}).r || {};
+      if (other.length) {
+        throw new HttpsError('failed-precondition', 'This listing cannot be restored: another enforcement still applies ('
+          + other.join(', ') + '). Resolve that first.', { otherEnforcement: other });
+      }
+      const holder = ownerId === reportId ? report : (siblings.find((s) => s.id === ownerId) || {}).r || {};
       const prior = typeof hold.previousIsVisible === 'boolean' ? hold.previousIsVisible
         : (holder.context && typeof holder.context.isVisible === 'boolean' ? holder.context.isVisible : null);
       if (prior === null) throw new HttpsError('failed-precondition', 'The visibility of this listing before the hold is not recorded; it cannot be restored automatically.');
       enforcement = 'listing_restored';
+      const ref0 = hold.ref || _opaqueRef(ownerId);
       tx.set(pref, { isVisible: prior, moderationHold: FieldValue.delete(),
-        moderationReleased: { reportId, by: uid, at: now, correlationId, restoredVisibility: prior }, updatedAt: now }, { merge: true });
+        moderationReleased: { ref: ref0, at: now, correlationId, restoredVisibility: prior }, updatedAt: now }, { merge: true });
+      for (const d of promos) {
+        const x = d.data() || {};
+        if (x.pausedByRef && x.pausedByRef !== ref0) continue;            /* paused by a different hold — not ours to resume */
+        tx.update(d.ref, { status: x.pausedFromStatus || 'active', pausedFromStatus: FieldValue.delete(), pausedByRef: FieldValue.delete(),
+          resumedAt: now, updatedAt: now });
+        promotionsChanged++;
+      }
     }
     const productHidden = enforcement === 'listing_hidden' || enforcement === 'already_hidden';
 
@@ -725,6 +824,7 @@ exports.tsReviewReport = onCall(OPT, async (req) => {
       let to = f;
       if (action === 'claim') Object.assign(patch, { assignedTo: uid, assignedAt: now, assignedRole: actorRole });
       else if (action === 'unclaim') Object.assign(patch, { assignedTo: null, assignedAt: null });
+      else if (isRestore) Object.assign(patch, { productHidden: false, listingRestoredAt: now, listingRestoredBy: uid, internalNote });
       else {
         to = newStatus;
         Object.assign(patch, { status: newStatus, reviewedBy: uid, reviewedAt: now, resolution });
@@ -743,7 +843,7 @@ exports.tsReviewReport = onCall(OPT, async (req) => {
       }
       tx.update(docRef, patch);
       tx.create(db.collection('trustSafetyAudit').doc(_auditId(id, rv)), {
-        action: isAssign ? 'report_' + action + 'ed' : (action === 'reopen' ? 'report_reopened' : 'report_reviewed'),
+        action: isAssign ? 'report_' + action + 'ed' : (isRestore ? 'listing_restored' : (action === 'reopen' ? 'report_reopened' : 'report_reviewed')),
         decision: action,
         reportId: id, reportRef: _opaqueRef(id),
         entityId: r.entityId || null, entityType: r.entityType || null,
@@ -752,6 +852,7 @@ exports.tsReviewReport = onCall(OPT, async (req) => {
         result: to, resultState: REPORT_STATE[to] || null,
         productHidden: !isAssign && productHidden,
         enforcement: isAssign ? 'none' : enforcement,
+        promotions: primary && promotionsChanged ? { changed: promotionsChanged, to: enforcement === 'listing_hidden' ? PROMO_PAUSED : 'resumed' } : null,
         resolution: isAssign ? '' : resolution,
         internalNote: internalNote || null,
         assignedTo: action === 'claim' ? uid : (action === 'unclaim' ? null : (r.assignedTo || null)),
@@ -764,7 +865,7 @@ exports.tsReviewReport = onCall(OPT, async (req) => {
     };
     const decided = [apply(reportId, ref, report, true)].concat(siblings.map((s) => apply(s.id, s.ref, s.r, false)));
     return { report, decided, productHidden, enforcement,
-      result: { status: decided[0].to, moderationState: REPORT_STATE[decided[0].to] || null, productHidden, enforcement } };
+      result: { status: decided[0].to, moderationState: REPORT_STATE[decided[0].to] || null, productHidden, enforcement, promotionsChanged } };
   });
 
   const res = Object.assign({ success: true }, out.result, {
@@ -796,9 +897,10 @@ exports.tsReviewReport = onCall(OPT, async (req) => {
 
   /* NOTIFICATIONS — after the decision committed, through the ONE notification authority (notify.js), recorded on the
      report and in the audit. A failure is recorded as a failure; nothing is claimed sent that notify() did not record. */
-  if (!isAssign && ['actioned', 'dismissed', 'changes_requested'].includes(newStatus)) {
+  if (!isAssign && !isRestore && ['actioned', 'dismissed', 'changes_requested'].includes(newStatus)) {
     res.notifications = await _notifyDecision(db, out.decided, newStatus, out.productHidden, resolution, correlationId);
   }
+  if (isRestore) res.notifications = await _notifyRestore(db, out.decided[0], correlationId);
   return res;
 });
 
@@ -870,10 +972,36 @@ async function _notifyDecision(db, decided, newStatus, productHidden, resolution
   return results;
 }
 
+/* The seller is told the listing is back — through the same authority, recorded on the report, no reporter identity. */
+async function _notifyRestore(db, head, correlationId) {
+  const send = _getNotify();
+  const c = (head && head.report && head.report.context) || {};
+  if (!c.sellerUid) return [];
+  const key = `moderation_restore_${_opaqueRef(String(head.report.entityId))}_r${head.rv}`;
+  let r;
+  if (!send) r = { status: 'failed', reason: 'notification authority unavailable', type: 'system_update', key };
+  else {
+    try {
+      const x = await send({ uid: c.sellerUid, type: 'system_update', title: 'Listing restored',
+        body: `Your listing "${_plain(c.productName || 'your listing')}" was reviewed again and SOKONI has restored it.`,
+        deepLink: '/merchant-v2.html#disputes', dedupeKey: key, awaitDelivery: false });
+      const inapp = x && x.channels ? x.channels.inapp || null : null;
+      r = x && x.deduped ? { status: 'deduped', type: 'system_update', key }
+        : { status: inapp === 'sent' ? 'recorded' : 'failed', inapp: inapp || 'not_attempted', delivery: 'background', type: 'system_update', key };
+    } catch (e) { r = { status: 'failed', reason: String((e && (e.code || e.message)) || 'error').slice(0, 120), type: 'system_update', key }; }
+  }
+  r = Object.assign({ audience: 'seller' }, r);
+  try {
+    await db.collection('reports').doc(head.id).update({ 'notifications.sellerRestore': Object.assign({ correlationId, revision: head.rv, at: FieldValue.serverTimestamp() }, r) });
+  } catch (_) { /* the restore stands; a missing record reads as "not recorded" */ }
+  return [r];
+}
+
 /* exported for tests and for the one documented mapping (CHANGELOG 2026-10-01 "community C2" / "community C3") */
 exports._reportModel = { REPORT_ENTITY_TYPES, REPORT_REASONS, REPORT_STATE, REPORT_ACTIONS, REPORT_TRANSITIONS,
   REPORT_DETAIL_MAX, REPORT_DETAIL_MIN_WHEN_REQUIRED, OPEN_STATUSES, QUEUE_STATUS_STORED, ASSIGN_ACTIONS, MODERATION_TARGETS,
-  SELLER_RESPONSE, queueStatusOf: _queueStatusOf, sellerStatusOf: _sellerStatusOf, allowedActions: _allowedActions };
+  SELLER_RESPONSE, PROMO_PAUSED, LISTING_ACTIONS: Object.freeze(['restore']), queueStatusOf: _queueStatusOf, sellerStatusOf: _sellerStatusOf, allowedActions: _allowedActions,
+  holdOwnedBy: _holdOwnedBy, opaqueRef: _opaqueRef };
 exports._setNotifier = (fn) => { _notifier = fn || null; };
 
 /* ─────────────────────────────────────────────────────────────────────────

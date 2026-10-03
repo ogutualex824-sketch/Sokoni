@@ -35,8 +35,8 @@ const SABOTAGES = {
     from: /function _requireAdmin\(req\) \{\n  if \(!req\.auth\?\.token\?\.admin && !req\.auth\?\.token\?\.superAdmin\) throw new HttpsError\('permission-denied', 'admin required'\);\n\}/,
     to: 'function _requireAdmin(req) {}' },
   'trust-client-status':        { file: 'trust-safety.js', catch: 'SB6',
-    from: /const newStatus = isAssign \? null : REPORT_ACTIONS\[action\];/,
-    to: "const newStatus = isAssign ? null : ({ upheld: 'actioned' }[data.status] || data.status || REPORT_ACTIONS[action]);" },
+    from: /const newStatus = \(isAssign \|\| isRestore\) \? null : REPORT_ACTIONS\[action\];/,
+    to: "const newStatus = (isAssign || isRestore) ? null : ({ upheld: 'actioned' }[data.status] || data.status || REPORT_ACTIONS[action]);" },
   'remove-reporter-privacy':    { file: 'trust-safety.js', catch: 'SB3',
     from: /      ref: _opaqueRef\(d\.id\),\n      entityType: r\.entityType \|\| null, entityId: r\.entityId \|\| null,\n      productName: c\.productName/,
     to: '      ref: _opaqueRef(d.id), reportedBy: r.reportedBy, detail: r.detail,\n      entityType: r.entityType || null, entityId: r.entityId || null,\n      productName: c.productName' },
@@ -253,7 +253,8 @@ const audits = async (pred) => (await db.collection('trustSafetyAudit').get()).d
   const r0 = await get('reports/' + ids[0]);
   ck('D1 UPHOLD + take-down goes through the canonical listing authority: products/pA isVisible:false + moderationHold, report upheld, enforcement listing_hidden',
     up.moderationState === 'approved' && up.queueStatus === 'upheld' && up.enforcement === 'listing_hidden' && pA.isVisible === false && pA.moderationHold
-      && pA.moderationHold.reportId === ids[0] && pA.moderationHold.by === 'adm1' && r0.status === 'actioned' && r0.productHidden === true
+      && pA.moderationHold.ref === crypto.createHash('sha256').update(String(ids[0])).digest('hex').slice(0, 16)
+      && pA.moderationHold.reportId === undefined && pA.moderationHold.by === undefined && pA.moderationHold.reason === undefined && r0.status === 'actioned' && r0.productHidden === true
       && !(await get('hiddenProducts/pA')) && pA.moderated === undefined, { up, hold: pA.moderationHold, vis: pA.isVisible });
 
   const dis = await tryv(TS.tsReviewReport(as('adm2', { reportId: ids[2], action: 'dismiss', resolution: 'Photos match the item' }, ADMIN)));
@@ -332,7 +333,7 @@ const audits = async (pred) => (await db.collection('trustSafetyAudit').get()).d
   const relAud = await audits((a) => a.reportId === ids[0] && a.enforcement === 'listing_restored');
   ck('D10 RESTORE is explicit and canonical: only the report that owns the hold may release it (another report refused); dismissing it with restoreListing puts back the recorded visibility, removes the hold, audits it',
     caseHeld.listingHeldByThisReport === true && notOwner === 'failed-precondition' && (await get('reports/' + fresh.reportId)).status === 'pending'
-      && okRev.enforcement === 'listing_restored' && pA5.isVisible === true && pA5.moderationHold === undefined && pA5.moderationReleased && pA5.moderationReleased.reportId === ids[0]
+      && okRev.enforcement === 'listing_restored' && pA5.isVisible === true && pA5.moderationHold === undefined && pA5.moderationReleased && pA5.moderationReleased.ref === crypto.createHash('sha256').update(String(ids[0])).digest('hex').slice(0, 16) && pA5.moderationReleased.by === undefined
       && (await get('reports/' + ids[0])).productHidden === false && relAud.length === 1, { notOwner, okRev, pA5 });
 
   say('\n── E: enforcement on discovery ──');

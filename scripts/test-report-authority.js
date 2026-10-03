@@ -135,7 +135,8 @@ const ADMIN = { admin: true };
   const after = await get('reports/' + id1);
   ck('AD2 approve + hideProduct: product hidden with moderationHold, report upheld + productHidden, one audit with from/to',
     bySeller === 'permission-denied' && done && done.productHidden === true && done.moderationState === 'approved' && p.isVisible === false
-      && p.moderationHold && p.moderationHold.reportId === id1 && after.status === 'actioned' && after.productHidden === true
+      && p.moderationHold && p.moderationHold.ref === require('crypto').createHash('sha256').update(String(id1)).digest('hex').slice(0, 16)
+      && p.moderationHold.reportId === undefined && p.moderationHold.by === undefined && p.moderationHold.reason === undefined && after.status === 'actioned' && after.productHidden === true
       && audits.length === 1 && audits[0].from === 'pending' && audits[0].resultState === 'approved' && audits[0].productHidden === true,
     { bySeller, done, hold: p.moderationHold, audits: audits.length });
 
