@@ -1,3 +1,21 @@
+## [2026-10-03] - P0: account deactivate/reactivate can no longer self-activate a provider or self-unfreeze an admin freeze.
+
+Functions only (`accountDeactivate`, `accountReactivate`, `adminSetAccountActive` in `functions/account-status.js`).
+Built on de6888b, the serving lineage (accountReactivate's live archive: 378 files, 0 differ). **Not deployed.**
+
+- **Attack (live):** an unapproved provider could go deactivate → reactivate and come back `status: 'active'`, which made them bookable.
+  The live code saved `cur.status || 'active'` only when no saved value existed, so a value the client wrote in advance won.
+  It also restored `preDeactivationStatus ?? 'active'`.
+- **Fix:**
+  - The saved status is always the CURRENT server status; a missing status is saved as `pending`.
+  - A restore only happens from `deactivated` and never invents `active`.
+  - Shops: the saved visibility is the current value, and an unknown value restores HIDDEN.
+- **Admin freeze:** there is a new server-only `accountFreezes/{uid}` record `{active, by: 'self'|'admin'}`. It has no client rule, so clients are denied by default.
+  - `accountReactivate` lifts only a self freeze, and refuses banned or suspended users.
+  - Deactivating yourself cannot turn an admin freeze into a self freeze.
+- **Database:** new collection `accountFreezes`. **Behaviour change:** a deactivation made before this deploy has no freeze record, so self-reactivation is refused (`NOT_SELF_DEACTIVATED`) and support must reactivate the account.
+- **Tests:** `scripts/test-account-reactivate-authority.js` 16/0. With `BASE=de6888b` it fails 9 rows. Sabotage caught 9/9 mutants.
+
 ## [2026-08-22] - Admin shortcut, Marketplace return, and the Health INTERNAL traced.
 
 Hosting slice + a SEPARATE Functions commit. No rules, no schema.
