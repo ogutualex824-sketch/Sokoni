@@ -59,7 +59,8 @@ async function run(opts) { const e = env(opts); if (e.err || !e.ctx.SokoniFoodEn
   ck('P-2', /data-food-entry/.test(SV) && /data-food-entry/.test(IX) && /data-food-entry/.test(FD) && [SV, IX, FD].every((p) => /<script defer src="sokoni-food-entry\.js"><\/script>/.test(p)),
     'Services, home and the Food Hub page enter through the server-routed food entry');
   ck('P-3', /location\.replace\('\/food\.html#food-business'\)/.test(DB), 'the old portal URL, still addressable, hands off to the server-routed entry (no second dashboard)');
-  ck('P-4', /Rider Portal/.test(SV) && /HubRegister\.open\(\{hub:'food'/.test(FD), 'CONTROL: unrelated links (rider, owned by sokoni-f3) and the application stay');
+  /* Rider links are NOT asserted here: they belong to sokoni-f3, whose owner decision removes the Services Rider Portal. */
+  ck('P-4', /HubRegister\.open\(\{hub:'food'/.test(FD), 'CONTROL: the food business application stays reachable');
   console.log('\nRESULT: ' + pass + ' passed, ' + fail + ' failed');
   process.exit(fail ? 1 : 0);
 })().catch((e) => { console.log('CRASH (no verdict): ' + (e && e.stack || e)); process.exit(2); });
