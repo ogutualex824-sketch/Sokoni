@@ -32,6 +32,7 @@ const STUB_PROVIDERS = `
 })();`;
 const STUB_BOOK = `window.SokoniBookService = { open: (o) => window.__T.opens.push(o) };`;
 const STUB_INBOX = `window.SokoniInbox = { openChat: (o) => window.__T.chats.push(o) };`;
+const STUB_LEADS = `if (!window.__T.noLeads) window.SokoniLeads = { ask: (o) => window.__T.asks.push(o) };`;
 
 function prov (uid, extra) {
   return Object.assign({ uid, id: uid, name: 'Pro ' + uid, emoji: '🔧', location: 'Nairobi', city: 'Nairobi', description: 'Leak and pipe repairs',
@@ -55,7 +56,7 @@ async function open (browser, base, page, state, opts = {}) {
   pg.on('pageerror', (e) => errors.push(String(e && e.message)));
   pg.on('dialog', (d) => d.dismiss());
   await pg.addInitScript((t) => {
-    window.__T = t; t.lists = []; t.opens = []; t.chats = []; t.ls = []; t.fs = [];
+    window.__T = t; t.lists = []; t.opens = []; t.chats = []; t.asks = []; t.ls = []; t.fs = [];
     const set = Storage.prototype.setItem; Storage.prototype.setItem = function (k, v) { t.ls.push(k); return set.call(this, k, v); };
     const wo = window.open; window.open = function (u) { t.wopen = (t.wopen || []).concat([String(u)]); return null; };
   }, state);
@@ -65,6 +66,7 @@ async function open (browser, base, page, state, opts = {}) {
     if (/\/sokoni-providers\.js$/.test(p)) return js(STUB_PROVIDERS);
     if (/\/sokoni-book-service\.js$/.test(p)) return js(STUB_BOOK);
     if (/\/sokoni-inbox\.js$/.test(p)) return js(STUB_INBOX);
+    if (/\/sokoni-leads\.js$/.test(p)) return js(STUB_LEADS);
     if (/gstatic\.com\/firebasejs/.test(u)) { route.request(); await pg.evaluate(() => {}).catch(() => {}); return js('export const getFirestore=()=>({});export const collection=()=>({});export const addDoc=async()=>{window.__T.fs.push(1)};export const serverTimestamp=()=>0;export const initializeApp=()=>({});export const getApps=()=>[];'); }
     if (u.startsWith(base) && /\.js$/.test(p)) return js('/* stubbed */');
     if (u.startsWith(base)) return route.continue();
@@ -103,7 +105,7 @@ const HUBS = [
       ck(`${tag} K2 the 📩 tap did not navigate away`, /\/(cleaning|plumbing)\.html/.test(h.pg.url()), h.pg.url());
       await h.pg.click(H.msg); await h.pg.waitForTimeout(60);
       t = await T(h.pg);
-      ck(`${tag} M1 💬 → SokoniInbox.openChat (in-app) with the provider uid`, t.chats.length === 1 && t.chats[0].otherUid === 'provA', t.chats);
+      ck(`${tag} M1 💬 → SokoniLeads.ask (a lead the provider can quote) with the provider uid — not a bare chat`, t.asks.length === 1 && t.asks[0].providerId === 'provA' && t.chats.length === 0, { asks: t.asks, chats: t.chats });
       await h.pg.locator('button[onclick="openBooking()"]:visible').first().click(); await h.pg.waitForTimeout(120);
       t = await T(h.pg);
       ck(`${tag} K3 generic "Book now" shows the pick note, opens NO form and NO booking`, await h.pg.$eval(H.note, (e) => !e.hidden) && t.opens.length === 1 && !(await h.pg.$('#clModalOverlay.open, #pgModalOverlay.open, #clName, #pgName')));
@@ -111,6 +113,10 @@ const HUBS = [
       ck(`${tag} K5 no page errors`, h.errors.length === 0, h.errors);
       await h.ctx.close();
 
+      h = await open(browser, base, H.page, { listResult, noLeads: true });
+      await h.pg.click(H.msg); await h.pg.waitForTimeout(60); t = await T(h.pg);
+      ck(`${tag} M2 lead module absent → in-app chat (SokoniInbox.openChat), never wa.me`, t.chats.length === 1 && t.chats[0].otherUid === 'provA' && t.asks.length === 0, { asks: t.asks, chats: t.chats });
+      await h.ctx.close();
       h = await open(browser, base, H.page, { listResult: { providers: [], error: new Error('denied') } });
       ck(`${tag} L4 read error → "Could not load providers" (not "No providers")`, (await txt(h.pg, H.grid)).includes('Could not load providers'));
       await h.ctx.close();

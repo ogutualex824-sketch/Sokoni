@@ -7,6 +7,7 @@
 - **Owner fee model**: SOKONI 5% of the service amount, paid by the PROVIDER at settlement, once per booking, from commercial config; leads free; no lead/listing/registration/withdrawal/messaging fees. The server change is owned by sokoni-5b.
 - **Files**: home-services.html, bookings.html, scripts/test-home-services-leads-static.js (19/0), scripts/test-secondary-firebase-apps.js (hs-write baseline removed; 9/0), docs/HOME_SERVICES_BOOKINGS.md.
 - **Database / API / rules changes**: none in this commit (the browser no longer writes homeServiceQuotes/homeServiceRequests).
+- **cleaning.html / plumbing.html**: 💬 now opens SokoniLeads.ask (a lead the provider can reply to and quote) instead of a bare pre-booking chat; it falls back to in-app chat when the lead module is absent, never WhatsApp. test-home-services-hubs-browser gains M1 (ask) and M2 (fallback); NOT yet run.
 - **Deferred**: browser suites below the 512 MB memory floor are UNPROVEN on this branch.
 
 ## [2026-10-03] - Home Services: My Bookings — the buyer's service bookings and booking PIN (bookings.html, NOT deployed)

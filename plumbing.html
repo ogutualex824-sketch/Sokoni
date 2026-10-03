@@ -294,7 +294,9 @@ document.addEventListener('click', function (ev) {
   if (msg) {
     ev.stopPropagation();
     const uid = msg.getAttribute('data-pg-msg'), nm = msg.getAttribute('data-pg-name');
-    if (window.SokoniInbox && SokoniInbox.openChat) SokoniInbox.openChat({ otherUid: uid, otherName: nm, type: 'customer-provider', context: 'Plumbing · SOKONI Services' });
+    /* Before a booking exists, a conversation is a LEAD (b2 4F: providerDispatch leadCreate) — the provider can reply and quote. */
+    if (window.SokoniLeads && SokoniLeads.ask) SokoniLeads.ask({ providerId: uid, providerName: nm });
+    else if (window.SokoniInbox && SokoniInbox.openChat) SokoniInbox.openChat({ otherUid: uid, otherName: nm, type: 'customer-provider', context: 'Plumbing · SOKONI Services' });
     else location.href = 'messages.html';
     return;
   }
@@ -332,6 +334,7 @@ renderProviders();
 </script>
 <script src="sokoni-providers.js" defer></script>
 <script src="sokoni-book-service.js" defer></script>
+<script src="sokoni-leads.js" defer></script>
 <script src="sokoni-inbox.js" defer></script>
 <script src="scroll-top.js" defer></script>
 <script src="seo.js" defer></script>

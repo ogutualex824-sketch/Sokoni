@@ -518,7 +518,7 @@ function renderProviders() {
       <!-- Compact card (owner 2026-09-30): 💬 in-app message and 📩 book as icons; the card opens
            the profile. No WhatsApp, no labelled buttons, no follow/share row on the card. -->
       <div class="cl-icons">
-        <button type="button" class="cl-ico cl-ico--msg" aria-label="Message ${esc(p.name)}" title="Message in-app" onclick="event.stopPropagation();window.SokoniInbox?SokoniInbox.openChat({otherUid:'${jsId}',otherName:'${jsNm}',type:'customer-provider',context:'Cleaning · SOKONI Services'}):location.href='messages.html'">💬</button>
+        <button type="button" class="cl-ico cl-ico--msg" aria-label="Message ${esc(p.name)}" title="Ask in SOKONI" onclick="event.stopPropagation();window.SokoniLeads&&SokoniLeads.ask?SokoniLeads.ask({providerId:'${jsId}',providerName:'${jsNm}'}):window.SokoniInbox?SokoniInbox.openChat({otherUid:'${jsId}',otherName:'${jsNm}',type:'customer-provider',context:'Cleaning · SOKONI Services'}):location.href='messages.html'">💬</button>
         <a class="cl-ico cl-ico--book" href="${esc(p.profileUrl)}" aria-label="Book ${esc(p.name)}" title="Book" onclick="event.stopPropagation();if(window.SokoniBookService){event.preventDefault();openBookingFor('${jsId}','${jsNm}');}">📩</a>
       </div>
       <div class="cl-prov-top">
@@ -630,6 +630,7 @@ renderProviders();
 <script src="sokoni-ui-extras.js" defer></script>
   <script src="sokoni-providers.js" defer></script>
 <script src="sokoni-book-service.js" defer></script>
+<script src="sokoni-leads.js" defer></script>
 <script src="sokoni-inbox.js" defer></script>
 <script src="sw-register.js" defer></script>
 <script>
