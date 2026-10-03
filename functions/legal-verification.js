@@ -421,6 +421,11 @@ function _summary(id, lp, now) {
   return {
     uid: id, name: lp.name || '', firmName: lp.firmName || '', registeredP105: lp.licenseNumber || '',
     specializations: lp.specializations || [], county: lp.county || '',
+    /* Legal Hub L7: AdminOS tells a LAWYER from a LAW FIRM and sees the canonical practice areas (taxonomy ids). */
+    entityType: lp.entityType === 'firm' ? 'firm' : 'advocate',
+    practiceAreas: require('./shared/legal-taxonomy').areasOfProfile(lp),
+    firm: lp.entityType === 'firm' && lp.firm ? { registrationNumber: lp.firm.registrationNumber || '', offices: (lp.firm.offices || []).length,
+      teamDeclared: (lp.firm.teamDeclared || []).length, teamVerified: false } : null,
     admin: (v.admin && v.admin.status) || 'pending',
     lsk: { status: l.status || 'pending', practiceStatus: l.practiceStatus || null, source: l.source || null,
       sourceLabel: SOURCE_LABEL[l.source] || null, checkedAtMs: l.checkedAtMs || null, validUntilMs: l.validUntilMs || null,
@@ -444,6 +449,9 @@ _adminH.legalAdminList = async (req) => {
   let rows = snap.docs.map((d) => _summary(d.id, d.data(), now));
   if (view === 'bookable') rows = rows.filter((r) => r.eligibility.bookable);
   else if (view === 'pending') rows = rows.filter((r) => !r.eligibility.bookable && r.admin !== 'rejected');
+  /* L7: lawyer vs law-firm filter (an unknown value lists nothing, never everyone). */
+  const et = _san(req.data && req.data.entityType, 12);
+  if (et) rows = ['advocate', 'firm'].includes(et) ? rows.filter((r) => r.entityType === et) : [];
   return { view, advocates: rows, lskIntegration: { available: LSK.available(), statement: LSK.STATUS.reason } };
 };
 

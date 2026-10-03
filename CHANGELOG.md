@@ -1,3 +1,12 @@
+## [2026-10-03] — Legal Hub L7 (server): AdminOS sees lawyer vs law firm and the canonical practice areas — NOT deployed
+
+- **functions/legal-verification.js:**
+  - The _summary (AdminOS list) carries entityType, practiceAreas (taxonomy) and a firm digest: registration number, office count, declared-team count, teamVerified false.
+  - legalAdminList takes an entityType filter. An unknown value lists none.
+  - The eligibility predicate is unchanged.
+- **Tests:** test-legal-profile A1 (15/0). test-legal-booking-chain 9/0, sabotage 5/5 + 6/6, test-legal-verification 93 server rows, test-booking-provider-gate 8/0.
+- **Deploy note:** this file is byte-copied into sokoni-5b's providerDispatch release, so the pinned SHA moves to this commit.
+
 ## [2026-10-03] — Legal Hub L4 (server): Legal consultations are canonical provider bookings (IntaSend → hold → PIN → one 5% → wallet) — NOT deployed
 
 - **functions/legal-verification.js:**

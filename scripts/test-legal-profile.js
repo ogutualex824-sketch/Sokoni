@@ -119,6 +119,15 @@ const eligibleVerification = () => ({
     && rs1.code === 'failed-precondition' && rs2.ok && a2b.status === 'pending' && a2b.applicantResponse === 'CR12 attached'
     && DOCS.get('legalProviders/firm1').firm.offices[0].address === 'Upper Hill, 5th floor',
     'NEEDS INFORMATION: applicant sees the reviewer reason, resubmits once asked (and only then); it returns to "pending" — never approved by the applicant', { rs0: rs0.det, rs1: rs1.code, a2b: a2b.status });
+  /* A1 — AdminOS (L7): lawyer vs law-firm, practice areas, type filter */
+  const LVx = require(path.join(FN, 'legal-verification.js'));
+  const al = await call(LVx._adminH.legalAdminList, 'admin1', { view: 'all' }, { admin: true });
+  const af = await call(LVx._adminH.legalAdminList, 'admin1', { view: 'all', entityType: 'firm' }, { admin: true });
+  const ax = await call(LVx._adminH.legalAdminList, 'admin1', { view: 'all', entityType: 'company' }, { admin: true });
+  const rowF = al.ok && al.ok.advocates.find((x) => x.uid === 'firm1');
+  ck('A1', !!rowF && rowF.entityType === 'firm' && JSON.stringify(rowF.practiceAreas) === JSON.stringify(['company-registration', 'term-sheets']) && rowF.firm && rowF.firm.teamVerified === false
+    && af.ok && af.ok.advocates.every((x) => x.entityType === 'firm') && af.ok.advocates.length >= 1 && ax.ok && ax.ok.advocates.length === 0,
+    'AdminOS list distinguishes LAW FIRM from LAWYER, shows canonical practice areas, filters by type (unknown type → none)', { rowF, n: af.ok && af.ok.advocates.length });
   const agreements = Object.keys(require(path.join(FN, 'legal-agreements.js'))._h), hub = Object.keys(LH._h || {});
   ck('D1', hub.length >= 4 && hub.every((k) => agreements.indexOf(k) < 0) && mine.ok && mine.ok.editable.indexOf('offices') > -1,
     'profile ops are routed by the EXISTING legalDispatch (no new Cloud Function); no name clash with agreement ops', hub);
