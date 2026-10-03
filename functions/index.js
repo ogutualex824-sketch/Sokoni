@@ -1215,7 +1215,7 @@ const _CHAT_TOOLS = [
   },
   {
     name: "cancel_order",
-    description: "Cancel an order. ONLY call after user explicitly confirms they want to cancel by that order ID. Only pending/confirmed orders can be cancelled.",
+    description: "Cancel an UNPAID order. ONLY call after user explicitly confirms they want to cancel by that order ID. Paid orders cannot be cancelled here — point the user to a refund request.",
     input_schema: {
       type: "object",
       properties: {
@@ -1575,14 +1575,37 @@ async function _execChatTool(name, input, ctx) {
 
     /* ── ACTION: cancel_order ── */
     if (name === "cancel_order") {
+      /* SECURITY CONVERGENCE (2026-10-03): the assistant is an UNTRUSTED requester with the buyer's own authority —
+         never more. LIVE it cancelled `confirmed` (= PAID) orders and promised a refund that nothing created: the
+         order went to cancelled with the money still held / settled, outside the refund authority. Now it cancels only
+         an UNPAID order the buyer owns, inside a transaction (status + payment re-read at write time, idempotent). A
+         paid order is never cancelled here; the buyer is told the truth and pointed to the refund request, which an
+         administrator approves. */
       if (!ctx.uid) return _authRequired();
-      const orderDoc = await db.collection("orders").doc(input.orderId).get().catch(() => null);
-      if (!orderDoc?.exists) return { error: "Order not found." };
-      if (orderDoc.data().uid !== ctx.uid) return { error: "You can only cancel your own orders." };
-      const st = orderDoc.data().status;
-      if (!["pending", "confirmed"].includes(st)) return { error: `Order cannot be cancelled — current status is "${st}". Only pending or confirmed orders qualify.` };
-      await db.collection("orders").doc(input.orderId).update({ status: "cancelled", cancelledAt: new Date().toISOString(), cancelledBy: ctx.uid, cancelReason: input.reason || "Cancelled via KASS", cancellationSource: "kass_ai" });
-      return { success: true, message: `Order #${input.orderId.slice(0,8).toUpperCase()} has been cancelled. If you paid, a refund will be processed within 3–5 business days.` };
+      const _oid = String(input.orderId || "").trim();
+      if (!_oid || !/^[A-Za-z0-9_-]{1,128}$/.test(_oid)) return { error: "Order not found." };
+      const _ref = db.collection("orders").doc(_oid);
+      const _paid = (o) => o.paymentVerified === true || o.paid === true || ["paid", "completed", "success"].includes(String(o.paymentStatus || "").toLowerCase());
+      let _out;
+      try {
+        _out = await db.runTransaction(async (t) => {
+          const snap = await t.get(_ref);
+          if (!snap.exists) return { error: "Order not found." };
+          const o = snap.data() || {};
+          const owns = [o.uid, o.buyerUid, o.buyerId, o.userId].filter(Boolean).map(String).includes(ctx.uid);
+          if (!owns) return { error: "You can only cancel your own orders." };
+          const st = String(o.status || "").toLowerCase();
+          if (st === "cancelled") return { success: true, idempotent: true, message: "This order is already cancelled." };
+          if (_paid(o) || !["pending", "pending_payment"].includes(st)) {
+            return { error: "This order has been paid (or is already being prepared), so it cannot be cancelled here. You can request a refund from My Orders — SOKONI reviews every refund request.",
+                     refundRequest: true, status: st };
+          }
+          t.update(_ref, { status: "cancelled", cancelledAt: new Date().toISOString(), cancelledBy: ctx.uid,
+            cancelReason: String(input.reason || "Cancelled via KASS").slice(0, 200), cancellationSource: "kass_ai" });
+          return { success: true, message: `Order #${_oid.slice(0,8).toUpperCase()} has been cancelled. It was not paid, so there is nothing to refund.` };
+        });
+      } catch (e) { return { error: "The order could not be cancelled just now. Nothing was changed." }; }
+      return _out;
     }
 
     /* ── ACTION: save_to_wishlist ── */
@@ -1938,7 +1961,7 @@ add_to_cart       — LINK to a product page; does NOT add to cart. Never say "a
 view_cart         — LINK to the cart page; you cannot read it. Never state a count or total
 get_my_orders     — list recent orders with status
 track_order       — live GPS tracking + ETA
-cancel_order      — cancel pending/confirmed order (confirm first)
+cancel_order      — cancel an UNPAID order only (confirm first); paid → refund request
 save_to_wishlist  — save item to favourites + price-drop alert
 get_wallet        — check wallet balance + loyalty points
 book_stay         — book BnB or hotel (confirm check-in/out, guests, total first)
