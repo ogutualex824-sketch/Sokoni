@@ -100,8 +100,8 @@ const SRC = read('sokoni-tech-service-editor.js');
   const row = api._internal.repairRow({ id: 'bk9', service: 'Screen', status: 'pending', repairDetails: { deviceType: 'phone' } });
   const has = (src, str) => src.indexOf(str) > -1;
   ck('L1', has(mh, 'function _openFromTransaction(){') && has(mh, 'SokoniChat.createConversation(t,id,null,{})') && has(mh, 'if(!_openFromTransaction())_noticeFromUrl();')
-    && has(mh, "['service_booking','service_lead','order'].indexOf(t)===-1"),
-    'messages.html opens ?tx=service_booking&txId= through the server (createConversation), allow-listed types only');
+    && has(mh, "['service_booking','service_lead','order','rfq'].indexOf(t)===-1") && has(ib, "SokoniInbox.TX_TYPES = ['service_booking', 'service_lead', 'order', 'rfq'];"),
+    'messages.html opens ?tx=service_booking|service_lead|order|rfq&txId= through the server (createConversation), allow-listed types only (page + inbox agree)');
   ck('L2', has(ib, 'SokoniInbox.openForTransaction = function(type, id)') && has(row, 'data-tech-repair-msg="bk9"')
     && has(bs, "messages.html?tx=service_booking&txId=' + encodeURIComponent(_ctx.bookingId)"),
     'Repairs "Message customer" and the booking view "Message the provider" open the BOOKING conversation');

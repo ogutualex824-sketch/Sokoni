@@ -1,3 +1,10 @@
+## [2026-10-03] — Messages: ?tx=rfq opens the B2B RFQ conversation (for sokoni-f3) — NOT deployed
+
+- **messages.html:** _openFromTransaction accepts rfq, with RFQ-specific refusal wording.
+- **sokoni-inbox.js:** TX_TYPES gains rfq. The txId is rfqId__supplierBusinessId.
+- **Server:** the sok-techfn line ed7cde0 (messages.js rfq → rfqRecipients, buyer + supplier owner).
+- **Tests:** test-tech-service-editor L1 now asserts the page and the inbox allowlists agree. 17/0.
+
 ## [2026-10-03] — Fitness Memberships wired into the provider dashboard (e3 d70eca5 exact diff) — NOT deployed
 
 - **provider-dashboard.html:** adds a Memberships sidebar item, hidden behind data-hc-module="memberships" (fail closed); panel-memberships with mbList; a P.show mount line; and the sokoni-fitness-memberships.js script.

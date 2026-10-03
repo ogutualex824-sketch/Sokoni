@@ -385,14 +385,14 @@ function _openFromTransaction(){
   var t=_params.get('tx'), id=_params.get('txId');
   if(!t||!id)return false;
   var n=$('notice');
-  if(['service_booking','service_lead','order'].indexOf(t)===-1){ n.innerHTML='<b>This conversation can’t be opened from here.</b>'; n.hidden=false; return true; }
+  if(['service_booking','service_lead','order','rfq'].indexOf(t)===-1){ n.innerHTML='<b>This conversation can’t be opened from here.</b>'; n.hidden=false; return true; }
   n.innerHTML='Opening the conversation…'; n.hidden=false;
   SokoniChat.createConversation(t,id,null,{}).then(function(r){
     n.hidden=true;
     if(r&&r.conversationId)_openThread(r.conversationId);
   }).catch(function(e){
     var c=e&&e.code||'';
-    n.innerHTML='<b>'+(c.indexOf('permission-denied')>-1?'You are not part of this booking.':c.indexOf('not-found')>-1?'That booking could not be found.':'The conversation could not be opened just now — please try again.')+'</b>';
+    n.innerHTML='<b>'+(c.indexOf('permission-denied')>-1?(t==='rfq'?'You are not part of this request for quotation.':'You are not part of this booking.'):c.indexOf('not-found')>-1?(t==='rfq'?'That request for quotation could not be found.':'That booking could not be found.'):'The conversation could not be opened just now — please try again.')+'</b>';
     n.hidden=false;
   });
   return true;
