@@ -27,7 +27,7 @@
 - **DB:** none new (reads rentalBookings, shops). **API:** new purpose value. **Security:** non-renter / unconfirmed / paid / own-equipment refused; client amount ignored.
 - **Open (not this commit):** webhook hold + settle (5b); rentalCancel of a PAID booking must refund (f3/5b) — today it would cancel without one.
 - **Lifecycle (f3 bb8634d, owner 10-03):** payable at accepted | confirmed (legacy) | payment_pending; pricing moves accepted → payment_pending in one txn; never writes a payment method (5b webhook sets paid_held + held + the IntaSend-reported method).
-- **Tests:** test-rental-booking-purpose 11/0; rfq_quote 7/0, b2b-lead-recovery 21/0, carhub 16/0, entertainment 95/0, event-settlement 111/0.
+- **Tests:** test-rental-booking-purpose 13/0 (R8 race: cancel or amount change between read and txn → refused, never payment_pending); rfq_quote 7/0, b2b-lead-recovery 21/0, carhub 16/0, entertainment 95/0, event-settlement 111/0.
 
 ## 2026-10-03 — Construction OFF items stored CONFIGURED BUT DISABLED, never as zero (owner FINAL rules via f3) (NOT deployed)
 

@@ -18,7 +18,8 @@ class HttpsError extends Error { constructor (code, message) { super(message); t
 let DOCS = {};
 const snapOf = (k) => { const d = DOCS[k]; return { exists: !!d, data: () => d && JSON.parse(JSON.stringify(d)) }; };
 const db = { collection: (c) => ({ doc: (id) => ({ _k: c + '/' + id, get: async () => snapOf(c + '/' + id) }) }),
-  runTransaction: async (fn) => fn({ get: async (ref) => snapOf(ref._k), update: (ref, patch) => { Object.assign(DOCS[ref._k], patch); } }) };
+  runTransaction: async (fn) => { if (BEFORE_TXN) { BEFORE_TXN(); BEFORE_TXN = null; } return fn({ get: async (ref) => snapOf(ref._k), update: (ref, patch) => { Object.assign(DOCS[ref._k], patch); } }); } };
+let BEFORE_TXN = null;   /* simulates a concurrent write landing between the pricer's first read and its transaction */
 const orig = Module.prototype.require;
 Module.prototype.require = function (id) {
   if (id === 'firebase-admin/firestore') return { getFirestore: () => db, FieldPath: { documentId: () => '__name__' } };
@@ -76,6 +77,13 @@ function reset (over, shop) {
   await tryCase('bad bookingId', () => reset(), 'renter1', 'x');
   await tryCase('missing booking', () => reset(), 'renter1', 'RB99999');
   ck('R5 every unsafe case is refused (never priced)', refusals.every(([, c]) => c !== 'PRICED'), refusals);
+  reset(); BEFORE_TXN = () => { DOCS['rentalBookings/RB00001'].status = 'cancelled'; };
+  x = await price('renter1', { bookingId: 'RB00001' });
+  ck('R8 RACE: a cancel landing between the first read and the txn is refused inside the txn — no intent, booking stays cancelled (never payment_pending)',
+    !x.ok && x.code === 'failed-precondition' && DOCS['rentalBookings/RB00001'].status === 'cancelled', x);
+  reset(); BEFORE_TXN = () => { DOCS['rentalBookings/RB00001'].totalAmount = 9999; };
+  x = await price('renter1', { bookingId: 'RB00001' });
+  ck('R8b RACE: an amount change between read and txn aborts (no stale-priced intent)', !x.ok && x.code === 'aborted' && DOCS['rentalBookings/RB00001'].status === 'accepted', x);
   ck('R6 rental_booking is self-settling (held; no generic credit at payment)', SS.isSelfSettling('rental_booking'));
   console.log(`\n${pass} passed, ${fail} failed`);
   process.exit(fail ? 1 : 0);
