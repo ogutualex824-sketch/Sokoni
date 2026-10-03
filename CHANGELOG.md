@@ -175,6 +175,11 @@ Emulator: QUEUED (memory floor).
 - **Tests:** scripts/test-fitness-attendance.js 28/0, negative controls 4/4 caught. test-membership-settlement 45/0 on 57fe896. Emulator proof QUEUED.
 - **Docs:** docs/FITNESS_MEMBERSHIP_ATTENDANCE.md.
 - **Breaking:** none.
+## 2026-10-03 — Car Hub vehicle sales 2% of the sale price (owner, via sokoni-f3; no live trigger yet); commission suites swept (NOT deployed)
+
+- **Changes:** commission-config vehicles; seller-terms row; snapshot regenerated.
+- **Tests:** agreement suite updated (healthcare 5, vehicles 2%); fitness-sales-switch now warns on an unreadable flag.
+- **Tests:** commission-schedule 25/0, 5pct-agreement 62/0, membership 77/0.
 
 ## 2026-10-03 — Fitness: default price catalogue (gyms edit), day/week passes, one sales-switch predicate, seller-terms commission wording, earn-page copy (NOT deployed)
 

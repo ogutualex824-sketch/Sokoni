@@ -54,7 +54,11 @@ const RATES = {
   marketplace:      { pct: 15,  fixedKES: 0,    _was: 'owner schedule 2026-09-28: online product sales 15% (was 5%; the plan lane was already a flat 15%)' },
   food_delivery:    { pct: 15,  fixedKES: 0,    _was: 'owner schedule 2026-09-28: food ordered online 15% (was 5%)' },
   property:         { pct: 0,   fixedKES: 5000, _was: 'owner schedule 2026-09-28: property KES 5,000 flat (was hub 2% / category 3%)' },
-  vehicles:         { pct: 0,   fixedKES: 2000, _was: 'hub flat KES 2000 / category 5%' },
+  /* Car Hub vehicle SALE (owner 2026-10-03, via sokoni-f3): 2 % of the sale price, deducted from the seller's settlement.
+     Replaces the KES 2,000 flat. Launch is marketplace-first (sales complete outside SOKONI), so this has NO live trigger
+     until an online vehicle sale path exists — it is a configured rate, never a charge on listings. Listings are free;
+     a dealer subscription is a separate product and never charged on the same sale unless the owner says so. */
+  vehicles:         { pct: 2,   fixedKES: 0,    _was: 'owner 2026-10-03: 2% of the sale price (was KES 2,000 flat per sale)' },
   healthcare:       { pct: 5,   fixedKES: 0,    _was: 'owner 2026-10-03: every service booking 5%, healthcare included (was 12%, owner schedule 2026-09-28)' },
   /* Healthcare PRODUCT sales price as merchant online sales (owner: "same as merchant"). `pharmacy` — the only
      product-selling healthcare vocabulary in the codebase — resolves here instead of to healthcare bookings. */
