@@ -1,3 +1,22 @@
+## [2026-10-03] — Till gift card: the server authorises and completes a gift-card payment (owner P0, GC-01…GC-20) — server half
+
+**Files:** `functions/pos-zero-friction.js`, `scripts/test-pos-gate-behavioural.js`, `scripts/test-pos-payment-gate-unit.js` (POS-15a expected set, agreed with sokoni-2f), `scripts/sabotage-pos-giftcard.js`, `CHANGELOG.md` · **Base:** `7f3c724` (on `e534623`)
+
+- **The browser may only REQUEST.**
+  - `posCompleteCheckout` loads the canonical `giftCards/{code}` and verifies, in the sale's own transaction: exists, this proven shop's, active, unexpired, KES, PIN, and balance to the cent.
+  - It then debits the card and writes the authoritative payment record `posGiftCardRedemptions/{saleId}_{hash(code)}`, bound to the sale, merchant, amount, KES and server total, together with the sale.
+  - The browser's balance, "paid" flag and reference are ignored.
+  - With a gift card the tender must cover the total exactly; the KES 1 rounding allowance does not apply. Over-tender only gives change from cash, as before.
+- **No second ledger:** the card's balance + redemptions are the ledger. Production held 0 gift cards (census 2026-09-29), so nothing migrates.
+- **No credential on the sale or receipt:** the code's last 4 + a one-way redemption id; a PIN is never stored.
+- **Tender lists:** `gift_card` joins both closed lists (`_TENDERS`, `SERVER_TENDERS`) only in this same change. `mpesa_till_manual` stays refused (owner ruling relayed by sokoni-2f; this conflicts with an earlier answer in sokoni-5b's session and has been put back to the owner).
+- **Tests:**
+  - gate-behavioural 56/0: GC-01…GC-20 + GC-01c / GC-08b / GC-15b + controls, every refusal pinned to its reason;
+  - **GC-16 (two tills at once) UNPROVEN**: needs emulator contention;
+  - gate-enforcement 42/0; unit 17/0;
+  - sabotage 14/14 caught.
+- **Client half NOT done:** `pos-checkout.html` / `till.html` still "redeem" in the browser first. The paired UI change is next. **NOT DEPLOYED.**
+
 ## [2026-10-03] — Till: a product SOKONI has taken down cannot be sold (ported onto the converged POS line)
 
 **Files:** `functions/pos-zero-friction.js`, `functions/shared/product-sale-eligibility.js` (byte-identical to `8b60947`, sha256 `1d34747d00b527df`), `scripts/test-pos-gate-behavioural.js`, `CHANGELOG.md` · **Base:** `e534623` (sokoni-2f's SmartPOS server gate, on live `ee37437`)

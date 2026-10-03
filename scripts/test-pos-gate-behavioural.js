@@ -55,7 +55,9 @@ const CTL = {
 };
 
 const DOCS = new Map();
-const FieldValue = { serverTimestamp: () => 'TS', increment: (n) => ({ __inc: n }) };
+const FieldValue = { serverTimestamp: () => 'TS', increment: (n) => ({ __inc: n }), arrayUnion: (...a) => ({ __union: a }) };
+/* arrayUnion is resolved on write (gift-card redemptions); every other value, __inc included, is stored as before. */
+const _resolveUnion = (prev, v) => { const o = Object.assign({}, prev || {}); for (const [k, x] of Object.entries(v || {})) o[k] = (x && x.__union) ? [...(o[k] || []), ...x.__union] : x; return o; };
 
 function makeDb() {
   const mk = (name, filters) => ({
@@ -104,7 +106,7 @@ function makeDb() {
       const t = { async get(r) { return r.get(); }, set(r, v) { w.push([r._key, v]); },
                   update(r, v) { w.push([r._key, v]); }, create(r, v) { w.push([r._key, v]); } };
       const out = await fn(t);
-      for (const [k, v] of w) DOCS.set(k, Object.assign({}, DOCS.get(k) || {}, v));
+      for (const [k, v] of w) DOCS.set(k, _resolveUnion(DOCS.get(k), v));
       return out;
     },
   };
@@ -206,7 +208,7 @@ const call = async (uid, over = {}) => {
       auth: { uid, token: { posRole: 'cashier' } },
     });
     return { ok: true, result: r };
-  } catch (e) { return { ok: false, code: e && e.code, message: e && e.message }; }
+  } catch (e) { return { ok: false, code: e && e.code, message: e && e.message, reason: e && e.details && e.details.reason }; }
 };
 
 const overdue = () => ([{ merchantUid: MERCHANT, settlementDay: '2026-09-05',
@@ -394,6 +396,102 @@ console.log('\nPART K — a SOKONI takedown blocks the till; a seller switch-off
   reset(); u = seedActor('owner'); DOCS.set('products/P1', Object.assign({}, H));
   try { r = await ZF.posCompleteCheckout({ data: { dryRun: true, idempotencyKey: 'IK_K_DRY', merchantId: MERCHANT, items: [{ productId: 'P1', qty: 1, unitPrice: 100 }], subtotal: 100, grandTotal: 100 }, auth: { uid: u, token: { posRole: 'cashier' } } }); } catch (e) { r = { err: e.message }; }
   ck('K-4 the dry run reports the takedown as a difference (moderation)', r && (r.differences || []).some((x) => x.field === 'moderation' && x.error === 'PRODUCT_UNDER_MODERATION'), JSON.stringify(r).slice(0, 160));
+}
+
+/* PART GC — TILL GIFT CARD (owner P0 brief 2026-10-03, GC-01..GC-20). Each row EXECUTES posCompleteCheckout and
+   records TEST · EXPECTED · OBSERVED · DATABASE EFFECT · MONEY EFFECT · SALE EFFECT · PASS/FAIL. */
+console.log('\nPART GC — the browser may only REQUEST a gift-card payment; the server authorises and completes it\n');
+{
+  const FUT = { toMillis: () => Date.now() + 864e5 }, PAST = { toMillis: () => Date.now() - 864e5 };
+  const card = (code, o) => DOCS.set('giftCards/' + code, Object.assign({ code, shopId: MERCHANT, balance: 500, initialBalance: 500, status: 'active', expiryDate: FUT, redemptions: [] }, o || {}));
+  const sales = () => [...DOCS.keys()].filter((k) => k.indexOf('posRetailSales/') === 0);
+  const recs = () => [...DOCS.keys()].filter((k) => k.indexOf('posGiftCardRedemptions/') === 0);
+  const bal = (code) => (DOCS.get('giftCards/' + code) || {}).balance;
+  const ROWS = [];
+  const row = (id, test, expected, ok, observed, db, money, sale) => { ROWS.push([id, test, expected, observed, db, money, sale, ok ? 'PASS' : 'FAIL']); ck(id + ' ' + test, ok, observed); };
+  const gc = async (uid, payments, over) => call(uid, Object.assign({ payments }, over || {}));
+  const fresh = () => { reset(); return seedActor('owner'); };
+  const refused = (code, reason) => (r) => !r.ok && r.reason === reason && sales().length === 0 && recs().length === 0 && (code ? bal(code) === (DOCS.get('giftCards/' + code) || {}).initialBalance : true);
+  let u, r;
+
+  u = fresh(); card('GOOD-0001'); r = await gc(u, [{ method: 'gift_card', code: 'good0001', amount: 100 }]);
+  { const rec = DOCS.get(recs()[0]) || {}; const sid = r.ok && r.result && r.result.saleId;
+    row('GC-01', 'valid card + sufficient balance', 'PASS', r.ok && bal('GOOD-0001') === 400 && sales().length === 1 && rec.saleId === sid && rec.merchantId === MERCHANT && rec.amount === 100 && rec.currency === 'KES' && rec.saleTotal === 100,
+      r.ok ? 'completed' : (r.message || r.code), 'payment record bound to sale/merchant/amount/KES', 'card 500 → 400', 'one sale'); }
+  { const sale = DOCS.get(sales()[0]) || {}; const pj = JSON.stringify(sale.payments || []) + JSON.stringify((r.result && r.result.receipt && r.result.receipt.payments) || []);
+    row('GC-01c', 'the sale and receipt carry no card code or PIN (last 4 + redemption id only)', 'no credential', !/good-?0001/i.test(pj.replace(/"codeLast4":"0001"/g, '')) && /"codeLast4":"0001"/.test(pj) && !/"pin"/.test(pj),
+      pj.slice(0, 120), 'sale.payments sanitised', '—', '—'); }
+  u = fresh(); card('LOW0-0002', { balance: 50, initialBalance: 50 }); r = await gc(u, [{ method: 'gift_card', code: 'LOW0-0002', amount: 100 }]);
+  row('GC-02', 'insufficient balance', 'REFUSE', refused('LOW0-0002', 'GIFT_CARD_BALANCE')(r), r.message || 'completed', 'none', 'card unchanged', 'no sale');
+  u = fresh(); card('INAC-0003', { status: 'inactive' }); r = await gc(u, [{ method: 'gift_card', code: 'INAC-0003', amount: 100 }]);
+  row('GC-03', 'inactive card', 'REFUSE', refused('INAC-0003', 'GIFT_CARD_NOT_ACTIVE')(r), r.message || 'completed', 'none', 'card unchanged', 'no sale');
+  u = fresh(); card('EXPD-0004', { expiryDate: PAST }); r = await gc(u, [{ method: 'gift_card', code: 'EXPD-0004', amount: 100 }]);
+  row('GC-04', 'expired card', 'REFUSE', refused('EXPD-0004', 'GIFT_CARD_EXPIRED')(r), r.message || 'completed', 'none', 'card unchanged', 'no sale');
+  u = fresh(); card('VOID-0005', { status: 'void' }); r = await gc(u, [{ method: 'gift_card', code: 'VOID-0005', amount: 100 }]);
+  row('GC-05', 'revoked card', 'REFUSE', refused('VOID-0005', 'GIFT_CARD_NOT_ACTIVE')(r), r.message || 'completed', 'none', 'card unchanged', 'no sale');
+  u = fresh(); r = await gc(u, [{ method: 'gift_card', code: 'NONE-0006', amount: 100 }]);
+  row('GC-06', 'nonexistent card', 'REFUSE', refused(null, 'GIFT_CARD_NOT_FOUND')(r), r.message || 'completed', 'none', 'none', 'no sale');
+  u = fresh(); card('OTHR-0007', { shopId: 'SHOP_B' }); r = await gc(u, [{ method: 'gift_card', code: 'OTHR-0007', amount: 100 }]);
+  row('GC-07', 'wrong merchant / context', 'REFUSE', refused('OTHR-0007', 'GIFT_CARD_OTHER_SHOP')(r), r.message || 'completed', 'none', 'card unchanged', 'no sale');
+  u = fresh(); card('WSAL-0008', { balance: 0, initialBalance: 0 });
+  DOCS.set('posGiftCardRedemptions/OTHER_SALE_WSAL-0008', { code: 'WSAL-0008', saleId: 'OTHER_SALE', merchantId: MERCHANT, amount: 100, currency: 'KES', status: 'captured' });
+  r = await gc(u, [{ method: 'gift_card', code: 'WSAL-0008', amount: 100, redemptionId: 'OTHER_SALE_WSAL-0008', ref: 'OTHER_SALE_WSAL-0008' }]);
+  row('GC-08', 'another sale\'s gift-card payment presented for this sale', 'REFUSE', !r.ok && r.reason === 'GIFT_CARD_BALANCE' && sales().length === 0 && bal('WSAL-0008') === 0, r.message || 'completed', 'no new record', 'none', 'no sale');
+  u = fresh(); card('AMNT-0009'); const r9a = await gc(u, [{ method: 'gift_card', code: 'AMNT-0009', amount: 99.5 }]); const r9b = await gc(u, [{ method: 'gift_card', code: 'AMNT-0009', amount: 110 }]);
+  row('GC-09', 'wrong amount (under by 0.50; over by 10)', 'REFUSE', !r9a.ok && r9a.reason === 'GIFT_CARD_AMOUNT' && !r9b.ok && /Only a cash payment can produce change/.test(r9b.message || '') && sales().length === 0 && bal('AMNT-0009') === 500, (r9a.message || 'ok') + ' | ' + (r9b.message || 'ok'), 'none', 'card unchanged', 'no sale');
+  u = fresh(); card('CURR-0010'); card('CURU-0011', { currency: 'USD' });
+  const r10a = await gc(u, [{ method: 'gift_card', code: 'CURR-0010', amount: 100, currency: 'USD' }]); const r10b = await gc(u, [{ method: 'gift_card', code: 'CURU-0011', amount: 100 }]);
+  row('GC-10', 'wrong currency (payment line USD; card USD)', 'REFUSE', !r10a.ok && r10a.reason === 'WRONG_CURRENCY' && !r10b.ok && r10b.reason === 'GIFT_CARD_CURRENCY' && sales().length === 0 && bal('CURR-0010') === 500 && bal('CURU-0011') === 500, (r10a.message || 'ok') + ' | ' + (r10b.message || 'ok'), 'none', 'cards unchanged', 'no sale');
+  u = fresh(); r = await gc(u, [{ method: 'gift_card', code: 'PAID-0012', amount: 100, paid: true, status: 'success', paymentVerified: true }]);
+  row('GC-11', 'browser says paid, server payment absent', 'REFUSE', refused(null, 'GIFT_CARD_NOT_FOUND')(r), r.message || 'completed', 'none', 'none', 'no sale');
+  u = fresh(); card('FBAL-0013', { balance: 50, initialBalance: 50 }); r = await gc(u, [{ method: 'gift_card', code: 'FBAL-0013', amount: 100, balance: 99999 }]);
+  row('GC-12', 'browser supplies a fake balance', 'REFUSE', refused('FBAL-0013', 'GIFT_CARD_BALANCE')(r), r.message || 'completed', 'none', 'card unchanged', 'no sale');
+  u = fresh(); r = await gc(u, [{ method: 'gift_card', amount: 100, ref: 'GCR_SUCCESS_123', redemptionId: 'GCR_SUCCESS_123', paid: true }]);
+  row('GC-13', 'browser supplies a fake successful reference (no card)', 'REFUSE', refused(null, 'GIFT_CARD_CODE_REQUIRED')(r), r.message || 'completed', 'none', 'none', 'no sale');
+  u = fresh(); card('DUPL-0014'); { const d = { idempotencyKey: 'IK_GC_DUP', payments: [{ method: 'gift_card', code: 'DUPL-0014', amount: 100 }] };
+    const a1 = await call(u, d); const a2 = await call(u, d);
+    row('GC-14', 'duplicate request (same key twice)', 'one payment only', a1.ok && bal('DUPL-0014') === 400 && recs().length === 1 && sales().length === 1 && (DOCS.get('giftCards/DUPL-0014').redemptions || []).length === 1,
+      'first ' + (a1.ok ? 'ok' : a1.message) + ', second ' + (a2.ok ? 'ok(replay)' : a2.message), 'one record', 'card debited once (400)', 'one sale'); }
+  u = fresh(); card('REPL-0015'); { const d = { idempotencyKey: 'IK_GC_REPLAY', payments: [{ method: 'gift_card', code: 'REPL-0015', amount: 100 }] };
+    const a1 = await call(u, d); const sk = sales()[0]; DOCS.delete(sk);                     /* the sale write is lost after the debit committed */
+    const a2 = await call(u, d);
+    row('GC-15', 'replay after the sale record was lost', 'no second deduction', a1.ok && bal('REPL-0015') === 400 && (DOCS.get('giftCards/REPL-0015').redemptions || []).length === 1 && recs().length === 1,
+      'replay ' + (a2.ok ? 'ok' : a2.message), 'record reused', 'card debited once (400)', a2.ok ? 'sale re-written' : 'sale not re-written'); }
+  /* GC-15b / GC-08b — the in-transaction redemption record, exercised directly. On this line the debit, the record and the
+     sale commit together, so "sale lost after the debit" cannot arise through the API; the record check is defence in
+     depth and is proven by seeding its precondition: a record at THIS sale's id, with no sale and no idempotency row. */
+  { const gk = (c) => require('crypto').createHash('sha256').update(String(c)).digest('hex').slice(0, 16);
+    u = fresh(); card('PRIO-0021'); const sid = ZF._saleIdFor(MERCHANT, 'IK_GC_PRIOR');
+    DOCS.set('posGiftCardRedemptions/' + sid + '_' + gk('PRIO-0021'), { code: 'PRIO-0021', saleId: sid, merchantId: MERCHANT, amount: 100, currency: 'KES', status: 'captured' });
+    r = await call(u, { idempotencyKey: 'IK_GC_PRIOR', payments: [{ method: 'gift_card', code: 'PRIO-0021', amount: 100 }] });
+    row('GC-15b', 'a redemption already recorded for this sale is not debited again', 'no second deduction', bal('PRIO-0021') === 500 && (DOCS.get('giftCards/PRIO-0021').redemptions || []).length === 0,
+      r.ok ? 'sale completed on the existing record' : (r.message || r.code), 'record reused', 'card unchanged (500)', r.ok ? 'one sale' : 'no sale');
+    u = fresh(); card('WREC-0022'); const sid2 = ZF._saleIdFor(MERCHANT, 'IK_GC_WREC');
+    DOCS.set('posGiftCardRedemptions/' + sid2 + '_' + gk('WREC-0022'), { code: 'WREC-0022', saleId: 'SOME_OTHER_SALE', merchantId: MERCHANT, amount: 100, currency: 'KES' });
+    r = await call(u, { idempotencyKey: 'IK_GC_WREC', payments: [{ method: 'gift_card', code: 'WREC-0022', amount: 100 }] });
+    row('GC-08b', 'a redemption record naming ANOTHER sale cannot pay this one', 'REFUSE', !r.ok && r.reason === 'GIFT_CARD_WRONG_SALE' && sales().length === 0 && bal('WREC-0022') === 500,
+      r.message || 'completed', 'none', 'card unchanged', 'no sale'); }
+  /* GC-16 is NOT counted: the in-memory stub has no transaction contention, so a pass here would be vacuous. */
+  ROWS.push(['GC-16', 'simultaneous redemption by two tills', 'cannot overspend', 'not run — needs Firestore transaction contention (emulator)', '—', '—', '—', 'UNPROVEN']);
+  console.log('  UNPROVEN GC-16 simultaneous redemption by two tills   [emulator only]');
+  u = fresh(); card('DONE-0017'); { const d = { idempotencyKey: 'IK_GC_DONE', payments: [{ method: 'gift_card', code: 'DONE-0017', amount: 100 }] };
+    await call(u, d); const before = JSON.stringify(DOCS.get(sales()[0])); const a2 = await call(u, d);
+    row('GC-17', 'sale already completed', 'no second completion', sales().length === 1 && JSON.stringify(DOCS.get(sales()[0])) === before && bal('DONE-0017') === 400,
+      a2.ok ? 'returned the existing sale' : a2.message, 'unchanged', 'card debited once', 'one sale, unchanged'); }
+  u = fresh(); card('EXCT-0018', { balance: 100, initialBalance: 100 }); r = await gc(u, [{ method: 'gift_card', code: 'EXCT-0018', amount: 100 }]);
+  row('GC-18', 'card balance exactly equals the sale', 'PASS', r.ok && bal('EXCT-0018') === 0 && DOCS.get('giftCards/EXCT-0018').status === 'redeemed' && sales().length === 1, r.ok ? 'completed' : r.message, 'record written', 'card 100 → 0 (redeemed)', 'one sale');
+  u = fresh(); card('UNDR-0019', { balance: 99.99, initialBalance: 99.99 }); r = await gc(u, [{ method: 'gift_card', code: 'UNDR-0019', amount: 100 }]);
+  row('GC-19', 'card balance one cent below the sale', 'REFUSE', refused('UNDR-0019', 'GIFT_CARD_BALANCE')(r), r.message || 'completed', 'none', 'card unchanged', 'no sale');
+  u = fresh(); card('FAIL-0020'); DOCS.set('products/P1', Object.assign({}, DOCS.get('products/P1'), { stock: 0 }));
+  r = await gc(u, [{ method: 'gift_card', code: 'FAIL-0020', amount: 100 }]);
+  row('GC-20', 'the sale fails after the card was checked (no stock)', 'nothing debited', !r.ok && /stock/i.test(r.message || '') && bal('FAIL-0020') === 500 && recs().length === 0 && sales().length === 0, r.message || 'completed', 'no record (one transaction)', 'card unchanged', 'no sale');
+  u = fresh(); r = await gc(u, [{ method: 'mpesa_till_manual', amount: 100, mpesaRef: 'QX12AB34CD' }]);
+  row('GC-X1', 'CONTROL: manual till code still refused (owner ruling)', 'REFUSE', !r.ok && sales().length === 0, r.message || 'completed', 'none', 'none', 'no sale');
+  u = fresh(); r = await gc(u, [{ method: 'cash', amount: 100 }]);
+  row('GC-X2', 'CONTROL: cash semantics unchanged', 'PASS', r.ok && sales().length === 1, r.ok ? 'completed' : r.message, 'sale', 'drawer', 'one sale');
+
+  console.log('\n  TEST  | EXPECTED | OBSERVED | DATABASE EFFECT | MONEY EFFECT | SALE EFFECT | RESULT');
+  for (const x of ROWS) console.log('  ' + [x[0] + ' ' + x[1], x[2], String(x[3]).slice(0, 70), x[4], x[5], x[6], x[7]].join(' | '));
 }
 
 console.log(`\n${pass} passed, ${fail} failed\n`);

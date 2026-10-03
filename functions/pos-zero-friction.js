@@ -32,8 +32,8 @@ function _sanitize(s) {
   return s.replace(/[<>"'&]/g, c => ({'<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;','&':'&amp;'}[c]));
 }
 
-function _e(msg, code='invalid-argument') {
-  throw new HttpsError(code, msg);
+function _e(msg, code='invalid-argument', details) {
+  throw details ? new HttpsError(code, msg, details) : new HttpsError(code, msg);
 }
 
 /* ══ 0b R1 — ONE SALE PER IDEMPOTENCY KEY, WHATEVER FAILS AFTERWARDS ═════════════════════
@@ -630,7 +630,9 @@ exports.posCompleteCheckout = onCall(cfgHeavy, async ({ data, auth }) => {
      (Census 2026-09-29: the only caller that newly fails is pos-checkout.html's gift card, whose "redemption" is
      device-local; production holds 0 gift cards. Stored value returns with its own server authority — step 10.)
      Placed after the dry-run return, so the side-effect-free preview is unchanged. */
-  const _TENDERS = { cash: 1, mpesa: 1, card: 1, wallet: 1 };
+  /* gift_card (owner P0 2026-10-03): its server authority now exists — the canonical giftCards/{code} is verified and
+     debited, with the posGiftCardRedemptions payment record, inside the sale's own transaction (3a below). */
+  const _TENDERS = { cash: 1, mpesa: 1, card: 1, wallet: 1, gift_card: 1 };
   for (const p of (Array.isArray(payments) ? payments : [])) {
     const m = String((p && p.method) || '').toLowerCase();
     if (!_TENDERS[m]) {
@@ -989,16 +991,39 @@ exports.posCompleteCheckout = onCall(cfgHeavy, async ({ data, auth }) => {
        counted toward the tendered total with no confirmation at all (e.g. 'bank', 'mpesa_till_manual',
        'gift_card') — a sale could complete on a payment nobody proved. Cash is the drawer's; M-PESA and card
        are confirmed below; wallet is debited inside the transaction. Anything else is refused. */
-    const SERVER_TENDERS = { cash: 1, mpesa: 1, card: 1, wallet: 1 };
+    /* gift_card (owner P0 2026-10-03, sokoni-5b): admitted ONLY together with its server authority below — the
+       canonical giftCards/{code} is verified and debited inside the sale's own transaction. mpesa_till_manual stays
+       refused (owner ruling 2026-10-03: a manual till code cannot complete a sale). */
+    const SERVER_TENDERS = { cash: 1, mpesa: 1, card: 1, wallet: 1, gift_card: 1 };
     for (const p of _pay) {
       const a = Number(p && p.amount);
       if (!isFinite(a) || a <= 0) _e('Every payment needs a positive amount');
       const m = String((p && p.method) || '').toLowerCase();
       if (!SERVER_TENDERS[m]) _e('This payment method (' + (m || 'none') + ') cannot settle a sale. Take cash or a confirmed M-PESA / card payment.');
+      if (p && p.currency !== undefined && p.currency !== null && String(p.currency).toUpperCase() !== 'KES') {
+        _e('Payments at the till are in KES only.', 'invalid-argument', { reason: 'WRONG_CURRENCY' });
+      }
     }
+    /* No bearer credential leaves this function: a gift card leg is stored with the last 4 of its code and its server
+       redemption id only; a PIN is never stored (sale, receipt). */
+    /* The redemption id must not carry the code (it is stored on the seller-readable sale): a one-way key instead. */
+    const _gcKey = (code) => require('crypto').createHash('sha256').update(String(code)).digest('hex').slice(0, 16);
+    const _gcNorm = (raw) => { const c = String(raw || '').replace(/[\s-]/g, '').toUpperCase(); return /^[A-Z0-9]{4,32}$/.test(c) ? c.match(/.{1,4}/g).join('-') : null; };
+    const _paymentsPublic = _pay.map((p) => {
+      const o = Object.assign({}, p); delete o.pin; delete o.balance; delete o.paid; delete o.status;
+      if (String(o.method || '').toLowerCase() === 'gift_card') {
+        const code = _gcNorm(o.code || o.ref); delete o.code; delete o.ref; delete o.reference;
+        o.codeLast4 = code ? code.replace(/-/g, '').slice(-4) : null;
+        o.redemptionId = code ? String(saleId) + '_' + _gcKey(code) : null;
+      }
+      return o;
+    });
     const tendered = _round2(_pay.reduce((s, p) => s + Number(p.amount || 0), 0));
     if (tendered + 1 < authoritativeTotal) {
       _e('The payment of ' + tendered + ' does not cover the sale total of ' + authoritativeTotal);
+    }
+    if (_pay.some((p) => String((p && p.method) || '').toLowerCase() === 'gift_card') && tendered < authoritativeTotal) {
+      _e('With a gift card the payment must cover the sale total of ' + authoritativeTotal + ' exactly.', 'invalid-argument', { reason: 'GIFT_CARD_AMOUNT' });
     }
     const cashTendered = _round2(_pay.filter((p) => p.method === 'cash')
       .reduce((s, p) => s + Number(p.amount || 0), 0));
@@ -1175,6 +1200,23 @@ exports.posCompleteCheckout = onCall(cfgHeavy, async ({ data, auth }) => {
        tenders, never a payment outcome. The sale carries it; the debt's rail and completion both read it. */
     const _saleRoute = await _collectionRouteFor(payments);
 
+    /* ── 3a. Gift cards (owner P0 2026-10-03). The browser's balance, "paid" flag and reference are ignored. Each card
+       is read from the canonical giftCards/{code} (pos-completeness shape) and debited in the transaction below;
+       the AUTHORITATIVE payment record is posGiftCardRedemptions/{saleId}_{code}, bound to this sale, merchant,
+       amount and KES. saleId is deterministic per (merchant, idempotencyKey), so a duplicate / replay / retry finds
+       the same record and debits nothing again. No second gift-card ledger: the card's balance + redemptions are it. */
+    const giftLegs = new Map();
+    for (const p of _pay) {
+      if (String((p && p.method) || '').toLowerCase() !== 'gift_card') continue;
+      const code = _gcNorm(p.code || p.ref);
+      if (!code) _e('Enter the gift card code.', 'invalid-argument', { reason: 'GIFT_CARD_CODE_REQUIRED' });
+      const prev = giftLegs.get(code);
+      giftLegs.set(code, { amount: _round2((prev ? prev.amount : 0) + Number(p.amount)), pin: (p.pin === undefined || p.pin === null) ? (prev ? prev.pin : null) : String(p.pin) });
+    }
+    const giftRefs = [...giftLegs.keys()].map((code) => ({ code,
+      card: db.collection('giftCards').doc(code),
+      rec:  db.collection('posGiftCardRedemptions').doc(String(saleId) + '_' + _gcKey(code)) }));
+
     /* ── 3b. Wallet payment pre-validation ── */
     const walletPayment = payments.find(p => p.method === 'wallet');
     let walletAmt = 0, walletTxRef = null, walletDocRef = null;
@@ -1226,7 +1268,7 @@ exports.posCompleteCheckout = onCall(cfgHeavy, async ({ data, auth }) => {
         name:  _sanitize(customer.name || 'Guest'),
         phone: _sanitize(customer.phone || ''),
       } : null,
-      payments,
+      payments: _paymentsPublic,
       couponCode:         couponCode ? _sanitize(couponCode) : null,
       couponDiscount,
       loyaltyRedeemed:    loyaltyRedeemPoints,
@@ -1276,7 +1318,7 @@ exports.posCompleteCheckout = onCall(cfgHeavy, async ({ data, auth }) => {
       discount:   totalDiscount,
       tax:        taxTotal,
       total:      authoritativeTotal,
-      payments,
+      payments: _paymentsPublic,
       loyaltyAwarded:  0,             /* set inside the transaction */
       loyaltyRedeemed: loyaltyRedeemPoints,
       customer:   customer?.name || 'Guest',
@@ -1370,6 +1412,7 @@ exports.posCompleteCheckout = onCall(cfgHeavy, async ({ data, auth }) => {
         _debtRefs ? txn.get(_debtRefs[1]) : Promise.resolve(null),
         ...productRefs.map(r => txn.get(r)),
       ]);
+      const giftSnaps = await Promise.all(giftRefs.map((g) => Promise.all([txn.get(g.card), txn.get(g.rec)])));
 
       /* 0b R1 — another attempt with this key committed first (a concurrent re-claim of a failed
          key). That sale stands; this attempt writes NOTHING — no stock, no wallet, no loyalty. */
@@ -1391,6 +1434,33 @@ exports.posCompleteCheckout = onCall(cfgHeavy, async ({ data, auth }) => {
         : _owners;
       /* Q0a — customer ownership re-checked on the transaction's own read. */
       if (custSnap && custSnap.exists) _assertCustomerOwned(custSnap, _txOwners);
+      /* Gift cards: real, this shop's, active, unexpired, KES, PIN-matched, funded — or nothing is written. */
+      const giftDebits = [];
+      giftRefs.forEach((g, i) => {
+        const [cSnap, rSnap] = giftSnaps[i];
+        if (rSnap.exists) {
+          const rr = rSnap.data() || {};
+          if (String(rr.saleId) !== String(saleId)) throw new HttpsError('failed-precondition', 'That gift card payment belongs to another sale.', { reason: 'GIFT_CARD_WRONG_SALE' });
+          return;                                                         /* this sale already redeemed it */
+        }
+        const want = giftLegs.get(g.code);
+        if (!cSnap.exists) throw new HttpsError('failed-precondition', 'That gift card was not found. Nothing has been charged.', { reason: 'GIFT_CARD_NOT_FOUND' });
+        const c = cSnap.data() || {};
+        const _shops = [merchantId, _provenBusinessId].filter(Boolean).map(String);
+        if (!_shops.includes(String(c.shopId || ''))) throw new HttpsError('failed-precondition', 'That gift card is not valid at this shop.', { reason: 'GIFT_CARD_OTHER_SHOP' });
+        if (c.status !== 'active') throw new HttpsError('failed-precondition', 'That gift card is ' + String(c.status || 'not active') + '.', { reason: 'GIFT_CARD_NOT_ACTIVE' });
+        if (c.currency && String(c.currency).toUpperCase() !== 'KES') throw new HttpsError('failed-precondition', 'That gift card is not in KES.', { reason: 'GIFT_CARD_CURRENCY' });
+        if (c.expiryDate && typeof c.expiryDate.toMillis === 'function' && c.expiryDate.toMillis() < Date.now()) {
+          throw new HttpsError('failed-precondition', 'That gift card has expired.', { reason: 'GIFT_CARD_EXPIRED' });
+        }
+        if (c.pin && String(c.pin) !== String(want.pin || '')) throw new HttpsError('permission-denied', 'The gift card PIN is wrong.', { reason: 'GIFT_CARD_PIN' });
+        const bal = Number(c.balance);
+        if (!isFinite(bal) || Math.round(bal * 100) < Math.round(want.amount * 100)) {
+          throw new HttpsError('failed-precondition', 'The gift card balance is KES ' + (isFinite(bal) ? bal : 0) + ', not enough for KES ' + want.amount + '.', { reason: 'GIFT_CARD_BALANCE' });
+        }
+        giftDebits.push({ g, amount: want.amount, newBalance: _round2(bal - want.amount) });
+      });
+
       /* Inventory: assert stock before deducting anything. */
       productSnaps.forEach((snap, i) => {
         const item = enrichedItems[i];
@@ -1407,6 +1477,14 @@ exports.posCompleteCheckout = onCall(cfgHeavy, async ({ data, auth }) => {
       });
 
       /* ── PHASE 3: ALL WRITES ── */
+      for (const d of giftDebits) {
+        txn.update(d.g.card, { balance: d.newBalance, status: d.newBalance <= 0 ? 'redeemed' : 'active',
+          redemptions: FieldValue.arrayUnion({ amount: d.amount, saleId: String(saleId), by: String(cashierId || (auth && auth.uid) || ''), at: new Date(now).toISOString() }),
+          updatedAt: FieldValue.serverTimestamp() });
+        txn.set(d.g.rec, { code: d.g.code, saleId: String(saleId), merchantId: String(merchantId), idempotencyKey: String(idempotencyKey),
+          amount: d.amount, currency: 'KES', saleTotal: authoritativeTotal, balanceAfter: d.newBalance, status: 'captured',
+          at: FieldValue.serverTimestamp() });
+      }
       if (doWalletDeduct) {
         txn.set(walletDocRef, {
           balance:   FieldValue.increment(-walletAmt),

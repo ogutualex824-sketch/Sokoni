@@ -37,8 +37,12 @@ ck('POS-09', 'not an IntaSend record → refused', own.assertConfirmableStk(inte
 ck('POS-10', 'SIMULATED_* is not an IntaSend prompt reference', own.isStkRef('SIMULATED_1791000000000') === false && own.isStkRef('postill_x') === true);
 
 const fn = src.slice(src.indexOf('exports.posCompleteCheckout'), src.indexOf('exports.posCompleteCheckout') + 60000);
-ck('POS-15a', 'closed tender list {cash, mpesa, card, wallet}; anything else refused before money is counted',
-  /const SERVER_TENDERS = \{ cash: 1, mpesa: 1, card: 1, wallet: 1 \};/.test(fn) && /if \(!SERVER_TENDERS\[m\]\) _e\(/.test(fn) && fn.indexOf('SERVER_TENDERS[m]') < fn.indexOf('const tendered ='));
+/* 2026-10-03 (owner P0, agreed sokoni-2f/sokoni-5b): gift_card joins the list ONLY with its server authority — the
+   canonical giftCards debit + posGiftCardRedemptions record in the sale's own transaction. mpesa_till_manual stays out. */
+ck('POS-15a', 'closed tender list {cash, mpesa, card, wallet, gift_card}; gift_card only WITH its in-transaction authority; anything else refused before money is counted',
+  /const SERVER_TENDERS = \{ cash: 1, mpesa: 1, card: 1, wallet: 1, gift_card: 1 \};/.test(fn)
+  && /collection\('giftCards'\)\.doc\(code\)/.test(fn) && /collection\('posGiftCardRedemptions'\)/.test(fn) && /txn\.update\(d\.g\.card, \{ balance: d\.newBalance/.test(fn)
+  && !/mpesa_till_manual: 1/.test(fn) &&/if \(!SERVER_TENDERS\[m\]\) _e\(/.test(fn) && fn.indexOf('SERVER_TENDERS[m]') < fn.indexOf('const tendered ='));
 ck('POS-15b', 'an M-PESA prompt reference can only settle an M-PESA line', /if \(_stk && method !== 'mpesa'\) _e\(/.test(fn));
 ck('POS-11', 'a confirmable line with no reference is refused', /if \(!ref\) \{\s*_e\(/.test(fn));
 ck('POS-05c', 'the confirmed (provider) amount must cover the line; an unreadable amount is refused', /const confirmedAmount = Number\(_confirm\.amount\);/.test(fn) && /!isFinite\(confirmedAmount\) \|\| confirmedAmount \+ 1 < Number\(p\.amount \|\| 0\)/.test(fn));
