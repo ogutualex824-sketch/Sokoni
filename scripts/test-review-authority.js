@@ -115,6 +115,12 @@ const ADM = { admin: true };
     ck('H-3', !h.ok && h.reason === 'NOT_ELIGIBLE', 'a CANCELLED viewing does not count', h);
     _c(); h = await call(RV.submitReview, 'buyer', { targetType: 'sports_venue', targetId: 'V1', rating: 5, body: 'Pitch was well kept and the lights worked' });
     ck('H-4', h.ok && h.r.status === 'pending' && (DOCS.get('reviews/buyer_sports_venue_V1') || {}).targetId === 'sports_venue_V1', 'a venue review with a booking in the caller\'s name is created PENDING', h);
+    DOCS.set('sportsVenueBookings/b3', { venueId: 'V3', uid: 'buyer', status: 'pending' });
+    _c(); h = await call(RV.submitReview, 'buyer', { targetType: 'sports_venue', targetId: 'V3', rating: 5, body: 'Good changing rooms and fair pricing',
+      authorUid: 'venueOwner', reviewerName: 'Forged Name', name: 'Forged', author: 'Forged', status: 'approved', approved: true, published: true });
+    const vd = DOCS.get('reviews/buyer_sports_venue_V3') || {};
+    ck('H-4b', h.ok && vd.status === 'pending' && vd.authorUid === 'buyer' && !('reviewerName' in vd) && !('name' in vd) && !('author' in vd) && !('approved' in vd) && !('published' in vd),
+      'a VENUE review with forged authorUid / name / status / approved / published is stored PENDING, authored by the CALLER, forged fields dropped', { h, vd });
     _c(); h = await call(RV.submitReview, 'stranger', { targetType: 'sports_venue', targetId: 'V1', rating: 1, body: 'booked a different venue, reviewing this one' });
     ck('H-5', !h.ok && h.reason === 'NOT_ELIGIBLE', 'a booking for ANOTHER venue does not count', h);
     _c(); h = await call(RV.submitReview, 'buyer', { targetType: 'property', targetId: 'L1', rating: 5, body: 'second review of the same house today' });
@@ -136,6 +142,11 @@ const ADM = { admin: true };
       'APPROVED by AdminOS → public via getReviews (server display name, no uid) and counted in ratingsSummary/property_L1', { g: g.ok ? g.r : g, sum });
     const pg = await call(RV.getReviews, null, { targetId: 'L1' });
     ck('H-11', pg.ok && pg.r.reviews.length === 0 && !DOCS.has('ratingsSummary/L1'), 'a PRODUCT with the same id never shows or counts the property\'s review (no namespace collision)', pg.ok ? pg.r : pg);
+    h = await call(RV.adminModerateReview, 'admin1', { reviewId: 'buyer_sports_venue_V1', action: 'reject', note: 'not about the venue' }, ADM);
+    const rj = await call(RV.getReviews, null, { targetType: 'sports_venue', targetId: 'V1' });
+    const rs = DOCS.get('ratingsSummary/sports_venue_V1');
+    ck('A-04', h.ok && h.r.status === 'rejected' && DOCS.get('reviews/buyer_sports_venue_V1').status === 'rejected' && rj.ok && rj.r.reviews.length === 0 && (!rs || rs.count === 0),
+      'an explicit REJECT leaves the review unpublished: absent from getReviews and not counted in ratingsSummary', { h, rj: rj.ok ? rj.r : rj, rs });
     _c(); h = await call(RV.submitReview, 'buyer', { targetType: 'bnb', targetId: 'b001', rating: 5, body: 'a stay type that has no authority yet' });
     ck('H-12', !h.ok && h.reason === 'UNSUPPORTED_TARGET', 'an unsupported hub type is refused, not stored', h);
   }
@@ -195,6 +206,14 @@ const ADM = { admin: true };
     const ul = await call(RV.adminModerateReview, 'admin1', { kind: 'unboxing', reviewId: 'legacy1', action: 'approve' }, ADM);
     ck('U-13', ul.ok && !FILES.has('sk.appspot.com/unboxing/stranger/s1.webp') && (DOCS.get('unboxingReviews/legacy1').publicImages || []).length === 0,
       'approving a post never publishes a photo from ANOTHER user\'s quarantine folder', { ul, d: DOCS.get('unboxingReviews/legacy1') });
+    DOCS.set('orders/o9', { buyerUid: 'buyer', status: 'delivered', paymentVerified: true, sellerUid: 'seller1', items: [{ productId: 'p3' }] });
+    DOCS.set('products/p3', { sellerUid: 'seller1' });
+    FILES.add('sk.appspot.com/unboxing-pending/buyer/box3.webp');
+    _clr(); const ur = await call(RV.submitUnboxing, 'buyer', { orderId: 'o9', productId: 'p3', rating: 2, comment: 'box was crushed on arrival, sadly', images: [IMG.replace('box1', 'box3')] });
+    const urj = await call(RV.adminModerateReview, 'admin1', { kind: 'unboxing', reviewId: 'buyer_p3', action: 'reject', note: 'photo shows another item' }, ADM);
+    const ud3 = DOCS.get('unboxingReviews/buyer_p3') || {};
+    ck('A-04u', ur.ok && urj.ok && ud3.status === 'rejected' && !FILES.has('sk.appspot.com/unboxing/buyer/box3.webp') && !(ud3.publicImages || []).length,
+      'an explicit REJECT of an unboxing post publishes nothing: no public photo copy, no public URL', { ur, urj, ud3 });
   } else { ck('U-0', false, 'submitUnboxing exists'); }
 
   console.log('\nRESULT: ' + pass + ' passed, ' + fail + ' failed');

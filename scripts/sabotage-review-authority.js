@@ -18,6 +18,10 @@ const M = [
   ['failed copy publishes private URLs', 'return await ref.update({ publicImages: [], photoCopyFailed: true })', 'return await ref.update({ publicImages: r.images, photoCopyFailed: true })', 'U-12'],
   ['public copy kept after removal', 'await storage.bucket(bp.slice(0, i)).file(bp.slice(i + 1)).delete().catch(() => {});', 'void i;', 'U-11'],
   ["another user's file copied", "if (!o || o.uid !== String(r.uid || '')) continue;", 'if (!o) continue;', 'U-13'],
+  ['browser authorUid honoured', '    authorUid:  uid,', '    authorUid:  (req.data && req.data.authorUid) || uid,', 'H-4b'],
+  ['rejected review served publicly', '    .where("status", "==", "approved");\n', '    ;\n', 'A-04'],
+  ['reject publishes photos', 'kind === "unboxing" && (res.status === "approved" || res.from === "approved")) {\n    photos = await _syncUnboxingPhotos(db, admin.storage(), String(d.reviewId), res.status === "approved");',
+    'kind === "unboxing") {\n    photos = await _syncUnboxingPhotos(db, admin.storage(), String(d.reviewId), res.status !== "removed");', 'A-04u'],
 ];
 const rows = [];
 try {
