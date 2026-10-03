@@ -11650,6 +11650,7 @@ exports.reviewCourse          = education.reviewCourse;
 exports.createCourse          = education.createCourse;
 exports.getMyEnrollments      = education.getMyEnrollments;
 exports.publishCourse         = education.publishCourse;
+exports.manageMyCourses       = education.manageMyCourses;
 /* Education (owner 2026-10-03): the learner profile + guardian links, and the ONE Education capability answer (E2). */
 exports.educationLearner      = require('./education-learner').educationLearner;
 exports.educationWorkspace    = require('./education-workspace').educationWorkspace;

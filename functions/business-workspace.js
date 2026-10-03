@@ -112,7 +112,8 @@ const MODULES = Object.freeze({
   /* EDUCATION E2 (sokoni-5b, owner 2026-10-03): teacher / institution modules on THIS dashboard, chosen by the
      server-stamped providers/{uid}.education.type (application-lifecycle, from the application category — never a
      client field). Each screen is an E2 build; until it ships it is NOT_IMPLEMENTED, never shown as working. */
-  eduCourses:        { label: 'Courses',             section: 'educourses',        implemented: false, why: 'EDUCATION_E2_PENDING' },
+  /* E2 courses slice: the owner course workspace (manageMyCourses + the Courses panel) is built. */
+  eduCourses:        { label: 'Courses',             section: 'educourses',        implemented: true },
   eduLessons:        { label: 'Lessons',             section: 'edulessons',        implemented: false, why: 'EDUCATION_E2_PENDING' },
   eduLearners:       { label: 'Learners',            section: 'edulearners',       implemented: false, why: 'EDUCATION_E2_PENDING' },
   eduClasses:        { label: 'Classes',             section: 'educlasses',        implemented: false, why: 'EDUCATION_E2_PENDING' },
