@@ -12,6 +12,10 @@
      NC-b  provider approval check skipped                → C6  provider not approved / suspended
      NC-c  single-flight claim dropped                    → C10 double call idempotent
      NC-d  pricer re-reads the OFFER at pay time (2f)     → C12 offer edit after creation changes nothing
+     NC-e  reuse ignores payBy                            → C16 reuse never returns an expired membership
+     NC-f  payBy not written                              → C15 payBy set server-side
+
+   Rows C12/C13 run on the REAL clock (payment-purposes' payBy check reads Date.now(), 2f df88d4b S3).
 
    Run: NODE_PATH=<functions/node_modules> NODE_OPTIONS=--require <block-admin.js> node scripts/test-fitness-membership-create.js
    ============================================================================ */
@@ -123,7 +127,7 @@ const seedBase = (svcOver, extra) => Object.assign({
 }, extra || {});
 const AUTH = (uid) => ({ uid, token: { uid } });
 const req = (uid, data) => ({ auth: uid ? AUTH(uid) : null, data });
-const EXPECTED_KEYS = ['buyerUid', 'category', 'createdAt', 'paymentStatus', 'periodCount', 'periodUnit', 'priceCents', 'providerId', 'serviceId', 'startAt', 'status', 'title'];
+const EXPECTED_KEYS = ['buyerUid', 'category', 'createdAt', 'payBy', 'paymentStatus', 'periodCount', 'periodUnit', 'priceCents', 'providerId', 'serviceId', 'startAt', 'status', 'title'];
 
 function harness (FMC, seed, opts) {
   const o = opts || {};
@@ -219,11 +223,12 @@ async function matrix (FMC, PP) {
   /* C9 */
   { const h = harness(FMC, seedBase());
     const r = await create(FMC, 'member_1', { serviceId: SVC, priceCents: 100, price: 100, periodCount: 60, periodUnit: 'day', providerId: 'gym_B',
-      buyerUid: 'member_9', title: 'Free', status: 'active', paymentStatus: 'paid_held', startAt: '2020-01-01T00:00:00.000Z', category: 'x' });
+      buyerUid: 'member_9', title: 'Free', status: 'active', paymentStatus: 'paid_held', startAt: '2020-01-01T00:00:00.000Z', category: 'x', payBy: '2099-01-01T00:00:00.000Z', requestedStartAt: '2099-01-01T00:00:00.000Z' });
     const m = r.ok && h.get('providerMemberships/' + r.r.membershipId);
-    ck('C9 client-supplied priceCents / periodCount / periodUnit / providerId / buyerUid / title / status / startAt ignored',
+    ck('C9 client-supplied priceCents / periodCount / periodUnit / providerId / buyerUid / title / status / startAt / payBy / requestedStartAt ignored',
       !!m && m.priceCents === 600000 && m.periodCount === 3 && m.periodUnit === 'month' && m.providerId === 'gym_A' && m.buyerUid === 'member_1'
       && m.title === 'Gold 3-month' && m.status === 'pending_payment' && m.paymentStatus === 'pending' && m.startAt === NOW.toISOString() && m.category === 'fitness'
+      && m.payBy === new Date(NOW.getTime() + 5 * 60 * 1000).toISOString() && !('requestedStartAt' in m)
       && r.r.priceCents === 600000, m || r.reason); }
 
   /* C10 */
@@ -256,12 +261,12 @@ async function matrix (FMC, PP) {
     const m = h.get('providerMemberships/' + r.r.membershipId) || {};
     const keys = Object.keys(m).sort();
     const resKeys = Object.keys(r.r).sort().join();
-    ck('C11 created doc shape EXACT (create contract v2 + serviceId + createdAt): no fee/deposit/commission/attendance/settlement fields',
+    ck('C11 created doc shape EXACT (create contract v2 + serviceId + createdAt + payBy): no fee/deposit/commission/attendance/settlement fields, no requestedStartAt (2f writes it at payment)',
       keys.join() === EXPECTED_KEYS.join() && Number.isInteger(m.priceCents) && m.serviceId === SVC && m.createdAt === 'TS'
-      && resKeys === 'membershipId,periodCount,periodUnit,priceCents,reused,title', { keys, resKeys }); }
+      && resKeys === 'membershipId,payBy,periodCount,periodUnit,priceCents,reused,title', { keys, resKeys }); }
 
   /* C12 — SNAPSHOT (2f): an offer edit after creation changes neither the membership nor what the purpose charges */
-  { const h = harness(FMC, seedBase());
+  { const h = harness(FMC, seedBase(), { now: new Date() });
     const r = await create(FMC, 'member_1', { serviceId: SVC });
     const P = 'providerMemberships/' + r.r.membershipId;
     const before = JSON.stringify(h.get(P));
@@ -271,27 +276,27 @@ async function matrix (FMC, PP) {
     ck('C12 offer edit after creation (price → KES 1, months → 12) changes NEITHER the membership doc NOR the amount fitness_membership charges',
       before === after && q.ok && q.r.amountCents === 600000 && q.r.amount === 6000 && q.r.metadata.periodCount === 3, { same: before === after, q: q.ok ? q.r.amountCents : q.msg }); }
 
-  /* C13 — end to end */
-  { const h = harness(FMC, seedBase());
+  /* C13 — end to end (real clock: the purpose's payBy check and 2f's start-at-payment both read "now") */
+  { const RT = new Date(); const h = harness(FMC, seedBase(), { now: RT });
     const r = await create(FMC, 'member_1', { serviceId: SVC });
     const id = r.r.membershipId; const P = 'providerMemberships/' + id;
     const q = await attempt(() => PP.priceFor('fitness_membership', 'member_1', { membershipId: id }));
     const wrongBuyer = await attempt(() => PP.priceFor('fitness_membership', 'member_2', { membershipId: id }));
-    MS._test.use({ db: h.db, ts: () => 'MSTS', inc: h.db._inc, tsFromDate: (d) => d.toISOString() });
+    MS._test.use({ db: h.db, ts: () => 'MSTS', inc: h.db._inc, tsFromDate: (d) => d.toISOString(), now: () => RT, notify: async () => null });
     /* the intent createPaymentIntent would persist from this quote; then 2f's REAL webhook hold (initialSettlementFields inside) */
     h.db._docs.set('paymentIntents/int_1', { uid: 'member_1', purpose: 'fitness_membership', resourceType: q.ok ? q.r.resourceType : null, resourceId: id, amountCents: q.ok ? q.r.amountCents : 0, currency: 'KES' });
     const held = await MS.holdMembershipPayment(h.db, null, 'API_TEST', 'int_1', q.ok ? q.r.amount : 0);
     const mh = h.get(P);
     const holdOk = held === true && mh.paymentStatus === 'paid_held' && mh.status === 'active' && mh.heldCents === 600000 && mh.releasedPeriods === 0;
     let tsN = 0; const released = [];
-    FA._test.use({ db: h.db, ts: () => 'FTS#' + (++tsN), now: () => new Date(NOW.getTime() + 86400000), correlationId: () => 'cid', release: async (x) => { released.push(x); }, staffAuthority: null });
+    FA._test.use({ db: h.db, ts: () => 'FTS#' + (++tsN), now: () => new Date(RT.getTime() + 86400000), correlationId: () => 'cid', release: async (x) => { released.push(x); }, staffAuthority: null, notify: async () => null });
     const tok = (await FA._h.membershipQrHandler(req('member_1', { membershipId: id }))).token;
     const ci = await attempt(() => FA._h.checkInHandler(req('gym_A', { token: tok })));
     const m = h.get(P);
     ck('C13 end to end: create → 2f pricer charges the snapshot (KES 6,000, buyer-bound) → 2f webhook hold (paid_held + initialSettlementFields) → QR check-in records attendance and locks refund',
       holdOk && q.ok && q.r.amountCents === 600000 && q.r.resourceType === 'providerMembership' && q.r.resourceId === id && wrongBuyer.code === 'permission-denied'
       && ci.ok && ci.r.firstCheckIn === true && m.attendedSessions === 1 && m.refundEligible === false && !!m.firstAttendedAt && m.status === 'active'
-      && released[0] === id && MS.refundDecision(m, NOW).code === 'used',
+      && released[0] === id && MS.refundDecision(m, new Date(RT.getTime() + 86400000)).code === 'used' && m.requestedStartAt === RT.toISOString(),
       { holdOk, q: q.ok ? q.r : q.msg, wrongBuyer: wrongBuyer.code, ci: ci.ok ? ci.r : ci.reason, m }); }
 
   /* C14 — writer hook (for sokoni-5b's providerDispatch release; pure) */
@@ -315,6 +320,41 @@ async function matrix (FMC, PP) {
       && u1.reason === 'bad_price' && u2.ok && u3.ok && u3p.priceType === 'fixed' && dup.ok && dupOut.serviceKind === 'membership' && dupOut.periodCount === 3,
       { c1, c2: c2.v, c3: c3.v, c4: c4.v, c5: c5.v, u1, u2, u3p, dupOut }); }
 
+  /* C15 — payBy (2f df88d4b S3: the purpose refuses a NEW intent once payBy has passed; this path must set it) */
+  { const h = harness(FMC, seedBase());
+    const r = await create(FMC, 'member_1', { serviceId: SVC, payBy: '2099-01-01T00:00:00.000Z' });
+    const m = r.ok ? h.get('providerMemberships/' + r.r.membershipId) : {};
+    const want = new Date(NOW.getTime() + FMC.PAY_BY_MS).toISOString();
+    /* end to end with 2f's purpose: NOW is in the past, so this membership's payBy has passed on the real clock */
+    const q = await attempt(() => PP.priceFor('fitness_membership', 'member_1', { membershipId: r.r.membershipId }));
+    ck('C15 payBy set SERVER-side = creation + PAY_BY_MS (client payBy ignored), returned to the client; 2f purpose refuses a new intent after it',
+      r.ok && m.payBy === want && r.r.payBy === want && FMC.PAY_BY_MS === 5 * 60 * 1000 && !q.ok && q.code === 'failed-precondition' && /expired/i.test(q.msg || ''),
+      { payBy: m.payBy, res: r.r && r.r.payBy, q: q.ok ? q.r : [q.code, q.msg] }); }
+
+  /* C16 — the 30-min double-tap reuse window never outlives payBy */
+  { const h = harness(FMC, seedBase());
+    const a = await create(FMC, 'member_1', { serviceId: SVC });
+    h.setNow(new Date(NOW.getTime() + FMC.PAY_BY_MS - 1));
+    const inside = await create(FMC, 'member_1', { serviceId: SVC });
+    h.setNow(new Date(NOW.getTime() + FMC.PAY_BY_MS));          /* exactly payBy: expired */
+    const atPayBy = await create(FMC, 'member_1', { serviceId: SVC });
+    const hn = harness(FMC, seedBase());
+    const b = await create(FMC, 'member_1', { serviceId: SVC });
+    const P = 'providerMemberships/' + b.r.membershipId;
+    const legacy = Object.assign({}, hn.get(P)); delete legacy.payBy; hn.db._docs.set(P, legacy);   /* a record without payBy */
+    const noPayBy = await create(FMC, 'member_1', { serviceId: SVC });
+    ck('C16 reuse never returns an expired membership: reused 1 ms before payBy; a NEW one at payBy (well inside 30 min); a record with no payBy is never reused',
+      a.ok && inside.ok && inside.r.reused === true && inside.r.membershipId === a.r.membershipId
+      && atPayBy.ok && atPayBy.r.reused === false && atPayBy.r.membershipId !== a.r.membershipId && noPayBy.ok && noPayBy.r.reused === false,
+      { inside: inside.r, atPayBy: atPayBy.r, noPayBy: noPayBy.r }); }
+
+  /* C17 — PAY_BY_MS is the booking hold window (booking-service.js HOLD_MS is not exported → the VALUE is pinned) */
+  { const bs = fs.readFileSync(path.join(FN, 'booking-service.js'), 'utf8');
+    const mm = /const HOLD_MS = ([0-9 *]+);/.exec(bs);
+    const hold = mm ? Function('return (' + mm[1] + ')')() : null;
+    ck('C17 PAY_BY_MS equals booking-service.js HOLD_MS (the platform pre-payment hold window) — drift fails here',
+      hold != null && hold === FMC.PAY_BY_MS, { hold, payBy: FMC.PAY_BY_MS }); }
+
   return rows;
 }
 
@@ -330,6 +370,10 @@ const MUTANTS = [
   { tag: 'd', row: 'C12', what: 'fitness_membership pricer re-reads the OFFER at pay time', file: 'pp',
     from: 'const cents = Number(m.priceCents);',
     to: "const cents = Number(((await db().collection('providerServices').doc(String(m.serviceId)).get()).data() || {}).price);" },
+  { tag: 'e', row: 'C16', what: 'reuse ignores payBy', file: 'fmc',
+    from: '&& now.getTime() < _ms(prior.m.payBy)) {', to: ') {' },
+  { tag: 'f', row: 'C15', what: 'payBy not written', file: 'fmc',
+    from: 'startAt: _tsFromDate(now), payBy: _tsFromDate(new Date(now.getTime() + PAY_BY_MS)),', to: 'startAt: _tsFromDate(now),' },
 ];
 
 (async () => {

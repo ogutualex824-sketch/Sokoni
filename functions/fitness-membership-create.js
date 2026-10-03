@@ -21,11 +21,16 @@
    and are IMMUTABLE on the membership. payment-purposes.fitness_membership prices from the membership doc and never
    re-reads the offer; a later edit of the offer never changes a membership already created (booking snapshot rule).
 
-   startAt = SERVER time at creation (purchase time). The months run from here — not from payment, not from the first
-   visit — unless the owner decides otherwise. A pending membership older than 30 min is abandoned (never activated
-   without a verified webhook); the next attempt creates a fresh one with a fresh startAt.
+   startAt = SERVER time at creation = the REQUESTED start. sokoni-2f (df88d4b §13.2) moves it to the PAYMENT time in
+   holdMembershipPayment unless it lies in the future, and keeps this value as requestedStartAt — this path never
+   writes requestedStartAt and never fights 2f's field.
+   payBy = creation + PAY_BY_MS. payment-purposes.fitness_membership refuses a NEW intent after payBy (2f, S3); a
+   payment already in flight is honoured. PAY_BY_MS is the platform's pre-payment hold window: booking-service.js
+   HOLD_MS (5 min) — not exported there, so the VALUE is reused and pinned to that source line by
+   scripts/test-fitness-membership-create.js (C17), which fails if the two drift. A pending membership is reused for a
+   double tap only while BOTH < 30 min since the claim AND before its payBy — reuse never returns an expired one.
 
-   NEVER from the client: price, priceCents, periodCount, periodUnit, providerId, buyerUid, title, status, startAt.
+   NEVER from the client: price, priceCents, periodCount, periodUnit, providerId, buyerUid, title, status, startAt, payBy.
    The only input is serviceId.
    ============================================================================ */
 'use strict';
@@ -39,6 +44,7 @@ const OFFER = require('./shared/membership-offer');
 const COL = 'providerMemberships';
 const CLAIMS = 'fitnessMembershipClaims';
 const PENDING_REUSE_MS = 30 * 60 * 1000;
+const PAY_BY_MS = 5 * 60 * 1000;          /* = booking-service.js HOLD_MS (source-pinned in the suite) */
 const SERVICE_ID_RE = /^[A-Za-z0-9_-]{1,128}$/;
 const ACTIVE_PROVIDER_STATES = Object.freeze(['active', 'approved']);   /* booking-service.bookingCreateService */
 const FITNESS_CATEGORY = 'fitness_studio';
@@ -50,6 +56,9 @@ const _ts = () => (_hooks.ts ? _hooks.ts() : admin.firestore.FieldValue.serverTi
 const _now = () => (_hooks.now ? _hooks.now() : new Date());
 const _tsFromDate = (d) => (_hooks.tsFromDate ? _hooks.tsFromDate(d) : admin.firestore.Timestamp.fromDate(d));
 const _newId = () => (_hooks.newId ? _hooks.newId() : _db().collection(COL).doc().id);
+
+/* Timestamp | Date | ISO → epoch ms; missing/unreadable → 0 (so a record without payBy is never reused). */
+const _ms = (v) => { if (!v) return 0; if (typeof v.toMillis === 'function') return v.toMillis(); const t = new Date(v instanceof Date ? v.getTime() : v).getTime(); return Number.isFinite(t) ? t : 0; };
 
 const _claimId = (buyerUid, serviceId) => 'fmc_' + crypto.createHash('sha256').update(buyerUid + '|' + serviceId).digest('hex').slice(0, 40);
 
@@ -95,14 +104,16 @@ async function createMembershipHandler(req) {
         if (ps.exists) prior = { id: ps.id, m: ps.data(), at: Number(cs.data().claimedAtMs) || 0 };
       }
       if (prior && prior.m.buyerUid === uid && prior.m.serviceId === serviceId && prior.m.status === 'pending_payment'
-          && prior.m.paymentStatus === 'pending' && now.getTime() - prior.at < PENDING_REUSE_MS) {
+          && prior.m.paymentStatus === 'pending' && now.getTime() - prior.at < PENDING_REUSE_MS
+          && now.getTime() < _ms(prior.m.payBy)) {
         out = { membershipId: prior.id, reused: true, m: prior.m };
         return;
       }
       const membershipId = _newId();
       const doc = {
         providerId: offer.providerId, buyerUid: uid, priceCents: offer.priceCents, periodCount: offer.periodCount,
-        periodUnit: offer.periodUnit, startAt: _tsFromDate(now), category: 'fitness', title: offer.title,
+        periodUnit: offer.periodUnit, startAt: _tsFromDate(now), payBy: _tsFromDate(new Date(now.getTime() + PAY_BY_MS)),
+        category: 'fitness', title: offer.title,
         paymentStatus: 'pending', status: 'pending_payment', serviceId, createdAt: _ts(),
       };
       t.create(_db().collection(COL).doc(membershipId), doc);
@@ -117,13 +128,13 @@ async function createMembershipHandler(req) {
   }
   logger.info('[fitness-membership] create', { membershipId: out.membershipId, serviceId, providerId: offer.providerId, reused: out.reused });
   return { membershipId: out.membershipId, reused: out.reused, priceCents: out.m.priceCents, periodCount: out.m.periodCount,
-           periodUnit: out.m.periodUnit, title: out.m.title };
+           periodUnit: out.m.periodUnit, title: out.m.title, payBy: _ms(out.m.payBy) ? new Date(_ms(out.m.payBy)).toISOString() : null };
 }
 
 const fitnessCreateMembership = onCall({ region: 'us-central1', enforceAppCheck: true, maxInstances: 20 }, createMembershipHandler);
 
 module.exports = {
-  fitnessCreateMembership, providerRefusal, PENDING_REUSE_MS, COL, CLAIMS,
+  fitnessCreateMembership, providerRefusal, PENDING_REUSE_MS, PAY_BY_MS, COL, CLAIMS,
   _h: { createMembershipHandler },
   _test: { use: (h) => Object.assign(_hooks, h || {}), claimId: _claimId },
 };
