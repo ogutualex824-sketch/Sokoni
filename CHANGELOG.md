@@ -1,3 +1,8 @@
+## 2026-10-03 — Sports commission: explicit venue booking / coaching / tournament entry rows at 5% (NOT deployed)
+
+- **Change:** commission-config sports_* rows + aliases; venue/coaching flat bookings; policy version 2026-10-03.sports; client snapshot rebuilt.
+- **Tests:** test-sports-commercial 4/0.
+
 ## 2026-10-03 — Receipts: buyer/provider history + reconciliation for quote-originated bookings, holds without payment, wallet mismatches (NOT deployed)
 
 - **History:** myTransactionReceipts returns each receipt's own events (b2's request).

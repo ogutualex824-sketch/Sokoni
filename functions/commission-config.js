@@ -99,6 +99,12 @@ const RATES = {
   /* Owner 2026-10-03 (via sokoni-5b): 5% per sale, paid by the teacher / institution, never added on top for the learner — the Home Services model. */
   /* Owner 2026-10-03: phones / laptops / electronics sales carry an EXPLICIT 15% (the marketplace rate) — they used to
      match no row and fall silently to the 5% default. Own row so reports, promotions and AdminOS can see electronics. */
+  /* SPORTS (owner 2026-10-03): every Sports revenue stream is an EXPLICIT row — never a fallback.
+     Venue bookings and coaching are service bookings (flat 5%, no plan moves them); a tournament entry fee is 5% like an
+     event ticket. Sports promotion / featured listings / subscriptions are platform revenue through their own products. */
+  sports_venue_bookings:   { pct: 5, fixedKES: 0, _was: 'new 2026-10-03 — owner: venue bookings 5% (flat booking lane)' },
+  sports_coaching:         { pct: 5, fixedKES: 0, _was: 'new 2026-10-03 — owner: coaching 5% (flat booking lane)' },
+  sports_tournament_entry: { pct: 5, fixedKES: 0, _was: 'new 2026-10-03 — owner: tournament entry fees 5% (like event tickets)' },
   electronics:      { pct: 15,  fixedKES: 0,    _was: 'no row — fell to the 5% default (phones / laptops / electronics labels)' },
   education:        { pct: 5,   fixedKES: 0,    _was: "15% 'category only' (never owner-set)" },
   /* Owner 2026-10-03 (via sokoni-f3): Jobs carries NO commission — applications are free; SOKONI earns only from employer
@@ -167,7 +173,11 @@ const ALIASES = {
   property_agent: 'property',
   bnb: 'hotel',
   car_dealer: 'vehicles', car_hub: 'vehicles',
+  /* 'sports' stays → events: a sports EVENT TICKET is an event ticket. Sports server code never passes bare 'sports' — it
+     names sports_venue_bookings / sports_coaching / sports_tournament_entry explicitly (test-sports-commercial S3). */
   entertainment: 'events', sports: 'events',
+  sports_venue: 'sports_venue_bookings', venue_booking: 'sports_venue_bookings', coaching: 'sports_coaching', coach_booking: 'sports_coaching',
+  tournament_entry: 'sports_tournament_entry', tournament: 'sports_tournament_entry',
   /* Electronics retail (owner 2026-10-03). Device accessories are ELECTRONICS taxonomy, never fashion accessories. */
   phones: 'electronics', phone: 'electronics', smartphones: 'electronics', laptops: 'electronics', laptop: 'electronics',
   tablets: 'electronics', tablet: 'electronics', computers: 'electronics', device_accessories: 'electronics',
@@ -182,7 +192,7 @@ const MIN_COMMISSION_KES = 10;
 
 /* The commercial policy version a commission was priced under — recorded on every ledger row with the resolved category,
    so "order → category → policy version → commission → seller net" is reproducible. Bump on ANY rate/alias change. */
-const COMMISSION_POLICY_VERSION = '2026-10-03.electronics';
+const COMMISSION_POLICY_VERSION = '2026-10-03.sports';
 
 /* ══════════════════════════════════════════════════════════════════════════════════════════
    SUBSCRIPTION PLAN ADJUSTMENTS — CAPABILITY SHIPPED, POLICY OFF
@@ -253,7 +263,7 @@ const PLAN_ADJUSTMENTS_DOC = 'plan_adjustments';   /* revenueConfig/plan_adjustm
    must never move these rates — not the provider ladder, and not a seller-plan discount (features.commission_discount_pct
    / revenueConfig/plan_adjustments) if that rollout is ever switched on. finos-utils skips the plan step for them and
    records planSkipped 'flat_booking_rate'. */
-const FLAT_BOOKING_CATEGORIES = Object.freeze(['services', 'home_services', 'car_rental', 'healthcare', 'entertainment_bookings', 'fitness', 'education']);   /* education: owner 2026-10-03, flat 5% */
+const FLAT_BOOKING_CATEGORIES = Object.freeze(['services', 'home_services', 'car_rental', 'healthcare', 'entertainment_bookings', 'fitness', 'education', 'sports_venue_bookings', 'sports_coaching']);   /* sports bookings: owner 2026-10-03 */   /* education: owner 2026-10-03, flat 5% */
 function isFlatBookingCategory(key) {
   const r = resolveRate(key);
   return r.matched === true && FLAT_BOOKING_CATEGORIES.indexOf(r.category) !== -1;

@@ -91,6 +91,18 @@
       "pct": 5,
       "fixedKES": 0
     },
+    "sports_venue_bookings": {
+      "pct": 5,
+      "fixedKES": 0
+    },
+    "sports_coaching": {
+      "pct": 5,
+      "fixedKES": 0
+    },
+    "sports_tournament_entry": {
+      "pct": 5,
+      "fixedKES": 0
+    },
     "electronics": {
       "pct": 15,
       "fixedKES": 0
@@ -163,6 +175,12 @@
     "car_hub": "vehicles",
     "entertainment": "events",
     "sports": "events",
+    "sports_venue": "sports_venue_bookings",
+    "venue_booking": "sports_venue_bookings",
+    "coaching": "sports_coaching",
+    "coach_booking": "sports_coaching",
+    "tournament_entry": "sports_tournament_entry",
+    "tournament": "sports_tournament_entry",
     "phones": "electronics",
     "phone": "electronics",
     "smartphones": "electronics",

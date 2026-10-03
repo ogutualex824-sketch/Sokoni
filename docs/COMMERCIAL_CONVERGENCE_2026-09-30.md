@@ -869,3 +869,18 @@ No duplicate authority was found on the money side.
 **Not in this lane:** the rest of the Digital brief (approval routing, canonical taxonomy, IMEI/serial, inventory units, checkout/order states, search, AdminOS) belongs to sokoni-e3.
 
 **Tests:** `scripts/test-electronics-commercial.js` 6/0 (real engine: a KES 100,000 phone is charged KES 15,000 with the policy version recorded). The commission sweep is green except for the pre-existing commercial-facts 3b.
+
+## 21 · Sports: explicit commission rows (owner 2026-10-03)
+
+**Owner decision:** venue bookings 5% and coaching 5% (flat booking lane), tournament entry fees 5% (like event tickets). Every Sports revenue stream is an explicit row; none falls back to a default.
+
+| Row | Rate | Aliases | Notes |
+|---|---|---|---|
+| `sports_venue_bookings` | 5% | `sports_venue`, `venue_booking` | in `FLAT_BOOKING_CATEGORIES` |
+| `sports_coaching` | 5% | `coaching`, `coach_booking` | in `FLAT_BOOKING_CATEGORIES` |
+| `sports_tournament_entry` | 5% | `tournament_entry`, `tournament` | not a booking |
+
+- **Bare `sports`:** still resolves to `events`, because a sports **event ticket** is an event ticket. Sports server code must name the explicit rows (`test-sports-commercial` S3 enforces this on `functions/sports*.js`).
+- **Policy version:** `COMMISSION_POLICY_VERSION` is `2026-10-03.sports`.
+- **Not changed:** the engine still takes the provider plan rate when a caller passes `subscriptionRole` (`PROVIDER_PLAN_RATES`, kept for non-booking callers that name a provider plan; `test-provider-plan-ladder`). No booking caller passes it: `provider-hub.commissionArgsForHub` omits it for every booking lane. Sports venue and coach bookings must follow the same rule.
+- **Tests:** `scripts/test-sports-commercial.js` 4/0. The commission sweep is green; the only failures (commercial-facts 3b, pos-fixed-rate-bypass ×1) are identical on base.
