@@ -22,8 +22,11 @@ if (process.env.SABOTAGE) {
     ['A2', 'shared/marketing-taxonomy.js', "specialist: { label: 'Specialist (one service)', minCategories: 1, maxCategories: 1 }", "specialist: { label: 'Specialist (one service)', minCategories: 1, maxCategories: 12 }"],
     ['A6', 'marketing-hub.js', 'if (c && LIVE.indexOf(st) >= 0) throw', 'if (false) throw'],
     /* S1 removes BOTH layers (retraction empties the categories AND the card filter checks listed/status). */
-    ['S1', 'marketing-hub.js', "p.marketingListed === true && p.marketingStatus === 'active' &&", 'true &&',
+    /* S1: listing ignores the authority AND the retraction keeps the categories — a suspended marketer stays listed */
+    ['S1', 'marketing-hub.js', "out[x.id] = await MA.marketingAuthority(db(), x.id, x.data() || null);", "out[x.id] = { active: true, categories: (x.data() || {}).marketingCategories || [] };",
       'application-lifecycle.js', 'marketingCategories: [], marketingGroups: [],\n      marketingListed: false,', 'marketingListed: false,'],
+    /* LF: the authority trusts the provider's own fields when there is no decision record */
+    ['LF', 'shared/marketing-authority.js', "  if (!r) return { active: false, categories: [], type: null, why: 'no_decision_record' };", "  if (!r) return { active: (provider || {}).marketingStatus === 'active', categories: (provider || {}).marketingCategories || [], type: null, why: 'forged' };"],
     ['A7', 'marketing-hub.js', "status: 'pending', reviewStage: 'submitted',", "status: d.status || 'pending', reviewStage: 'submitted',"],
     ['O1', 'marketing-hub.js', 'async marketingAdminOverview(req) {\n    _admin(req);', 'async marketingAdminOverview(req) {'],
   ];
@@ -145,6 +148,16 @@ const BASE_APP = { name: 'Achieng Creative', description: 'Brand identity and so
   r = await D('marketingProfile', null, { uid: 'u1' });
   const rn = await D('marketingProfile', null, { uid: 'u4' });
   ck('L2', r.ok && r.ok.profile.name === 'Achieng Creative' && rn.code === 'not-found', 'public profile for a listed marketer; an unapproved applicant is not-found', [r, rn]);
+
+  /* ── LF: SECURITY — self-written providers.marketing* (owner-writable on the served rules) is never listed ── */
+  DOCS.set('providers/forger', { uid: 'forger', name: 'Forged Agency', status: 'active', isPublic: true, marketingStatus: 'active', marketingListed: true, marketingCategories: ['branding', 'seo'], marketingGroups: ['creative', 'digital'] });
+  /* u1 is approved for branding + logo-design only; a self-added 'seo' on its OWN doc must not appear */
+  DOCS.set('providers/u1', Object.assign(DOCS.get('providers/u1'), { marketingCategories: ['branding', 'logo-design', 'seo'] }));
+  const lfB = await D('marketingDirectory', null, { category: 'branding' }), lfS = await D('marketingDirectory', null, { category: 'seo' }), lfP = await D('marketingProfile', null, { uid: 'forger' });
+  ck('LF', lfB.ok && lfB.ok.items.length === 1 && lfB.ok.items[0].uid === 'u1' && lfB.ok.items[0].categories.indexOf('seo') < 0 && lfS.ok && lfS.ok.items.length === 0 && lfP.code === 'not-found',
+    'SECURITY: a provider with self-written marketing fields and no decision record is never listed; a self-added category is never shown (the record decides)', { b: lfB.ok, s: lfS.ok, p: lfP.code });
+  DOCS.delete('providers/forger');
+  DOCS.set('providers/u1', Object.assign(DOCS.get('providers/u1'), { marketingCategories: ['branding', 'logo-design'] }));
 
   /* ── R: a marketing decision never touches the applicant's other services ── */
   DOCS.set('providers/u2', { uid: 'u2', name: 'Kasindi Cleaning', category: 'cleaning', categories: ['cleaning'], status: 'active', isPublic: true, searchable: true, acceptsBookings: true });

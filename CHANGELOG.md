@@ -1,3 +1,12 @@
+## [2026-10-03] — SECURITY: Marketing directory / profile / status / AdminOS reads use the server decision record (5b deb598e) — NOT deployed
+
+- **functions/shared/marketing-authority.js** (same module as the capability line e4f9b7d) + **functions/marketing-hub.js**:
+  - who is listed, and for which services, = applicationDecisions/marketing_{uid}.approvedCategories ∩ the provider listing, fail closed;
+  - the public card shows ONLY the approved services; category/group filters keep only providers approved for them;
+  - marketingMyStatus, the admin overview counts, the review view and the marketers list use the same authority (admin also sees the provider's claimed list and the authority reason).
+- Depends on 5b deb598e (applicationDecide writes approvedCategories to the record). No live marketers are affected: Marketing was never deployed.
+- **Tests:** test-marketing-hub 36/0 (new LF: self-written marketing fields never listed; a self-added category never shown); SABOTAGE 11/11, including the authority bypass. k13a 11/0, k13b 8/0, education-applications 34/0, role-provisioning 57/0, food-gate1 28/0.
+
 ## [2026-10-03] - Marketing: the approved category subset is on the server decision record
 
 Functions only (`applicationDecide` in `functions/application-lifecycle.js`), NOT deployed. For a marketing application,

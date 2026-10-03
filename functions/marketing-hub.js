@@ -18,6 +18,9 @@
 const { onCall, HttpsError } = require('firebase-functions/v2/https');
 const admin = require('firebase-admin');
 const MKT = require('./shared/marketing-taxonomy');
+/* SECURITY (2026-10-03): providers.marketing* is owner-writable on the served rules — who is listed, and for which services,
+   comes from the server decision record (applicationDecisions.approvedCategories ∩ listing), fail closed. */
+const MA = require('./shared/marketing-authority');
 
 const _OPTS = { region: 'us-central1', enforceAppCheck: true, timeoutSeconds: 60, memory: '256MiB' };
 const db = () => admin.firestore();
@@ -39,18 +42,26 @@ function _urls(v) {
 function _phone(v) { const d = String(v || '').replace(/\D/g, ''); if (/^0[17]\d{8}$/.test(d)) return '+254' + d.slice(1); if (/^254[17]\d{8}$/.test(d)) return '+' + d; return ''; }
 
 /** The public projection of a marketer — no phone, no email, no internal ids beyond the provider uid. */
-function _card(id, p) {
+function _card(id, p, auth) {
+  const cats = auth ? auth.categories : [];
   return {
     uid: id, name: _s(p.name, 160), marketingType: p.marketingType || 'individual',
-    categories: Array.isArray(p.marketingCategories) ? p.marketingCategories : [],
-    groups: Array.isArray(p.marketingGroups) ? p.marketingGroups : [],
+    categories: cats,                                   /* ONLY the server-approved services, never the provider's own list */
+    groups: MKT.groupsOf(cats),
     city: _s(p.city, 100), description: _s(p.description, 280), photoURL: _s(p.photoURL || p.logoUrl || '', 400),
     /* Real counters only (seeded 0 at creation, moved by reviews/bookings). reviewCount 0 → the UI shows "No reviews yet". */
     rating: typeof p.rating === 'number' ? p.rating : null, reviewCount: typeof p.reviewCount === 'number' ? p.reviewCount : 0,
     jobsCompleted: typeof p.jobsCompleted === 'number' ? p.jobsCompleted : 0,
   };
 }
-const _listed = (p) => p && p.marketingListed === true && p.marketingStatus === 'active' && p.status === 'active' && p.isPublic !== false;
+/** Listed = the derived Marketing authority is active AND the provider record itself is live and public. */
+const _listed = (p, auth) => !!(p && auth && auth.active === true && p.status === 'active' && p.isPublic !== false);
+/** Authority for many providers at once (one decision-record read each). */
+async function _auths(docs) {
+  const out = {};
+  await Promise.all(docs.map(async (x) => { out[x.id] = await MA.marketingAuthority(db(), x.id, x.data() || null); }));
+  return out;
+}
 
 const _h = {
   /* ── public ── */
@@ -71,7 +82,12 @@ const _h = {
         : q.where('marketingListed', '==', true);
     const snap = await q.limit(200).get();
     const term = _s(d.q, 60).toLowerCase();
-    let items = snap.docs.filter((x) => _listed(x.data())).map((x) => _card(x.id, x.data()));
+    const A = await _auths(snap.docs);
+    let items = snap.docs.filter((x) => _listed(x.data(), A[x.id])).map((x) => _card(x.id, x.data(), A[x.id]));
+    /* the query pre-filters on the provider's own fields; the authority decides — a category filter keeps only providers
+       APPROVED for it, a group filter only providers with an approved service in that group */
+    if (cat) items = items.filter((i) => i.categories.indexOf(cat) >= 0);
+    if (group) items = items.filter((i) => i.groups.indexOf(group) >= 0);
     if (type) items = items.filter((i) => i.marketingType === type);
     if (term) items = items.filter((i) => (i.name + ' ' + i.description + ' ' + i.categories.map((c) => MKT.AREA[c].label).join(' ')).toLowerCase().indexOf(term) >= 0);
     items.sort((a, b) => (b.jobsCompleted - a.jobsCompleted) || ((b.rating || 0) - (a.rating || 0)) || a.name.localeCompare(b.name));
@@ -82,9 +98,10 @@ const _h = {
     const id = _s((req.data || {}).uid, 128);
     if (!id) throw new HttpsError('invalid-argument', 'uid is required.');
     const s = await db().collection('providers').doc(id).get();
-    if (!s.exists || !_listed(s.data())) throw new HttpsError('not-found', 'This marketer is not listed.');
+    const auth = s.exists ? await MA.marketingAuthority(db(), id, s.data()) : null;
+    if (!s.exists || !_listed(s.data(), auth)) throw new HttpsError('not-found', 'This marketer is not listed.');
     const p = s.data();
-    return { ok: true, profile: Object.assign(_card(s.id, p), { description: _s(p.description, 2000), portfolio: _urls(p.marketingPortfolio) }) };
+    return { ok: true, profile: Object.assign(_card(s.id, p, auth), { description: _s(p.description, 2000), portfolio: _urls(p.marketingPortfolio) }) };
   },
 
   /* ── applicant ── */
@@ -159,6 +176,7 @@ const _h = {
     const [a, p] = await Promise.all([db().collection('applications').doc(APP_ID(uid)).get(), db().collection('providers').doc(uid).get()]);
     const app = a.exists ? a.data() : null;
     const pr = p.exists ? p.data() : null;
+    const myAuth = pr ? await MA.marketingAuthority(db(), uid, pr) : { active: false, categories: [] };
     return {
       ok: true,
       application: app ? {
@@ -169,8 +187,8 @@ const _h = {
         yearsExperience: app.yearsExperience == null ? null : app.yearsExperience, agency: app.agency || null,
       } : null,
       marketer: pr && pr.marketingStatus ? {
-        status: pr.marketingStatus, listed: _listed(pr), marketingType: pr.marketingType || null,
-        categories: pr.marketingCategories || [], providerId: pr.providerId || null,
+        status: pr.marketingStatus, listed: _listed(pr, myAuth), marketingType: pr.marketingType || null,
+        categories: myAuth.categories, providerId: pr.providerId || null,
       } : null,
     };
   },
@@ -193,8 +211,10 @@ const _h = {
     }; }).sort((a, b) => (b.receivedAtMs || 0) - (a.receivedAtMs || 0));
     const byStatus = {}, byType = {}, byCategory = {};
     items.forEach((i) => { byStatus[i.status] = (byStatus[i.status] || 0) + 1; byType[i.marketingType || 'unknown'] = (byType[i.marketingType || 'unknown'] || 0) + 1; });
-    live.docs.forEach((x) => { const p = x.data(); if (!_listed(p)) return; (p.marketingCategories || []).forEach((c) => { byCategory[c] = (byCategory[c] || 0) + 1; }); });
-    return { ok: true, items, counts: { byStatus, byType, byCategory, listed: live.docs.filter((x) => _listed(x.data())).length } };
+    const LA = await _auths(live.docs);
+    const listedDocs = live.docs.filter((x) => _listed(x.data(), LA[x.id]));
+    listedDocs.forEach((x) => { LA[x.id].categories.forEach((c) => { byCategory[c] = (byCategory[c] || 0) + 1; }); });
+    return { ok: true, items, counts: { byStatus, byType, byCategory, listed: listedDocs.length } };
   },
 
   /** One application for review: what was submitted, the server decision record, the immutable review history (adminAudit)
@@ -212,6 +232,7 @@ const _h = {
     const app = a.data() || {};
     const p = app.uid ? await db().collection('providers').doc(String(app.uid)).get() : null;
     const pr = p && p.exists ? p.data() : null;
+    const prAuth = pr ? await MA.marketingAuthority(db(), String(app.uid), pr) : { active: false, categories: [] };
     const ms = (v) => (v && typeof v.toMillis === 'function' ? v.toMillis() : (typeof v === 'number' ? v : null));
     return {
       ok: true,
@@ -228,7 +249,7 @@ const _h = {
       decisionRecord: rec.exists ? { status: (rec.data() || {}).status || null, decidedBy: (rec.data() || {}).decidedBy || null, atMs: ms((rec.data() || {}).decidedAt || (rec.data() || {}).createdAt) } : null,
       history: aud.docs.map((x) => { const d = x.data() || {}; return { action: d.action || '', by: d.performedBy || null, reason: d.reason || null, atMs: ms(d.createdAt) }; })
         .sort((x, y) => (x.atMs || 0) - (y.atMs || 0)),
-      marketer: pr && pr.marketingStatus ? { status: pr.marketingStatus, listed: _listed(pr), categories: pr.marketingCategories || [], providerStatus: pr.status || null } : null,
+      marketer: pr && pr.marketingStatus ? { status: pr.marketingStatus, listed: _listed(pr, prAuth), categories: prAuth.categories, claimedCategories: pr.marketingCategories || [], providerStatus: pr.status || null } : null,
     };
   },
 
@@ -238,9 +259,10 @@ const _h = {
     const d = req.data || {};
     const type = MKT.APPLICATION_TYPES[d.type] ? d.type : null;
     const snap = await db().collection('providers').where('marketingStatus', 'in', ['active', 'suspended', 'rejected']).limit(500).get();
-    let items = snap.docs.map((x) => { const p = x.data() || {}; return {
-      uid: x.id, name: _s(p.name, 160), marketingType: p.marketingType || null, marketingStatus: p.marketingStatus || null, listed: _listed(p),
-      categories: p.marketingCategories || [], city: _s(p.city, 100), providerStatus: p.status || null,
+    const PA = await _auths(snap.docs);
+    let items = snap.docs.map((x) => { const p = x.data() || {}; const a = PA[x.id]; return {
+      uid: x.id, name: _s(p.name, 160), marketingType: p.marketingType || null, marketingStatus: p.marketingStatus || null, listed: _listed(p, a),
+      categories: a.categories, claimedCategories: p.marketingCategories || [], authority: a.why, city: _s(p.city, 100), providerStatus: p.status || null,
       rating: typeof p.rating === 'number' ? p.rating : null, reviewCount: typeof p.reviewCount === 'number' ? p.reviewCount : 0, jobsCompleted: typeof p.jobsCompleted === 'number' ? p.jobsCompleted : 0,
     }; });
     if (type) items = items.filter((i) => i.marketingType === type);
