@@ -63,3 +63,26 @@ inside blocks those suites do not exercise). **Rollback for this release = f259c
 4. Release only `firestore:rules` (and verify `releases/cloud.firestore` → the new ruleset id afterwards — a scoped
    `--only firestore:rules` deploy can fail open), then run live probes (forged-badge create denied, anonymous job
    create denied, an applicant's own pending application still writable).
+
+## 2026-10-03 — review authority alignment (`6daba96`) and RELEASE PRECONDITION
+
+`6daba96` aligns the candidate with sokoni-5b's review authority (`7ec04c5`; sokoni-5b confirmed the match).
+- `reviews` and `unboxingReviews`: no browser create, update or delete, admin browser included. Reads are unchanged.
+- `reviewModerationLog`, `reviewRateLimits`, `smsSendAudit`, `deliveryPinLog`: no match, no wildcard, so deny-all.
+- Same commit: buyer paid-cancel guard; `bookingPaymentReviews` / `pinDeliveryFailures` / `pinSecurityEvents` are
+  admin-read and write:false.
+- **Emulator suites NOT yet run** on `6daba96` (`zz-test-r0.js`, `test-census-4d-rules.js`). Run them before release.
+
+**RELEASE PRECONDITION. These rules ship LAST, in this order. Each step must be live and verified first:**
+1. functions `fix/review-authority-on-76436b1` @ `85a5fcf`: submitReview, getReviews, adminModerateReview, submitUnboxing
+2. adminOsDispatch `fix/adminos-review-queue-on-18cfe7f` @ `3684b64`
+3. hosting `hosting/review-approval-ui-on-72dca56` @ `307b84e`. This moves unboxing.html off the direct
+   `SokoniDB.saveUnboxingReview` setDoc, and the wall listener queries `status == 'approved'`.
+4. **these rules**
+
+Releasing before step 3 refuses every unboxing submission. Releasing before step 1 leaves no writer for reviews.
+
+Out of scope here:
+- Storage: v1 unboxing is text-only. sokoni-5b adds a `unboxing/{uid}/{file}` storage rule when photos are built.
+- The bnb / property / sports pages write `fsWrite('reviews', …)`, refused by both live and candidate rules. Those
+  hubs need their own server path (sokoni-5b convergence item), never a rules loosening.
