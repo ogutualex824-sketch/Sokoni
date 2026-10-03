@@ -28,13 +28,16 @@ function _h() {
       require('./booking-service')._h,             /* Phase B: authoritative service create */
       require('./booking-availability-guard')._h,  /* read-only availability-vs-booking impact check */
       require('./booking-resolution')._h,          /* Slice 2: affected-booking resolution engine */
-      require('./business-workspace')._h);         /* shell gate: the ONE business workspace authority (derived approval state) */
+      require('./business-workspace')._h,          /* shell gate: the ONE business workspace authority (derived approval state) */
+      require('./service-leads')._h);              /* Tech Hub 4F: the ONE service lead / quote authority (docs/SERVICE_LEADS.md) */
   }
   return _mod;
 }
 
 const ROUTES = [
   'businessWorkspace',
+  // service-leads — Tech Hub 4F (docs/SERVICE_LEADS.md)
+  'leadCreate', 'leadListMine', 'leadListForProvider', 'leadMarkViewed', 'leadDecline', 'leadSendQuote', 'leadRespond', 'leadClose',
   'workspaceHome',
   'providerSaveDraft',
   'providerGetDraft',

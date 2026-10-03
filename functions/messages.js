@@ -25,6 +25,7 @@ function _union(v) { return admin.firestore.FieldValue.arrayUnion(v); }
 /* ── Transaction type → Firestore collection ──────────────────── */
 const TX_COLLECTIONS = {
   order:                    'orders',
+  service_lead:             'serviceLeads',       /* Tech slice 4F — a conversation before any booking hangs on the lead */
   service_booking:          'providerBookings',   /* Tech slice 4L: bookingCreateService writes providerBookings; legacy service bookings in `bookings` stay reachable (TX_FALLBACK) */
   food_order:               'foodOrders',
   pharmacy_order:           'pharmacyOrders',
@@ -123,6 +124,7 @@ async function _sendFcm(token, title, body, data) {
    refused. Nine of the seventeen accepted types have no rules block at all. */
 const PARTY_FIELDS = {
   order:               ['buyerId', 'buyerUid', 'uid', 'userId', 'sellerUid', 'assignedDriverUid'],
+  service_lead:        ['customerUid', 'providerId'],
   service_booking:     ['customerUid', 'buyerId', 'uid', 'userId', 'ownerId', 'customerId', 'providerId'],   /* customerUid = the booking engine's customer field (4L) */
   food_order:          ['buyerUid', 'restaurantId'],
   property_inquiry:    ['uid'],

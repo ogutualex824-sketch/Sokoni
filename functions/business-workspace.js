@@ -94,7 +94,8 @@ const MODULES = Object.freeze({
   listings:      { label: 'Listings',            section: 'listings',     implemented: false, why: 'LISTINGS_MODULE_PENDING' },
   /* SLICE 0 — Tech Hub capability modules (switched on by shared/service-capabilities, never by a profile). Their screens
      are the Tech Hub build (sokoni-b2); until each ships it is NOT_IMPLEMENTED with this reason. */
-  leads:             { label: 'Leads',               section: 'leads',             implemented: false, why: 'TECH_HUB_PENDING' },
+  /* Tech Hub slice 4F: the service lead / quote authority (service-leads.js) + the provider Leads screen. */
+  leads:             { label: 'Leads & quotes',      section: 'leads',             implemented: true },
   /* Tech Hub slice 4b: repairs = the provider's providerBookings that carry repairDetails (the existing booking lifecycle,
      PIN completion and settlement — no second repair state machine); supportedDevices = the techProfile editor on services. */
   repairs:           { label: 'Repairs',             section: 'repairs',           implemented: true },

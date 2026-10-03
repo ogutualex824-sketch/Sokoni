@@ -152,8 +152,19 @@ _h.bookingCreateService = async (req) => {
     }) : [],
     durationMins: d.durationMins != null ? Math.max(0, Math.round(Number(d.durationMins) || 0)) : undefined,
   };
+  /* Tech Hub slice 4F: booking an ACCEPTED quote. The price is the quote's (service-leads.js validated it when the
+     provider sent it); the request carries only leadId. The lead converts inside this booking's transaction. */
+  const leadId = _san(d.leadId, 128) || null;
+  const leadCtx = leadId ? await require('./service-leads').quoteForBooking(db, { leadId, customerUid, providerId, serviceId }) : null;
   let durationMins, price, deposit, pricingSnapshot = null;
-  if (svc.pricing && typeof svc.pricing === 'object') {
+  if (leadCtx) {
+    const q = leadCtx.quote;
+    durationMins = Math.max(15, Math.round(Number(q.durationMins) || Number(svc.durationMins) || 60));
+    price = Math.max(0, Math.round(Number(q.amountCents) || 0));
+    deposit = 0;
+    pricingSnapshot = { pricingVersion: 'quote@1', currency: 'KES', source: 'quote', leadId, quoteVersion: q.version || 1,
+      totalCents: price, depositCents: 0, breakdown: [{ type: 'quote', label: 'Accepted quote', amount: price }] };
+  } else if (svc.pricing && typeof svc.pricing === 'object') {
     const br = require('./service-pricing').computePrice(svc.pricing, selection, {
       date: date, startTime: startTime, durationMins: selection.durationMins, distanceKm: Number(d.distanceKm) || 0,
     });
@@ -207,6 +218,7 @@ _h.bookingCreateService = async (req) => {
   let outcome = null;
   await db.runTransaction(async (txn) => {
     outcome = null;
+    const leadSnap = leadCtx ? await txn.get(leadCtx.ref) : null;   /* read before any write (4F) */
     if (idemRef) { const i = await txn.get(idemRef); if (i.exists) { outcome = { bookingId: i.data().bookingId, idempotent: true }; return; } }
     const lock = await txn.get(slotLockRef);
     if (lock.exists) {
@@ -266,6 +278,7 @@ _h.bookingCreateService = async (req) => {
       expiresAt: admin.firestore.Timestamp.fromMillis(holdExpiresMs),   /* pre-payment hold window; cleared on paid_held */
       note: _san(d.note, 300),
       ...(repairDetails ? { repairDetails } : {}),
+      ...(leadCtx ? { leadId } : {}),
       hubType: _san(d.hubType, 40) || 'services',
       idempotencyKey,
       /* Provenance — which path/engine/rev priced & reserved this booking, so a
@@ -279,6 +292,7 @@ _h.bookingCreateService = async (req) => {
     });
     txn.set(slotLockRef, { bookingId, providerId, customerUid, date, startTime, endTime, startTs, endTs, createdAt: _ts(), expiresAt: admin.firestore.Timestamp.fromMillis(holdExpiresMs) });
     if (idemRef) txn.set(idemRef, { bookingId, providerId, customerUid, createdAt: _ts() });
+    if (leadCtx) require('./service-leads').convertIn(txn, leadCtx.ref, leadSnap, bookingId, leadCtx.reuseFrom);
     const hev = bookingEvent({
       bookingId, type: TYPES.HELD, actor: 'customer', providerId, customerUid,
       previousStatus: null, newStatus: status, data: { expiresAt: holdExpiresMs, priceCents: price, serviceId },

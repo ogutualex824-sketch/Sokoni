@@ -1,3 +1,29 @@
+## [2026-10-03] — Tech Hub slice 4F (server): service leads & quotes — the ONE lead / quote authority — NOT deployed
+
+**Files:**
+- New: `functions/service-leads.js`, `docs/SERVICE_LEADS.md` (contract + state machine), `scripts/test-service-leads.js`, `scripts/lib/inmem-firestore.js` (shared harness, transactional writes buffered).
+- Changed: `functions/booking-service.js`, `functions/provider-dispatch.js`, `functions/business-workspace.js`, `functions/messages.js`; `scripts/test-service-capabilities.js` (B-8 row).
+
+- **serviceLeads/{id}**, server-written only (no rules block → default deny). States: created → viewed → quote_sent ⇄ clarification_requested
+  → quote_accepted → converted, plus declined / quote_declined / closed.
+- **providerDispatch ops:** leadCreate, leadListMine, leadListForProvider, leadMarkViewed, leadDecline, leadSendQuote, leadRespond, leadClose.
+  - The provider side needs the `leads` module AVAILABLE (now implemented, labelled "Leads & quotes"): an approved provider with QUOTE_REQUEST, not suspended.
+  - A quote's serviceMode must be a GRANTED capability.
+  - Limits: 3 open leads per customer per provider, 20 per customer per day.
+- **bookingCreateService({ leadId })** books an ACCEPTED, unexpired quote:
+  - at the QUOTED price (request amounts ignored);
+  - with pricingSnapshot.source 'quote';
+  - and the lead converts inside the booking transaction (read before writes).
+  - One conversion while the booking is live. An abandoned unpaid hold (expired / cancelled / released) frees the quote again.
+- **messages.js:** transaction type `service_lead` (parties customerUid + providerId). "Message provider" before any booking now has a transaction.
+- **Lead monetization NOT configured:** no lead fee exists in SOKONI. Every lead records `monetization.status: not_configured` and nothing is
+  charged. Charging needs an owner decision + a payment path.
+- **Tests:** test-service-leads 12/0 (BASE=95f2ef6: no lead authority).
+  - Mutations caught: "price from request" (L-7), "skip conversion" (L-7, L-8).
+  - test-service-capabilities 15/0 (B-8: leads switched on now AVAILABLE; LOCKED untouched), sabotage 7/7.
+  - business-workspace 30/0, tech-service-profile 18/0, messages-service-booking 6/0, messages-participant-authority 51/0.
+- **Release:** providerDispatch (5b's ONE release) + messagesDispatch (messages.js). Lineage gate applies.
+
 ## [2026-10-03] — Tech Hub slice 4L (server): booking conversations reach the engine's providerBookings — NOT deployed
 
 - functions/messages.js:

@@ -100,7 +100,7 @@ try { BW = require(path.join(FN, 'business-workspace.js')); } catch (e) { loadEr
   /* B-8 the override guard */
   if (typeof BW._applyServiceCaps === 'function') {
     const x = BW._applyServiceCaps({ route: 'provider-dashboard.html', modules: { quotes: { state: 'LOCKED', reason: 'PLAN' }, leads: { state: 'NOT_APPLICABLE', reason: null } } }, { capabilities: ['QUOTE_REQUEST'], sources: {} });
-    ck('B-8', x.modules.quotes.state === 'LOCKED' && x.modules.leads.state === 'NOT_IMPLEMENTED', 'a capability never overrides a LOCKED / plan state; it only switches on NOT_APPLICABLE modules', x.modules);
+    ck('B-8', x.modules.quotes.state === 'LOCKED' && x.modules.leads.state === 'AVAILABLE' /* leads implemented by Tech 4F (sokoni-b2); the invariant is LOCKED untouched + NOT_APPLICABLE switched on */, 'a capability never overrides a LOCKED / plan state; it only switches on NOT_APPLICABLE modules', x.modules);
   } else ck('B-8', false, '_applyServiceCaps exported for this guard');
   done();
 })().catch((e) => { console.log('CRASH (no verdict): ' + (e && e.stack || e)); process.exit(2); });
