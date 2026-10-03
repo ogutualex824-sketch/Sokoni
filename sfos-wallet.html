@@ -618,7 +618,7 @@
 <!-- ═══════════════ BOTTOM NAV ═══════════════ -->
 <nav id="sfos-bottom-nav" aria-label="Main navigation">
   <button class="sfos-nav-btn active" id="sfosNavHome"
-    onclick="_navTo('sfos_home','sfosNavHome')" aria-label="Home panel">
+    onclick="(function(){var h=document.getElementById('sfos_home');if(h&&!h.classList.contains('active')){_navTo('sfos_home','sfosNavHome');return;}if(history.length>1&&/\/wallet(\.html)?(\?|#|$)/.test(document.referrer)){history.back();return;}location.href='wallet.html';})()" aria-label="Home — back to your wallet">
     <i class="fas fa-house"></i>Home
   </button>
   <button class="sfos-nav-btn" id="sfosNavMoney"

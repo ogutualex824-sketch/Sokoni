@@ -1673,6 +1673,14 @@ textarea.pi-edit-field{resize:vertical;min-height:80px;line-height:1.6;}
 /* Workspace Accent Variables — default green; role themes override via injected <style> */
 :root{--pi8-ws-accent:#71ff00;--pi8-ws-accent2:rgba(113,255,0,0.09);}
 </style>
+<style id="skProfileWalletCss">
+/* In-profile wallet (owner 2026-10-03): opening and closing the wallet is a switch, not a page load. */
+#skWalletHost{position:fixed;inset:0;z-index:99990;background:var(--bg,#050505);transform:translateX(100%);visibility:hidden;transition:transform .18s ease,visibility 0s linear .18s;will-change:transform}
+#skWalletHost.sk-open{transform:none;visibility:visible;transition:transform .18s ease}
+#skWalletHost iframe{width:100%;height:100%;border:0;display:block;background:var(--bg,#050505)}
+@media (prefers-reduced-motion:reduce){#skWalletHost,#skWalletHost.sk-open{transition:none}}
+html.sk-wallet-open,html.sk-wallet-open body{overflow:hidden}
+</style>
 </head>
 
 <body>
@@ -1890,6 +1898,31 @@ textarea.pi-edit-field{resize:vertical;min-height:80px;line-height:1.6;}
     </div>
     <div class="rs-btns" id="rsBtns">
       <!-- dynamically filled -->
+    </div>
+  </div>
+
+  <!-- YOUR IDENTITIES (owner 2026-10-03: moved to the top — Profile, then identities: Business, Services …, then the rest). Entry points into the operational surfaces.
+       This is a doorway, not a dashboard: an analytics GRID inside the personal
+       profile is how merchant operations ended up here in the first place.
+       Shown only to accounts holding the corresponding role. -->
+  <div id="upAnalyticsCard" class="up-card" style="margin:12px 0 0;display:none;">
+    <div class="up-card-title">Your SOKONI identities</div>
+    <div id="upIdentityLinks" style="display:flex;flex-direction:column;gap:8px;">
+      <a href="merchant-v2.html" id="upIdBusiness" data-sk-merchant-entry style="display:none;align-items:center;gap:10px;padding:12px 14px;background:rgba(113,255,0,0.05);border:1px solid rgba(113,255,0,0.15);border-radius:12px;text-decoration:none;color:#fff;">
+        <span style="font-size:20px;">&#127978;</span>
+        <span style="flex:1;min-width:0;"><span style="display:block;font-size:13px;font-weight:800;">Business</span><span style="display:block;font-size:11px;color:rgba(255,255,255,0.45);">Manage your shop &amp; products</span></span>
+        <span style="color:#71ff00;font-size:16px;">&#8250;</span>
+      </a>
+      <a href="provider-dashboard.html" id="upIdServices" style="display:none;align-items:center;gap:10px;padding:12px 14px;background:rgba(0,212,255,0.05);border:1px solid rgba(0,212,255,0.15);border-radius:12px;text-decoration:none;color:#fff;">
+        <span style="font-size:20px;">&#128296;</span>
+        <span style="flex:1;min-width:0;"><span style="display:block;font-size:13px;font-weight:800;">Services</span><span style="display:block;font-size:11px;color:rgba(255,255,255,0.45);">Manage your services &amp; bookings</span></span>
+        <span style="color:#00d4ff;font-size:16px;">&#8250;</span>
+      </a>
+      <a href="super-admin.html" id="superAdminLink" style="display:none;align-items:center;gap:10px;padding:12px 14px;background:rgba(224,64,251,0.05);border:1px solid rgba(224,64,251,0.2);border-radius:12px;text-decoration:none;color:#e040fb;">
+        <span style="font-size:20px;">&#x1F451;</span>
+        <span style="flex:1;min-width:0;font-size:13px;font-weight:800;">Super Admin Portal</span>
+        <span style="font-size:16px;">&#8250;</span>
+      </a>
     </div>
   </div>
 
@@ -2188,30 +2221,6 @@ textarea.pi-edit-field{resize:vertical;min-height:80px;line-height:1.6;}
       </div>
     </div>
 
-    <!-- YOUR IDENTITIES — entry points into the operational surfaces.
-         This is a doorway, not a dashboard: an analytics GRID inside the personal
-         profile is how merchant operations ended up here in the first place.
-         Shown only to accounts holding the corresponding role. -->
-    <div id="upAnalyticsCard" class="up-card" style="margin-top:12px;display:none;">
-      <div class="up-card-title">Your SOKONI identities</div>
-      <div id="upIdentityLinks" style="display:flex;flex-direction:column;gap:8px;">
-        <a href="merchant-v2.html" id="upIdBusiness" data-sk-merchant-entry style="display:none;align-items:center;gap:10px;padding:12px 14px;background:rgba(113,255,0,0.05);border:1px solid rgba(113,255,0,0.15);border-radius:12px;text-decoration:none;color:#fff;">
-          <span style="font-size:20px;">&#127978;</span>
-          <span style="flex:1;min-width:0;"><span style="display:block;font-size:13px;font-weight:800;">Business</span><span style="display:block;font-size:11px;color:rgba(255,255,255,0.45);">Manage your shop &amp; products</span></span>
-          <span style="color:#71ff00;font-size:16px;">&#8250;</span>
-        </a>
-        <a href="provider-dashboard.html" id="upIdServices" style="display:none;align-items:center;gap:10px;padding:12px 14px;background:rgba(0,212,255,0.05);border:1px solid rgba(0,212,255,0.15);border-radius:12px;text-decoration:none;color:#fff;">
-          <span style="font-size:20px;">&#128296;</span>
-          <span style="flex:1;min-width:0;"><span style="display:block;font-size:13px;font-weight:800;">Services</span><span style="display:block;font-size:11px;color:rgba(255,255,255,0.45);">Manage your services &amp; bookings</span></span>
-          <span style="color:#00d4ff;font-size:16px;">&#8250;</span>
-        </a>
-        <a href="super-admin.html" id="superAdminLink" style="display:none;align-items:center;gap:10px;padding:12px 14px;background:rgba(224,64,251,0.05);border:1px solid rgba(224,64,251,0.2);border-radius:12px;text-decoration:none;color:#e040fb;">
-          <span style="font-size:20px;">&#x1F451;</span>
-          <span style="flex:1;min-width:0;font-size:13px;font-weight:800;">Super Admin Portal</span>
-          <span style="font-size:16px;">&#8250;</span>
-        </a>
-      </div>
-    </div>
   </div>
 
   <!-- ORDERS panel -->
@@ -8119,6 +8128,60 @@ window.logoutUser = logoutUser;
 <script type="module" src="sokoni-orders.js"></script>
 <script src="sokoni-merchant-entry.js" defer></script>
 <script src="sokoni-merchant-diag.js" defer></script>
+<script>
+/* In-profile wallet host (owner 2026-10-03). Every "Open Wallet" / "See All" / Withdraw link on this page shows the
+   wallet INSIDE the profile — no navigation, no splash, no reload. The wallet frame is pre-warmed while idle so it
+   appears instantly; its Back button (or the phone's Back) simply hides it again and the profile underneath is
+   untouched. Same origin, same signed-in session; wallet.html recognises this host (auth-guard + ?embed=profile). */
+(function () {
+  'use strict';
+  var host = null, frame = null, warmed = false, isOpen = false;
+  var SRC = 'wallet.html?embed=profile';
+  function ensure() {
+    if (host) return;
+    host = document.createElement('div');
+    host.id = 'skWalletHost'; host.setAttribute('role', 'dialog'); host.setAttribute('aria-modal', 'true'); host.setAttribute('aria-label', 'Wallet');
+    frame = document.createElement('iframe');
+    frame.title = 'SOKONI Wallet';
+    frame.setAttribute('allow', 'camera; clipboard-write');
+    host.appendChild(frame);
+    document.body.appendChild(host);
+  }
+  function warm() { ensure(); if (!warmed) { warmed = true; frame.src = SRC; } }
+  function show(push) {
+    warm();
+    if (isOpen) return;
+    isOpen = true;
+    document.documentElement.classList.add('sk-wallet-open');
+    host.classList.add('sk-open');
+    if (push !== false) { try { history.pushState({ skWallet: 1 }, '', location.pathname + location.search + '#wallet-open'); } catch (_) {} }
+    try { frame.contentWindow && frame.contentWindow.focus(); } catch (_) {}
+  }
+  function hide() {
+    if (!isOpen) return;
+    isOpen = false;
+    host.classList.remove('sk-open');
+    document.documentElement.classList.remove('sk-wallet-open');
+    try { if (typeof loadWallet === 'function') loadWallet(); } catch (_) {}   /* the profile's balance refreshes from the server */
+  }
+  function close() { if (history.state && history.state.skWallet) history.back(); else hide(); }
+  window.addEventListener('popstate', function () { if (history.state && history.state.skWallet) show(false); else hide(); });
+  /* One delegated handler covers every wallet link on the page, including menus rendered later. */
+  document.addEventListener('click', function (ev) {
+    if (ev.defaultPrevented || ev.button !== 0 || ev.metaKey || ev.ctrlKey || ev.shiftKey || ev.altKey) return;
+    var a = ev.target && ev.target.closest && ev.target.closest('a[href]');
+    if (!a || (a.target && a.target !== '_self')) return;
+    var u; try { u = new URL(a.getAttribute('href'), location.href); } catch (_) { return; }
+    if (u.origin !== location.origin || !/^\/wallet(\.html)?$/.test(u.pathname)) return;
+    ev.preventDefault();
+    show(true);
+  }, true);
+  window.SokoniProfileWallet = { open: function () { show(true); }, close: close, warm: warm };
+  var idle = window.requestIdleCallback || function (f) { return setTimeout(f, 1200); };
+  window.addEventListener('load', function () { idle(warm); });
+  if (location.hash === '#wallet-open') { try { history.replaceState(null, '', location.pathname + location.search); } catch (_) {} setTimeout(function () { show(true); }, 0); }
+})();
+</script>
 </body>
 </html>
 

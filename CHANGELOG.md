@@ -1,3 +1,25 @@
+## 2026-10-03 — Profile + Wallet: identities on top, wallet opens inside the profile (no reload, no splash) — built on live 72dca56, NOT deployed
+
+Owner request: keep the production profile as it is; order = Profile → role switcher (unchanged) → identities (Business, Services, Super Admin) → the rest; the wallet opens inside the profile as a quick switch with no reload or splash; personal wallet Home → `index.html`; BOS (Financial OS) wallet Home → the wallet.
+
+- **profile.html**:
+  - The "Your SOKONI identities" card moved from the Overview tab to just under the role switcher. It keeps the same ids, so the existing code that reveals it is unchanged. Everything else is identical to production (test O4).
+  - The in-profile wallet host `window.SokoniProfileWallet`: a same-origin iframe `wallet.html?embed=profile`, pre-warmed while the page is idle, sliding in over 180 ms (reduced motion respected).
+  - One delegated click handler covers every `/wallet` link. Phone Back and the wallet's Back hide it via history state. The profile balance re-reads from the server when the wallet closes.
+- **wallet.html**:
+  - Embed mode: `data-no-splash`, and no duplicate bottom nav.
+  - Back closes the in-profile wallet.
+  - Logo → `index.html` (top window). Home → `index.html` from the home panel (from any other panel it first returns to the home panel).
+- **sfos-wallet.html**: Home → back to the wallet. It uses history when the page was opened from the wallet, otherwise it goes to `wallet.html`.
+- **auth-guard.js**: the profile is a recognised host, so an embedded wallet is never sent to login.
+- **Test:** `scripts/test-profile-wallet-instant.js`.
+  - Branch: 13/0. Production files (`SOK_FILES_ROOT`): 9 FAIL.
+  - Sabotage (preventDefault removed → W1 fails; logo reverted → H1 fails).
+  - Related suites green: home-logo-routing 31/0, customer-nav 62/0, business-hub-acting-role 36/0, role-authority 155/0, auth-session-transitions 100/100.
+- **Database / API / rules:** none. All callables used by both wallet pages were confirmed LIVE (`gcloud functions list`).
+- **Known gap (not fixed here):** bank withdrawals send no `bankCode`, so `requestSellerPayout` refuses them. The fix needs a server-provided bank list, which is a functions slice.
+- **UNPROVEN:** real-browser run (memory floor).
+
 ## [2026-09-30] - Entry experience E1: "Create Free Account" opens the one account wizard; the premium colour-journey splash returns, once per visit, full screen
 
 **Branch `hosting/entry-experience-on-2bcdae2`, built DIRECTLY on live `2bcdae2`** (owner 2026-09-30: ship only this slice;

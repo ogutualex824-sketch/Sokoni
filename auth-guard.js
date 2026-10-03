@@ -68,7 +68,8 @@
           if (!window.parent || window.parent === window) return false;
           /* Same-origin read; throws for a cross-origin parent, which is NOT our shell. */
           var pp = (window.parent.location.pathname || '').toLowerCase();
-          return /(^|\/)merchant(-v2)?(\.html)?$/.test(pp) || !!window.parent.SokoniShell;
+          /* 2026-10-03: the PROFILE also hosts the wallet (?embed=profile) — same origin, same session. */
+          return /(^|\/)merchant(-v2)?(\.html)?$/.test(pp) || /(^|\/)profile(\.html)?$/.test(pp) || !!window.parent.SokoniShell;
       } catch (e) { return false; }
   }
 
