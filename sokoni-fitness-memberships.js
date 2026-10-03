@@ -5,7 +5,9 @@
  *   fitnessGymMemberships({status, limit, cursor}) → the gym's memberships (server-scoped to the caller's gym)
  *   fitnessGymMembership({membershipId})         → one membership + attendance ledger + settlement rows
  *   fitnessCheckIn({token})                      → the ONLY thing that records attendance
- *   providerServices (read-only query)           → the gym's membership offers, listed, never written
+ *   providerServices (read-only query + re-read)  → the gym's membership offers (listed; re-read after a save)
+ *   providerDispatch({op:'providerAddService'|'providerUpdateService'|'providerToggleService', …})
+ *                                                → the ONLY offer writers (provider-ops, server-validated)
  * Nothing here writes Firestore. "ATTENDANCE RECORDED" is rendered ONLY from a fitnessCheckIn response.
  * Unknown values render "—"; an uncapped membership renders "Unlimited"; nothing is guessed.
  *
@@ -74,10 +76,13 @@
     return 'KES ' + kes.toLocaleString('en-KE', { minimumFractionDigits: kes % 1 ? 2 : 0, maximumFractionDigits: 2 });
   }
   function shortRef(id) { return id ? '#' + String(id).slice(-6).toUpperCase() : DASH; }
+  /* Plan length. Day and week offers are single passes (owner 2026-10-03: count 1); months run 1..60. */
   function periodText(count, unit) {
     if (!isCount(count) || count < 1) return DASH;
-    var u = unit === 'month' || !unit ? 'month' : String(unit);
-    return count + ' ' + u + (count === 1 ? '' : 's');
+    if (unit === 'day') return count === 1 ? 'Day pass' : count + ' days';
+    if (unit === 'week') return count === 1 ? 'Week pass' : count + ' weeks';
+    if (unit !== 'month' && unit !== undefined && unit !== null && unit !== '') return DASH;   /* an unknown unit is unknown */
+    return count + ' month' + (count === 1 ? '' : 's');
   }
 
   /* Session cap. `absentMeans` says what a MISSING field means for this source:
@@ -115,31 +120,53 @@
   var STATUS_LABEL = {
     pending_payment: 'Waiting for payment', active: 'Active', expired: 'Expired', refund_requested: 'Refund requested',
     refunded: 'Refunded', cancelled: 'Cancelled', suspended: 'Suspended', completed: 'Completed', disputed: 'Disputed',
+    expired_unused: 'Expired (unused)',
   };
   var PAY_LABEL = {
     pending: 'Awaiting payment', paid_held: 'Paid · held by SOKONI', payment_review: 'Payment under review',
     partially_released: 'Partly released to gym', released: 'Released to gym', refund_requested: 'Refund requested',
-    refunded: 'Refunded',
+    refunded: 'Refunded', refunded_late: 'Payment refunded — please start again',
   };
   function label(map, v) { return v === null || v === undefined || v === '' ? DASH : (map[v] || String(v)); }
 
-  /* ── check-in refusals: the server's reason code → human text (owner reject list) ── */
+  /* ── check-in refusals: the server's reason code → human text. The table is docs/FITNESS_MEMBERSHIP_API.md §3 (15 reasons);
+     scripts/fixtures/fitness-api-fixtures.json is the source of truth and the UI suite drives every fixture through it. ── */
   var REFUSAL = {
     token_invalid: 'This QR code is not valid. Ask the member to refresh it in their app.',
     token_expired: 'This QR code has expired. Ask the member to refresh it in their app.',
     not_found: 'Membership not found.',
+    no_permission: "You don't have permission to record attendance for this gym.",
+    other_gym: 'This membership is not for your gym.',
+    self_scan: 'You cannot check yourself in.',
+    wrong_member: 'This QR code does not belong to this membership holder.',
     expired: 'This membership has expired.',
     cancelled: 'This membership has been cancelled.',
     suspended: 'This membership is suspended.',
-    wrong_member: 'This QR code does not belong to this membership holder.',
     not_covered: 'This membership does not cover a session right now.',
-    other_gym: 'This membership is for a different gym.',
     entitlement_exhausted: 'All sessions on this membership have been used.',
-    no_permission: "You don't have permission to record attendance for this gym.",
-    self_scan: 'You cannot check yourself in.',
+    business_link_missing: "Staff attendance isn't set up for this gym yet. Ask the gym owner to scan.",
+    not_approved: "This gym isn't approved to record attendance right now.",
+    module_unavailable: "Memberships aren't enabled for this business.",
   };
+  var UNAUTH_TEXT = 'Sign in required.';
+  var UNAVAILABLE_TEXT = 'Attendance could not be recorded. Please try again.';
+  /* Gym read-scope refusals (fitnessGymMemberships / fitnessGymMembership) and scanner-status reasons — UPPER_SNAKE. */
+  var SCOPE = {
+    NO_PERMISSION: "You don't have permission to view this gym's memberships.",
+    NOT_APPROVED: "This gym isn't approved to manage memberships right now.",
+    BUSINESS_LINK_MISSING: "Staff access isn't set up for this gym yet.",
+    MODULE_NOT_AVAILABLE: "Memberships aren't enabled for this business.",
+    MULTIPLE_GYMS: 'You are staff at more than one gym. Ask the gym owner for access to this view.',
+  };
+  /* The web SDK surfaces an HttpsError as code "functions/<code>" with .details. e3's callables put the machine code in
+     details.reason; 2f's (membership-settlement, payment-purposes) put it in details.code. Read both. */
   function errCode(err) { return String((err && err.code) || '').replace(/^functions\//, ''); }
-  function errReason(err) { var d = err && err.details; return d && typeof d === 'object' && d.reason ? String(d.reason) : null; }
+  function errReason(err) {
+    var d = err && err.details;
+    if (!d || typeof d !== 'object') return null;
+    var r = d.reason || d.code;
+    return r ? String(r) : null;
+  }
   function isOffline(err) {
     if (root.navigator && root.navigator.onLine === false) return true;
     if (!err) return false;
@@ -152,30 +179,42 @@
   function refusalText(err) {
     if (isOffline(err)) return OFFLINE_TEXT;
     var r = errReason(err);
-    if (r && REFUSAL[r]) return REFUSAL[r];
+    if (r && Object.prototype.hasOwnProperty.call(REFUSAL, r)) return REFUSAL[r];
     var c = errCode(err);
-    if (c === 'unauthenticated') return 'Your session has ended. Sign in again to record attendance.';
+    if (c === 'unauthenticated') return UNAUTH_TEXT;
+    if (c === 'unavailable') return UNAVAILABLE_TEXT;
     if (c === 'permission-denied') return REFUSAL.no_permission;
     return (err && err.message) ? String(err.message) : 'Attendance was not recorded.';
   }
-
-  /* ── the check-in result card — built ONLY from the server response ── */
-  function memberName(res) {
-    var n = res && ((res.member && res.member.displayName) || res.memberName || res.displayName);
-    return n ? String(n) : DASH;
+  /* list/detail load failures: scope reason → text; otherwise the server's user-safe message. */
+  function scopeText(err, offlineText, fallback) {
+    if (isOffline(err)) return offlineText;
+    var r = errReason(err);
+    if (r && Object.prototype.hasOwnProperty.call(SCOPE, r)) return SCOPE[r];
+    if (r === 'not_found') return 'Membership not found.';
+    return (err && err.message) ? String(err.message) : fallback;
   }
+
+  /* ── the check-in result card — built ONLY from the server response (success and duplicate share one key set, API §3) ── */
+  function memberName(res) {
+    var n = res && res.member && res.member.displayName;
+    return typeof n === 'string' && n ? n : DASH;
+  }
+  var USED_LINE = 'Refund no longer available — membership used';
   function checkInCardHTML(res) {
-    if (!res || res.ok !== true || typeof res.attendanceId !== 'string' || !res.attendanceId) {
+    if (!res || res.ok !== true || typeof res.attendanceId !== 'string' || !res.attendanceId || typeof res.duplicate !== 'boolean') {
       return '<div class="sfm-card sfm-bad" role="alert"><strong>Attendance was not recorded.</strong> The server did not confirm this check-in — scan again.</div>';
     }
-    var line = esc(memberName(res)) + ' — Membership ' + esc(shortRef(res.membershipId)) + ' · ' + esc(sessionLine(res)) +
-      ' · Check-in: ' + esc(fmtTime(res.checkedInAt));
+    var head = esc(memberName(res)) + ' — Membership ' + esc(shortRef(res.membershipId)) + (res.title ? ' · ' + esc(res.title) : '') +
+      ' · ' + esc(sessionLine(res));
     if (res.duplicate === true) {
       return '<div class="sfm-card sfm-warn" role="status" data-sfm-result="duplicate"><strong>Already checked in today</strong>' +
-        '<div class="sfm-line">' + line + '</div><div class="sfm-sub">Existing record ' + esc(shortRef(res.attendanceId)) +
-        ' · ' + esc(label({ checked_in: 'Checked in', completed: 'Completed', voided_by_admin: 'Voided by admin' }, res.status)) + '</div></div>';
+        '<div class="sfm-line">' + head + ' · Original check-in: ' + esc(fmtTime(res.checkedInAt)) + '</div><div class="sfm-sub">Existing record ' + esc(res.attendanceId) +
+        ' · ' + esc(label({ checked_in: 'Checked in', completed: 'Completed', voided_by_admin: 'Voided by admin' }, res.status)) + ' · nothing new was recorded</div></div>';
     }
-    return '<div class="sfm-card sfm-ok" role="status" data-sfm-result="recorded"><strong>ATTENDANCE RECORDED</strong> · ' + line + '</div>';
+    return '<div class="sfm-card sfm-ok" role="status" data-sfm-result="recorded"><strong>ATTENDANCE RECORDED</strong> · ' + head +
+      ' · Check-in: ' + esc(fmtTime(res.checkedInAt)) +
+      (res.firstCheckIn === true ? '<div class="sfm-sub" data-sfm-first>' + esc(USED_LINE) + '</div>' : '') + '</div>';
   }
   function refusalCardHTML(err) {
     var t = refusalText(err);
@@ -192,7 +231,9 @@
     }
     if (r === 'NOT_APPROVED') return "Your gym isn't approved yet. Scanning opens as soon as SOKONI approves it.";
     if (r === 'NO_PERMISSION') return esc(REFUSAL.no_permission);
-    if (r) return 'Scanning is unavailable for this account (' + esc(r) + ').';
+    if (r === 'MODULE_NOT_AVAILABLE') return "Memberships aren't enabled for this business yet, so scanning is off.";
+    if (r === 'MULTIPLE_GYMS') return esc(SCOPE.MULTIPLE_GYMS);
+    if (r) return 'Scanning is unavailable for this account.';
     return 'Scanning is unavailable for this account.';
   }
 
@@ -201,6 +242,11 @@
     if (!r || !('refundState' in r) || r.refundState === undefined) return DASH;
     if (r.refundState === null) return 'None';
     return label({ requested: 'Requested', approved: 'Approved', rejected: 'Rejected', executed: 'Refunded', exception_requested: 'Exception requested' }, r.refundState);
+  }
+  /* refundEligible: true only for a PAID membership with an empty ledger; false once used (never back); null = unpaid/unknown. */
+  function refundableText(r) {
+    if (!r || r.refundEligible === null || r.refundEligible === undefined) return DASH;
+    return r.refundEligible === true ? 'Yes — not used yet' : r.refundEligible === false ? 'No — membership used' : DASH;
   }
   function settlementText(r) {
     var parts = [];
@@ -220,41 +266,131 @@
       kv('Start', fmtDate(r.startAt)) + kv('Expiry', fmtDate(r.endsAt)) +
       kv('Sessions included', capText(capOf(r, 'sessionsIncluded', 'unknown'))) + kv('Attended', countText(r.attendedSessions)) +
       kv('Remaining', remainingText(r, 'unknown')) + kv('Last attendance', fmtDateTime(r.lastAttendedAt)) +
-      kv('Refund', refundStateText(r)) + kv('Payment', label(PAY_LABEL, r.paymentStatus)) +
+      kv('Refund', refundStateText(r)) + kv('Refundable', refundableText(r)) + kv('Payment', label(PAY_LABEL, r.paymentStatus)) +
       (settle ? kv('Settlement', settle) : '') +
       '</div>' +
       (r.membershipId ? '<button type="button" class="sfm-btn sfm-btn-s" data-sfm-act="detail" data-id="' + esc(r.membershipId) + '">Details</button>' : '') +
       '</div>';
+  }
+  /* settlement is an OBJECT (API §6): {releases[], releasedPeriods, releasedCents, netSettledCents}. Anything else = unknown. */
+  function settlementOf(d) {
+    var st = d && d.settlement;
+    if (!st || typeof st !== 'object' || Array.isArray(st) || !Array.isArray(st.releases)) return null;
+    return st;
+  }
+  function settlementHTML(st) {
+    if (!st) return '<p class="sfm-sub" data-sfm-settle="unknown">Settlement: ' + DASH + '</p>';
+    var rel = st.releases.length ? '<ul class="sfm-list" data-sfm-settle="releases">' + st.releases.map(function (p) {
+      p = p || {};
+      return '<li>Period ' + esc(isCount(p.periodIndex) ? String(p.periodIndex) : DASH) + ' · gross ' + esc(fmtKES(p.grossCents)) +
+        ' · commission ' + esc(fmtKES(p.commissionCents)) + ' · net ' + esc(fmtKES(p.netCents)) + ' · ' + esc(label({ settled: 'Settled' }, p.status)) +
+        ' · ' + esc(fmtDate(p.settledAt)) + '</li>';
+    }).join('') + '</ul>' : '<p class="sfm-sub">No releases yet.</p>';
+    return rel + '<div class="sfm-grid" data-sfm-settle="totals">' + kv('Periods released', countText(st.releasedPeriods)) +
+      kv('Released (gross)', fmtKES(st.releasedCents)) + kv('Net settled to gym', fmtKES(st.netSettledCents)) + '</div>';
   }
   var ATT_LABEL = { checked_in: 'Checked in', completed: 'Completed', voided_by_admin: 'Voided by admin' };
   function detailHTML(d) {
     d = d || {};
     var m = d.membership || d;
     var att = Array.isArray(d.attendance) ? d.attendance : [];
-    var st = Array.isArray(d.settlement) ? d.settlement : (d.settlement && Array.isArray(d.settlement.rows) ? d.settlement.rows : []);
+    var so = settlementOf(d);
     var ledger = att.length ? att.map(function (a) {
       return '<li>' + esc(fmtDateTime(a.checkedInAt)) + ' · ' + esc(label(ATT_LABEL, a.status)) + ' · ' + esc(a.method || DASH) +
         (a.actorRole ? ' · by ' + esc(a.actorRole) : '') + (a.completedAt ? ' · completed ' + esc(fmtTime(a.completedAt)) : '') + '</li>';
     }).join('') : '<li>No attendance recorded.</li>';
-    var settle = st.length ? st.map(function (p) {
-      return '<li>' + esc(fmtDate(p.createdAt || p.releasedAt)) + ' · ' + esc(fmtKES(p.amountCents)) + ' · ' + esc(p.status || DASH) + '</li>';
-    }).join('') : '<li>No settlement rows yet.</li>';
+    var settle = settlementHTML(so);
     return '<div class="sfm-drawer-h"><div><div class="sfm-name">' + esc((m.member && m.member.displayName) || DASH) + '</div>' +
       '<div class="sfm-sub">' + esc(m.title || DASH) + ' · ' + esc(shortRef(m.membershipId)) + ' · ' + esc(periodText(m.periodCount, m.periodUnit)) + '</div></div>' +
       '<button type="button" class="sfm-btn sfm-btn-s" data-sfm-act="close" aria-label="Close details">Close</button></div>' +
       '<div class="sfm-grid">' + kv('Status', label(STATUS_LABEL, m.status)) + kv('Payment', label(PAY_LABEL, m.paymentStatus)) +
       kv('Start', fmtDate(m.startAt)) + kv('Expiry', fmtDate(m.endsAt)) +
       kv('Sessions included', capText(capOf(m, 'sessionsIncluded', 'unknown'))) + kv('Attended', countText(m.attendedSessions)) +
-      kv('Remaining', remainingText(m, 'unknown')) + kv('Refund', refundStateText(m)) + '</div>' +
+      kv('Remaining', remainingText(m, 'unknown')) + kv('Refund', refundStateText(m)) + kv('Refundable', refundableText(m)) + '</div>' +
       '<h4 class="sfm-h4">Attendance ledger</h4><ul class="sfm-list">' + ledger + '</ul>' +
-      '<h4 class="sfm-h4">Settlement</h4><ul class="sfm-list">' + settle + '</ul>' +
+      '<h4 class="sfm-h4">Settlement</h4>' + settle +
       '<p class="sfm-sub">Attendance can only be corrected by SOKONI through an audited correction — never deleted from here.</p>';
   }
-  function offerHTML(o) {
+  /* ── MEMBERSHIP OFFER EDITOR (owner 2026-10-03, "Defaults gyms can edit") ───────────────────────────────────────────
+     OFFER_DEFAULTS MIRRORS functions/shared/fitness-offer-defaults.js (origin/convergence/commercial-fn-on-ef1e992 @ fe33bcc),
+     the ONE source of SOKONI's starting prices. scripts/test-fitness-memberships-ui.js row OF-DEF fails if they differ.
+     They only PRE-FILL the form; the member always pays the gym's PUBLISHED offer, priced by the server. */
+  var OFFER_DEFAULTS = [
+    { key: 'daily', label: 'Daily Pass', priceCents: 50000, periodUnit: 'day', periodCount: 1 },
+    { key: 'weekly', label: 'Weekly Pass', priceCents: 150000, periodUnit: 'week', periodCount: 1 },
+    { key: 'monthly', label: 'Monthly', priceCents: 500000, periodUnit: 'month', periodCount: 1 },
+    { key: 'quarter', label: '3 Months', priceCents: 1400000, periodUnit: 'month', periodCount: 3 },
+    { key: 'half', label: '6 Months', priceCents: 2600000, periodUnit: 'month', periodCount: 6 },
+    { key: 'annual', label: 'Annual', priceCents: 4800000, periodUnit: 'month', periodCount: 12 },
+  ];
+  /* Same arithmetic as the server's withSavings(): multi-month offers vs the SAME list's 1-month price. */
+  function withSavings(list) {
+    var src = Array.isArray(list) ? list : OFFER_DEFAULTS;
+    var monthly = src.filter(function (o) { return o.periodUnit === 'month' && o.periodCount === 1 && isCount(o.priceCents) && o.priceCents > 0; })[0];
+    return src.map(function (o) {
+      var out = {}; Object.keys(o).forEach(function (k) { out[k] = o[k]; });
+      if (!monthly || o.periodUnit !== 'month' || !(o.periodCount > 1) || !isCount(o.priceCents)) { out.effectiveMonthlyCents = null; out.savingPct = null; return out; }
+      var eff = Math.round(o.priceCents / o.periodCount);
+      var saving = Math.round((1 - eff / monthly.priceCents) * 100);
+      out.effectiveMonthlyCents = eff; out.savingPct = saving > 0 ? saving : 0;
+      return out;
+    });
+  }
+  function savingText(o) { return o && isCount(o.savingPct) && o.savingPct > 0 ? 'Save ' + o.savingPct + '%' : ''; }
+  var OFFER_UNITS = ['day', 'week', 'month'];
+  var NOT_ENABLED = "Membership offers aren't enabled on the server yet.";
+
+  /* Draft → the exact typed payload provider-ops receives. Returns {data} or {error}. Never trusts the form's types. */
+  function offerPayload(draft) {
+    draft = draft || {};
+    var name = String(draft.name == null ? '' : draft.name).trim();
+    if (!name) return { error: 'Give the offer a name.' };
+    if (name.length > 200) return { error: 'The name is too long (200 characters at most).' };
+    var kes = typeof draft.priceKes === 'number' ? draft.priceKes : Number(String(draft.priceKes == null ? '' : draft.priceKes).replace(/[,\s]/g, ''));
+    if (!Number.isInteger(kes) || kes < 1 || kes > 10000000) return { error: 'Enter the price in whole shillings (for example 5000).' };
+    var unit = String(draft.periodUnit || '');
+    if (OFFER_UNITS.indexOf(unit) < 0) return { error: 'Choose day, week or month.' };
+    var count = unit === 'month' ? Number(draft.periodCount) : 1;
+    if (!Number.isInteger(count) || count < 1 || count > 60) return { error: 'A monthly offer runs for 1 to 60 months.' };
+    return { data: { name: name, price: kes * 100, priceType: 'fixed', serviceKind: 'membership', periodCount: count, periodUnit: unit } };
+  }
+  /* "Saved" is claimed ONLY when the server's own copy of the service is a membership with what we sent.
+     Until 5b's providerDispatch release carries the membership-offer hooks, provider-ops DROPS serviceKind/periodUnit/
+     periodCount — the re-read then shows a plain rate card and this returns false. */
+  function savedAsMembership(doc, sent) {
+    return !!(doc && sent && doc.serviceKind === 'membership' && doc.periodUnit === sent.periodUnit && doc.periodCount === sent.periodCount &&
+      doc.price === sent.price);
+  }
+  function offerRowHTML(o) {
     o = o || {};
     var live = o.active !== false && !o.removedAt;
-    return '<li><b>' + esc(o.name || DASH) + '</b> · ' + esc(fmtKES(o.price)) + ' · ' + esc(periodText(o.periodCount, o.periodUnit)) +
-      ' · ' + (live ? 'Active' : 'Inactive') + '</li>';
+    var save = savingText(o);
+    return '<li class="sfm-offer" data-id="' + esc(o.id || '') + '"><b>' + esc(o.name || DASH) + '</b> · ' + esc(fmtKES(o.price)) + ' · ' +
+      esc(periodText(o.periodCount, o.periodUnit)) + (save ? ' · <span class="sfm-save">' + esc(save) + '</span>' : '') + ' · ' + (live ? 'Active' : 'Paused') +
+      (o.id && !o.removedAt ? ' <button type="button" class="sfm-btn sfm-btn-s" data-sfm-act="offer-edit" data-id="' + esc(o.id) + '">Edit</button>' +
+        ' <button type="button" class="sfm-btn sfm-btn-s" data-sfm-act="' + (live ? 'offer-pause' : 'offer-activate') + '" data-id="' + esc(o.id) + '">' + (live ? 'Pause' : 'Activate') + '</button>' : '') +
+      '</li>';
+  }
+  function defaultsPickerHTML() {
+    return '<div class="sfm-defaults" role="group" aria-label="Start from a SOKONI default"><p class="sfm-sub">Start from a SOKONI default — you can change the name and price before saving.</p>' +
+      withSavings(OFFER_DEFAULTS).map(function (d) {
+        var save = savingText(d);
+        return '<button type="button" class="sfm-btn sfm-btn-s sfm-def" data-sfm-act="offer-default" data-id="' + esc(d.key) + '">' + esc(d.label) + ' · ' +
+          esc(fmtKES(d.priceCents)) + (save ? ' · ' + esc(save) : '') + '</button>';
+      }).join('') + '</div>';
+  }
+  function offerFormHTML(ed) {
+    ed = ed || {};
+    var unit = ed.periodUnit || 'month';
+    return '<form class="sfm-form" data-sfm-form="offer" novalidate>' +
+      '<label class="sfm-sub" for="sfmOfName">Offer name</label><input id="sfmOfName" class="sfm-in" maxlength="200" autocomplete="off" value="' + esc(ed.name || '') + '">' +
+      '<label class="sfm-sub" for="sfmOfPrice">Price (KES, whole shillings)</label><input id="sfmOfPrice" class="sfm-in" inputmode="numeric" value="' + esc(ed.priceKes == null ? '' : String(ed.priceKes)) + '">' +
+      '<label class="sfm-sub" for="sfmOfUnit">Length</label><select id="sfmOfUnit" class="sfm-in">' +
+      [['day', 'Day pass'], ['week', 'Week pass'], ['month', 'Months']].map(function (u) { return '<option value="' + u[0] + '"' + (u[0] === unit ? ' selected' : '') + '>' + u[1] + '</option>'; }).join('') + '</select>' +
+      '<label class="sfm-sub" for="sfmOfMonths">Months (monthly offers only, 1–60)</label><input id="sfmOfMonths" class="sfm-in" inputmode="numeric" value="' + esc(unit === 'month' ? String(ed.periodCount || 1) : '1') + '">' +
+      '<div class="sfm-formbtns"><button type="button" class="sfm-btn sfm-btn-p" data-sfm-act="offer-save">' + (ed.serviceId ? 'Save changes' : 'Save offer') + '</button> ' +
+      '<button type="button" class="sfm-btn sfm-btn-s" data-sfm-act="offer-cancel">Cancel</button></div>' +
+      '<p class="sfm-sub" data-sfm-offer-msg role="status" aria-live="polite">' + esc(ed.msg || '') + '</p></form>';
   }
 
   var CSS = '.sfm{font:14px/1.45 system-ui,-apple-system,sans-serif;color:var(--text,#e8e8e8);max-width:100%;overflow-x:hidden}' +
@@ -280,7 +416,10 @@
     '.sfm-kv span{display:block;font-size:.7rem;color:var(--sub,#888)}.sfm-kv b{font-weight:600;overflow-wrap:anywhere}' +
     '.sfm-drawer{border:1px solid var(--acc,#71ff00);border-radius:12px;padding:12px;margin:10px 0;background:var(--surf,#0d0d0d)}' +
     '.sfm-h4{margin:10px 0 4px;font-size:.85rem}.sfm-list{margin:0;padding-left:18px;font-size:.82rem}' +
-    '.sfm-offers{margin-top:16px;border-top:1px solid var(--border,#1a1a1a);padding-top:12px}';
+    '.sfm-offers{margin-top:16px;border-top:1px solid var(--border,#1a1a1a);padding-top:12px}.sfm-offer{margin-bottom:6px}' +
+    '.sfm-save{color:var(--acc,#71ff00);font-weight:700}.sfm-defaults{display:flex;flex-wrap:wrap;gap:6px;margin:8px 0}' +
+    '.sfm-form{display:grid;gap:4px;max-width:420px;margin-top:8px}.sfm-in{width:100%;min-height:44px;border-radius:10px;border:1px solid var(--border,#262626);background:var(--surf2,#141414);color:inherit;padding:8px 10px;font-size:15px}' +
+    '.sfm-in:focus-visible{outline:2px solid var(--acc,#71ff00);outline-offset:2px}.sfm-formbtns{display:flex;flex-wrap:wrap;gap:8px;margin-top:6px}';
 
   /* ── workspace gate (server answer only) ── */
   function moduleAvailable(w) {
@@ -290,7 +429,8 @@
   }
 
   /* ── gym module state ── */
-  var S = { el: null, ui: null, tab: 'active', cursor: null, rows: [], busy: false, canScan: false, scanStop: null, mounted: false };
+  var S = { el: null, ui: null, tab: 'active', cursor: null, rows: [], busy: false, canScan: false, scanStop: null, mounted: false,
+    offers: null, offerErr: '', offerMsg: '', ed: null, offerBusy: false };
   var TABS = [['active', 'Active'], ['pending', 'Pending'], ['expired', 'Expired'], ['refund', 'Refunds']];
 
   function mk(tag, cls, html) {
@@ -354,6 +494,13 @@
     if (name === 'submit') return submitToken(S.ui && S.ui.paste ? S.ui.paste.value : '');
     if (name === 'stop') { stopCamera(); if (S.ui) S.ui.scanBox.hidden = true; return null; }
     if (name === 'retry') return loadTab(S.tab);
+    if (name === 'offer-add') return offerStart('monthly');
+    if (name === 'offer-default') return offerStart(arg);
+    if (name === 'offer-edit') return offerStart(null, arg);
+    if (name === 'offer-cancel') { S.ed = null; S.offerMsg = ''; renderOffers(); return null; }
+    if (name === 'offer-save') return saveOffer();
+    if (name === 'offer-pause') return toggleOffer(arg, false);
+    if (name === 'offer-activate') return toggleOffer(arg, true);
     return null;
   }
 
@@ -398,7 +545,7 @@
       ui.more.innerHTML = S.cursor ? '<button type="button" class="sfm-btn sfm-btn-s" data-sfm-act="more">Load more</button>' : '';
     }, function (err) {
       if (!S.ui) return;
-      ui.list.innerHTML = '<div class="sfm-card sfm-bad" role="alert">' + esc(isOffline(err) ? 'Memberships unavailable — retry when connected' : ((err && err.message) || 'Memberships could not be loaded.')) +
+      ui.list.innerHTML = '<div class="sfm-card sfm-bad" role="alert">' + esc(scopeText(err, 'Memberships unavailable — retry when connected', 'Memberships could not be loaded.')) +
         ' <button type="button" class="sfm-btn sfm-btn-s" data-sfm-act="retry">Retry</button></div>';
     });
   }
@@ -409,24 +556,105 @@
     return call('fitnessGymMembership', { membershipId: String(id) }).then(function (d) {
       if (S.ui) ui.drawer.innerHTML = detailHTML(d);
     }, function (err) {
-      if (S.ui) ui.drawer.innerHTML = '<div class="sfm-card sfm-bad" role="alert">' + esc(isOffline(err) ? 'Details unavailable — retry when connected' : ((err && err.message) || 'Details could not be loaded.')) +
+      if (S.ui) ui.drawer.innerHTML = '<div class="sfm-card sfm-bad" role="alert">' + esc(scopeText(err, 'Details unavailable — retry when connected', 'Details could not be loaded.')) +
         '</div><button type="button" class="sfm-btn sfm-btn-s" data-sfm-act="close">Close</button>';
     });
   }
 
-  /* Membership offers: LISTED from providerServices (the services editor writes them; this module never does). */
+  /* Membership offers: LISTED from providerServices (read under rules); WRITTEN only through providerDispatch. */
+  function offersIntro() {
+    return '<h4 class="sfm-h4">Membership offers</h4><p class="sfm-sub">Members buy these plans at the price you publish. SOKONI checks every offer on the server.</p>';
+  }
+  function renderOffers() {
+    var ui = S.ui; if (!ui) return;
+    var ed = S.ed;
+    var listHtml = S.offerErr ? '<p class="sfm-sub" role="alert">' + esc(S.offerErr) + '</p>'
+      : S.offers === null ? '<p class="sfm-sub">Loading offers…</p>'
+      : S.offers.length ? '<ul class="sfm-list">' + withSavings(S.offers.map(function (o) { var c = {}; Object.keys(o).forEach(function (k) { c[k] = o[k]; }); c.priceCents = o.price; return c; })).map(offerRowHTML).join('') + '</ul>'
+      : '<p class="sfm-sub">No membership offers yet.</p>';
+    ui.offers.innerHTML = offersIntro() + listHtml +
+      (S.offerMsg ? '<p class="sfm-sub" role="status" data-sfm-offer-note>' + esc(S.offerMsg) + '</p>' : '') +
+      (ed ? (ed.serviceId ? '' : defaultsPickerHTML()) + offerFormHTML(ed)
+        : '<button type="button" class="sfm-btn sfm-btn-p" data-sfm-act="offer-add">Add membership offer</button>');
+  }
   function loadOffers() {
     var ui = S.ui; if (!ui) return Promise.resolve();
-    var intro = '<h4 class="sfm-h4">Membership offers</h4><p class="sfm-sub">Members buy these plans. Adding or editing an offer uses your existing Services editor once membership offers are enabled there — this screen only lists them.</p>';
     var fb = root.firebase, user = fb && fb.auth && fb.auth().currentUser;
-    if (!fb || !fb.firestore || !user) { ui.offers.innerHTML = intro + '<p class="sfm-sub">' + DASH + '</p>'; return Promise.resolve(); }
-    ui.offers.innerHTML = intro + '<p class="sfm-sub">Loading offers…</p>';
+    if (!fb || !fb.firestore || !user) { S.offers = []; S.offerErr = 'Sign in to manage your membership offers.'; renderOffers(); return Promise.resolve(); }
+    S.offers = null; S.offerErr = ''; renderOffers();
     return fb.firestore().collection('providerServices').where('providerId', '==', user.uid).where('serviceKind', '==', 'membership').limit(50).get()
       .then(function (snap) {
-        var docs = (snap && snap.docs) || [];
-        ui.offers.innerHTML = intro + (docs.length ? '<ul class="sfm-list">' + docs.map(function (d) { return offerHTML(d.data()); }).join('') + '</ul>'
-          : '<p class="sfm-sub">No membership offers yet.</p>');
-      }, function () { ui.offers.innerHTML = intro + '<p class="sfm-sub">Offers could not be loaded.</p>'; });
+        S.offers = ((snap && snap.docs) || []).map(function (d) { var o = d.data() || {}; o.id = d.id; return o; });
+        renderOffers();
+      }, function () { S.offers = []; S.offerErr = 'Offers could not be loaded.'; renderOffers(); });
+  }
+  function offerFormValues() {
+    var g = function (id) { var e = root.document.getElementById(id); return e ? e.value : undefined; };
+    var unit = g('sfmOfUnit');
+    if (unit === undefined) return null;
+    return { name: g('sfmOfName'), priceKes: g('sfmOfPrice'), periodUnit: unit, periodCount: Number(g('sfmOfMonths')) };
+  }
+  function offerStart(key, serviceId) {
+    S.offerMsg = '';
+    if (serviceId) {
+      var o = (S.offers || []).filter(function (x) { return x.id === serviceId; })[0]; if (!o) return;
+      S.ed = { serviceId: o.id, name: o.name || '', priceKes: isCount(o.price) ? Math.round(o.price / 100) : '', periodUnit: o.periodUnit || 'month', periodCount: o.periodCount || 1 };
+    } else {
+      var d = OFFER_DEFAULTS.filter(function (x) { return x.key === key; })[0] || OFFER_DEFAULTS[2];
+      S.ed = { serviceId: null, name: d.label, priceKes: d.priceCents / 100, periodUnit: d.periodUnit, periodCount: d.periodCount };
+    }
+    renderOffers();
+  }
+  function offerMsg(t) { if (S.ed) S.ed.msg = t; renderOffers(); }
+  /* Re-read the service the server wrote (rules: providerServices readable by any signed-in user). */
+  function rereadService(id) {
+    var fb = root.firebase;
+    if (!fb || !fb.firestore || !id) return Promise.resolve(null);
+    return fb.firestore().collection('providerServices').doc(String(id)).get()
+      .then(function (d) { return d && d.exists ? (d.data() || {}) : null; }, function () { return null; });
+  }
+  function saveOffer(draft) {
+    var ed = S.ed; if (!ed || S.offerBusy) return Promise.resolve(false);
+    var v = draft || offerFormValues() || ed;
+    var p = offerPayload(v);
+    if (p.error) { ed.name = v.name; ed.priceKes = v.priceKes; ed.periodUnit = v.periodUnit; ed.periodCount = v.periodCount; offerMsg(p.error); return Promise.resolve(false); }
+    S.offerBusy = true;
+    ed.name = p.data.name; ed.priceKes = p.data.price / 100; ed.periodUnit = p.data.periodUnit; ed.periodCount = p.data.periodCount;
+    offerMsg('Saving…');
+    var req = { op: ed.serviceId ? 'providerUpdateService' : 'providerAddService' };
+    if (ed.serviceId) req.serviceId = ed.serviceId;
+    Object.keys(p.data).forEach(function (k) { req[k] = p.data[k]; });
+    var sid = ed.serviceId;
+    return call('providerDispatch', req).then(function (r) {
+      sid = sid || (r && r.serviceId) || null;
+      if (!sid) { offerMsg('The server did not confirm the save. Reload and check your offers.'); return false; }
+      return rereadService(sid).then(function (doc) {
+        if (savedAsMembership(doc, p.data)) { S.ed = null; S.offerMsg = 'Saved — ' + p.data.name + '.'; renderOffers(); loadOffers(); return true; }
+        if (doc === null) { offerMsg('Saved status unknown — the offer could not be re-read. Reload to check.'); return false; }
+        /* The server stored a plain rate card (membership fields dropped). Never call that "Saved". A NEW card would be a
+           bookable fixed-price service nobody asked for, so it is archived through the server's own soft-delete. */
+        if (!ed.serviceId) {
+          return call('providerDispatch', { op: 'providerRemoveService', serviceId: sid }).then(function () {
+            offerMsg(NOT_ENABLED + ' Nothing was published.'); return false;
+          }, function () {
+            offerMsg(NOT_ENABLED + ' A plain rate card named "' + p.data.name + '" may have been created — archive it in Services.'); return false;
+          });
+        }
+        offerMsg(NOT_ENABLED); return false;
+      });
+    }, function (e) {
+      offerMsg(isOffline(e) ? 'Offers unavailable — retry when connected' : ((e && e.message) ? String(e.message) : 'The offer was not saved.'));
+      return false;
+    }).then(function (ok) { S.offerBusy = false; return ok; });
+  }
+  function toggleOffer(id, active) {
+    if (!id || S.offerBusy) return Promise.resolve(false);
+    S.offerBusy = true; S.offerMsg = 'Updating…'; renderOffers();
+    return call('providerDispatch', { op: 'providerToggleService', serviceId: String(id), active: active === true }).then(function () {
+      S.offerMsg = ''; return loadOffers().then(function () { return true; });
+    }, function (e) {
+      S.offerMsg = isOffline(e) ? 'Offers unavailable — retry when connected' : ((e && e.message) ? String(e.message) : 'The offer was not updated.'); renderOffers(); return false;
+    }).then(function (ok) { S.offerBusy = false; return ok; });
   }
 
   /* ── scanner: camera via the repo's SokoniQR.scan (BarcodeDetector); paste fallback always present ── */
@@ -498,10 +726,12 @@
       esc: esc, call: call, DASH: DASH, OFFLINE_TEXT: OFFLINE_TEXT, toDate: toDate, fmtDate: fmtDate, fmtTime: fmtTime, fmtDateTime: fmtDateTime,
       fmtKES: fmtKES, shortRef: shortRef, periodText: periodText, capOf: capOf, capText: capText, countText: countText,
       remainingText: remainingText, sessionLine: sessionLine, label: label, STATUS_LABEL: STATUS_LABEL, PAY_LABEL: PAY_LABEL,
-      isCount: isCount, isOffline: isOffline, errCode: errCode,
+      isCount: isCount, isOffline: isOffline, errCode: errCode, errReason: errReason,
     },
     _t: { checkInCardHTML: checkInCardHTML, refusalCardHTML: refusalCardHTML, refusalText: refusalText, rowHTML: rowHTML, detailHTML: detailHTML,
-      offerHTML: offerHTML, scannerReasonHTML: scannerReasonHTML, moduleAvailable: moduleAvailable, act: act, submitToken: submitToken,
-      openScanner: openScanner, loadStatus: loadStatus, state: S, REFUSAL: REFUSAL },
+      offerRowHTML: offerRowHTML, offerPayload: offerPayload, savedAsMembership: savedAsMembership, saveOffer: saveOffer, toggleOffer: toggleOffer,
+      offerStart: offerStart, withSavings: withSavings, OFFER_DEFAULTS: OFFER_DEFAULTS, NOT_ENABLED: NOT_ENABLED, renderOffers: renderOffers, scannerReasonHTML: scannerReasonHTML, moduleAvailable: moduleAvailable, act: act, submitToken: submitToken,
+      openScanner: openScanner, loadStatus: loadStatus, state: S, REFUSAL: REFUSAL, SCOPE: SCOPE, scopeText: scopeText, refundableText: refundableText,
+      settlementOf: settlementOf, settlementHTML: settlementHTML, USED_LINE: USED_LINE },
   };
 })(typeof window !== 'undefined' ? window : this);

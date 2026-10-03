@@ -6,8 +6,10 @@
  *   fitnessMembershipQr({membershipId})           → short-lived signed token, ACTIVE memberships only
  *   membershipRequestRefund({membershipId})       → a REQUEST; the server decides; refusals shown verbatim
  *   providerServices (serviceKind 'membership')   → a gym's offers, read-only
- *   fitnessCreateMembership({serviceId}) → createPaymentIntent({purpose:'fitness_membership', membershipId})
- *     → SokoniIntaSend.initiateSTKPush (the existing client payment path, amount from the server intent)
+ *   fitnessCreateMembership({serviceId}) → {membershipId, reused, priceCents, periodCount, periodUnit, title, payBy}
+ *     → REVIEW step rendered from THAT response (never from the offer doc) → on "Pay":
+ *     createPaymentIntent({purpose:'fitness_membership', membershipId}) → SokoniIntaSend.initiateSTKPush
+ *     (the existing client payment path; amount + ref from the server intent, and it must equal the reviewed price)
  * Selling is OFF unless featureFlags/fitness_membership_sales.enabled === true (server-written by AdminOS;
  * publicly readable). Missing doc / unreadable / anything else = OFF.
  * No Firestore writes. No localStorage source of truth. Never "success" before the server state.
@@ -23,6 +25,25 @@
   var REFUND_ELIGIBLE = 'Eligible to request, subject to policy';
   var REFUND_USED = 'Not available — membership already used';
   var NOT_ON_SALE = "Memberships aren't on sale yet";
+  var SALES_DISABLED_TEXT = "Memberships aren't on sale yet.";
+  var LATE_REFUNDED = 'Payment refunded — please start again';
+  /* Purchase refusals (API §1, plus 2f's purpose refusal details {code:'SALES_DISABLED'}). Branch on the code, never the
+     message; anything not listed shows the server's user-safe message as-is. */
+  var CREATE_REFUSAL = {
+    SALES_DISABLED: SALES_DISABLED_TEXT,
+    missing: 'Membership offer not found.',
+    self_purchase: 'You cannot buy a membership at your own gym.',
+    provider_missing: 'This gym isn’t currently selling memberships.',
+    provider_not_active: 'This gym isn’t currently selling memberships.',
+    not_fitness: 'Memberships can only be bought from a fitness business.',
+  };
+  function createRefusalText(e, fallback) {
+    if (C.isOffline(e)) return 'Unavailable — retry when connected';
+    var r = C.errReason(e);
+    if (r && Object.prototype.hasOwnProperty.call(CREATE_REFUSAL, r)) return CREATE_REFUSAL[r];
+    if (C.errCode(e) === 'unauthenticated') return 'Sign in required.';
+    return (e && e.message) ? String(e.message) : fallback;
+  }
   var REFRESH_BEFORE_MS = 30 * 1000;
 
   var S = { uid: null, docs: [], unsub: null, flagOn: false, offers: [], confirm: {}, msg: {}, att: {}, buy: null, busy: false, qr: null };
@@ -45,6 +66,7 @@
   }
 
   function statusText(m) {
+    if (m.paymentStatus === 'refunded_late') return LATE_REFUNDED;
     if (m.paymentStatus === 'payment_review') return 'Payment under review';
     if (m.status === 'pending_payment') return 'Waiting for payment confirmation';
     return C.label(C.STATUS_LABEL, m.status);
@@ -53,8 +75,13 @@
   /* refund wording — owner's exact text */
   function refundState(m) {
     var att = attendedOf(m);
-    if (m.status === 'refunded' || m.paymentStatus === 'refunded') return { text: 'Refunded' };
-    if (m.status === 'refund_requested' || m.paymentStatus === 'refund_requested') return { text: 'Refund requested — under review' };
+    var rs = m.refund && typeof m.refund === 'object' ? m.refund.state : null;
+    if (m.paymentStatus === 'refunded_late') return { text: 'Refunded to your SOKONI wallet (payment arrived too late)' };
+    if (rs === 'refunded' || m.status === 'refunded' || m.paymentStatus === 'refunded') {
+      return { text: m.refund && m.refund.destination === 'sokoni_wallet' ? 'Refunded to your SOKONI wallet' : 'Refunded' };
+    }
+    if (rs === 'requested' || m.status === 'refund_requested' || m.paymentStatus === 'refund_requested') return { text: 'Refund requested — under review' };
+    if (rs === 'rejected') return { text: 'Refund declined' };
     if (m.status !== 'active') return { text: DASH };
     if (m.refundEligible === false || (C.isCount(att) && att >= 1)) return { text: REFUND_USED };
     if (att === 0) return { text: REFUND_ELIGIBLE, canRequest: true };
@@ -66,7 +93,8 @@
   function cardHTML(id, m) {
     m = m || {};
     var so = sessionsObj(m), rs = refundState(m), active = m.status === 'active';
-    var pend = m.status === 'pending_payment' || m.paymentStatus === 'payment_review';
+    var late = m.paymentStatus === 'refunded_late';
+    var pend = !late && (m.status === 'pending_payment' || m.paymentStatus === 'payment_review');
     var refund = '<div class="fm-refund"><span>Refund</span> <b data-fm-refund>' + esc(rs.text) + '</b>';
     if (rs.canRequest) {
       refund += S.confirm[id]
@@ -86,6 +114,7 @@
     return '<article class="fm-card" data-id="' + esc(id) + '" aria-label="Membership ' + esc(C.shortRef(id)) + '">' +
       '<div class="fm-card-h"><div><div class="fm-title">' + esc(m.title || DASH) + '</div><div class="fm-sub">Membership ' + esc(C.shortRef(id)) + ' · ' + esc(C.periodText(m.periodCount, m.periodUnit)) + '</div></div>' +
       '<span class="fm-pill' + (pend ? ' fm-pill-wait' : active ? ' fm-pill-ok' : '') + '">' + esc(statusText(m)) + '</span></div>' +
+      (late ? '<p class="fm-sub" role="status">Your payment reached SOKONI after this membership\'s payment window closed, so it was not activated and the money went back to your SOKONI wallet. Start a new membership to continue.</p>' : '') +
       (pend ? '<p class="fm-sub" role="status">' + esc(m.paymentStatus === 'payment_review' ? 'SOKONI is checking this payment. Nothing is active until it is cleared.' : 'This updates automatically once your M-Pesa payment is confirmed.') + '</p>' : '') +
       '<div class="fm-grid">' + kv('Start', C.fmtDate(m.startAt)) + kv('Expiry', C.fmtDate(m.endsAt)) +
       kv('Sessions included', C.capText(C.capOf(m, 'sessionsIncluded', 'unlimited'))) + kv('Used', C.countText(so.attendedSessions)) +
@@ -93,7 +122,7 @@
       refund +
       '<div class="fm-actions">' +
       (active ? '<button type="button" class="fm-btn fm-btn-p" data-fm-act="qr" data-id="' + esc(id) + '">VIEW MEMBERSHIP QR</button>' : '') +
-      (pend ? '' : '<button type="button" class="fm-btn fm-btn-s" data-fm-act="history" data-id="' + esc(id) + '" aria-expanded="' + (att !== undefined) + '">Attendance history</button>') +
+      (pend || late ? '' : '<button type="button" class="fm-btn fm-btn-s" data-fm-act="history" data-id="' + esc(id) + '" aria-expanded="' + (att !== undefined) + '">Attendance history</button>') +
       '</div>' + hist + '</article>';
   }
 
@@ -221,51 +250,65 @@
       }, function () { box.innerHTML = '<p class="fm-sub" role="alert">Plans could not be loaded.</p>'; });
   }
   function payNote(t, alert) { var n = $('fmPayNote'); if (n) { n.textContent = t; if (alert) n.setAttribute('role', 'alert'); } }
+  /* The review step is built ONLY from fitnessCreateMembership's answer (server-priced snapshot). */
+  function reviewHTML(b) {
+    return '<div class="fm-paybox" data-fm-review>' +
+      (b.reused ? '<p class="fm-note" role="status">Continuing your pending membership — nothing new was created.</p>' : '') +
+      '<div class="fm-title">' + esc(b.title || DASH) + '</div><div class="fm-sub">Membership ' + esc(C.shortRef(b.membershipId)) + ' · ' + esc(C.periodText(b.periodCount, b.periodUnit)) + '</div>' +
+      '<div class="fm-price">' + esc(C.fmtKES(b.priceCents)) + '</div>' +
+      '<p class="fm-sub">Pay by ' + esc(C.fmtTime(b.payBy)) + ' (Nairobi). Paid to SOKONI and held for the gym. Refundable before your first visit, subject to policy.</p>' +
+      '<label class="fm-sub" for="fmPhone">M-Pesa number</label>' +
+      '<input id="fmPhone" class="fm-in" inputmode="numeric" autocomplete="tel" placeholder="e.g. 0712345678" value="' + esc(b.phone || '') + '">' +
+      '<button type="button" class="fm-btn fm-btn-p" data-fm-act="pay" id="fmPayBtn">Pay with M-Pesa</button><p id="fmPayNote" class="fm-sub" aria-live="polite"></p></div>';
+  }
+  function validCreate(r) {
+    return !!(r && typeof r.membershipId === 'string' && ID_RE.test(r.membershipId) && typeof r.reused === 'boolean' &&
+      C.isCount(r.priceCents) && r.priceCents > 0 && C.isCount(r.periodCount) && r.periodCount >= 1);
+  }
   function buy(serviceId) {
     var pay = $('fmPay');
     if (!S.flagOn) { if (pay) pay.innerHTML = '<p class="fm-note" role="status">' + esc(NOT_ON_SALE) + '</p>'; return Promise.resolve(false); }
     if (S.busy || !pay) return Promise.resolve(false);
-    var offer = S.offers.filter(function (o) { return o.id === serviceId; })[0]; if (!offer) return Promise.resolve(false);
+    if (!S.offers.some(function (o) { return o.id === serviceId; })) return Promise.resolve(false);
     S.busy = true;
     pay.innerHTML = '<p class="fm-sub" role="status">Starting your membership…</p>';
-    var mid = null;
     return C.call('fitnessCreateMembership', { serviceId: serviceId }).then(function (r) {
-      mid = r && r.membershipId;
-      if (!mid) throw Object.assign(new Error('Could not start the membership. Please try again.'), { code: 'unknown' });
-      return C.call('createPaymentIntent', { purpose: 'fitness_membership', membershipId: mid });
-    }).then(function (intent) {
-      if (!intent || !intent.ref || !(Number(intent.amount) > 0)) throw new Error('Payment could not be prepared. Please try again.');
-      S.buy = { membershipId: mid, ref: intent.ref, amount: Number(intent.amount), title: offer.name || 'Gym membership' };
+      if (!validCreate(r)) throw new Error('Could not start the membership. Please try again.');
       var phone = ((root.firebase.auth().currentUser || {}).phoneNumber || '').replace('+', '');
-      pay.innerHTML = '<div class="fm-paybox"><div class="fm-sub">' + esc(S.buy.title) + ' · Membership ' + esc(C.shortRef(mid)) + '</div>' +
-        '<div class="fm-price">KES ' + esc(S.buy.amount.toLocaleString('en-KE')) + '</div>' +
-        '<p class="fm-sub">Paid to SOKONI and held for the gym. Refundable before your first visit, subject to policy.</p>' +
-        '<label class="fm-sub" for="fmPhone">M-Pesa number</label>' +
-        '<input id="fmPhone" class="fm-in" inputmode="numeric" autocomplete="tel" placeholder="e.g. 0712345678" value="' + esc(phone) + '">' +
-        '<button type="button" class="fm-btn fm-btn-p" data-fm-act="pay" id="fmPayBtn">Pay with M-Pesa</button><p id="fmPayNote" class="fm-sub" aria-live="polite"></p></div>';
+      S.buy = { membershipId: r.membershipId, reused: r.reused, priceCents: r.priceCents, periodCount: r.periodCount, periodUnit: r.periodUnit,
+        title: r.title || null, payBy: r.payBy || null, phone: phone, ref: null, amount: null };
+      pay.innerHTML = reviewHTML(S.buy);
       return true;
     }).catch(function (e) {
-      pay.innerHTML = '<p class="fm-sub" role="alert">' + esc(C.isOffline(e) ? 'Unavailable — retry when connected' : ((e && e.message) || 'Could not start the membership.')) + '</p>';
+      pay.innerHTML = '<p class="fm-sub" role="alert">' + esc(createRefusalText(e, 'Could not start the membership.')) + '</p>';
       return false;
     }).then(function (ok) { S.busy = false; return ok; });
   }
   function payNow() {
-    if (!S.buy) return Promise.resolve(false);
+    if (!S.buy || S.busy) return Promise.resolve(false);
     var input = $('fmPhone'), btn = $('fmPayBtn');
     var phone = String((input && input.value) || '').replace(/\D/g, '').replace(/^0/, '254');
     if (!/^254[17]\d{8}$/.test(phone)) { payNote('Enter a valid Kenyan M-Pesa number.', true); return Promise.resolve(false); }
     if (!root.SokoniIntaSend || typeof root.SokoniIntaSend.initiateSTKPush !== 'function') { payNote('Payment unavailable right now. Please try again.', true); return Promise.resolve(false); }
-    if (btn) { btn.disabled = true; btn.textContent = 'Check your phone…'; }
-    return Promise.resolve(root.SokoniIntaSend.initiateSTKPush(phone, S.buy.amount, S.buy.ref, { category: 'fitness', serviceDesc: S.buy.title }))
-      .then(function () {
-        /* NOT a success message: the membership card below says "Waiting for payment confirmation" until the server flips it. */
+    S.busy = true;
+    if (btn) { btn.disabled = true; btn.textContent = 'Preparing payment…'; }
+    var b = S.buy;
+    return C.call('createPaymentIntent', { purpose: 'fitness_membership', membershipId: b.membershipId }).then(function (intent) {
+      if (!intent || !intent.ref || !(Number(intent.amount) > 0)) throw new Error('Payment could not be prepared. Please try again.');
+      /* The intent is the server's price; it must equal the price the member just reviewed, or nothing is pushed. */
+      if (Math.round(Number(intent.amount) * 100) !== b.priceCents) throw new Error('The price changed. Please start again.');
+      b.ref = intent.ref; b.amount = Number(intent.amount);
+      if (btn) btn.textContent = 'Check your phone…';
+      return Promise.resolve(root.SokoniIntaSend.initiateSTKPush(phone, b.amount, b.ref, { category: 'fitness', serviceDesc: b.title || 'Gym membership' })).then(function () {
+        /* NOT a success message: the membership card says "Waiting for payment confirmation" until the server flips it. */
         payNote('Enter your M-Pesa PIN on your phone. Your membership below updates automatically once SOKONI confirms the payment.');
         return true;
-      }, function (e) {
-        if (btn) { btn.disabled = false; btn.textContent = 'Pay with M-Pesa'; }
-        payNote((e && e.message) || 'Could not send the M-Pesa request.', true);
-        return false;
       });
+    }).catch(function (e) {
+      if (btn) { btn.disabled = false; btn.textContent = 'Pay with M-Pesa'; }
+      payNote(createRefusalText(e, 'Could not send the M-Pesa request.'), true);
+      return false;
+    }).then(function (ok) { S.busy = false; return ok; });
   }
 
   function act(name, id, el) {
@@ -318,7 +361,8 @@
   root.SokoniFitnessMember = {
     _t: { cardHTML: cardHTML, refundState: refundState, attendedOf: attendedOf, statusText: statusText, offersHTML: offersHTML, readFlag: readFlag,
       loadOffers: loadOffers, buy: buy, payNow: payNow, act: act, openQR: openQR, closeQR: closeQR, render: render, state: S,
-      REFUND_ELIGIBLE: REFUND_ELIGIBLE, REFUND_USED: REFUND_USED, NOT_ON_SALE: NOT_ON_SALE, start: start },
+      REFUND_ELIGIBLE: REFUND_ELIGIBLE, REFUND_USED: REFUND_USED, NOT_ON_SALE: NOT_ON_SALE, start: start, createRefusalText: createRefusalText,
+      reviewHTML: reviewHTML, LATE_REFUNDED: LATE_REFUNDED, CREATE_REFUSAL: CREATE_REFUSAL },
   };
   if (root.document && root.document.readyState === 'loading') root.document.addEventListener('DOMContentLoaded', start); else start();
 })(typeof window !== 'undefined' ? window : this);
