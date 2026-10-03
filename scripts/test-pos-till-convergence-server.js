@@ -49,11 +49,15 @@ const sale = (m, key, pid, amount, payments) => ({ idempotencyKey: key, merchant
 async function stk(ref, o) {
   await db.collection('posPaymentIntents').doc(ref).set(Object.assign({ ref, provider: 'intasend', currency: 'KES', state: o.status || 'completed',
     merchantId: o.merchantId, idempotencyKey: o.key, amountCents: o.amountCents }, o.intentExtra || {}));
+  /* confirmedAmountKES = IntaSend's own paid figure, as webhookIntasend finalizeFromWebhook writes it (2026-10-03: the gate
+     settles on THIS, never the requested amountCents). Default: a full payment; o.confirmedKES overrides (partial / absent). */
   if (o.status !== null) await db.collection('posPaymentStatus').doc(ref).set({ ref, status: o.status || 'completed', merchantId: o.merchantId,
-    amountCents: o.amountCents, transactionRef: ref });
+    amountCents: o.amountCents, transactionRef: ref,
+    confirmedAmountKES: Object.prototype.hasOwnProperty.call(o, 'confirmedKES') ? o.confirmedKES : (o.amountCents == null ? null : o.amountCents / 100) });
 }
 
 (async () => {
+  
   process.stdout.write(`\nPOS/Till convergence — server   (tree: ${ROOT})\n\n`);
   const A = 'tc-shop-a', B = 'tc-shop-b', MGR = 'tc-manager', CASH = 'tc-cashier', STR = 'tc-stranger';
   for (const m of [A, B]) {
@@ -163,6 +167,52 @@ async function stk(ref, o) {
     ok(l.ok && l.r.today.sales >= 2 && l.r.today.revenueCents >= 20000, 'T-9', 'the Pulse sees the sales P-0/P-1 just made through posCompleteCheckout', l.ok ? { sales: l.r.today.sales, rev: l.r.today.revenueCents } : l);
     const d = TK.nairobiDay(Date.UTC(2026, 8, 29, 21, 0), 0), d2 = TK.nairobiDay(Date.UTC(2026, 8, 29, 20, 59, 59), 0);
     ok(d.label === '2026-09-30' && d2.label === '2026-09-29', 'T-10', 'the Nairobi day turns at 21:00 UTC', { d: d.label, d2: d2.label });
+  }
+
+  /* ── Owner P0 2026-10-03 (sokoni-pos): POS-01..POS-15 on the real posCompleteCheckout ─────────────── */
+  {
+    const prod = async (id, price) => { await db.collection('products').doc(id).set({ name: id, price, stock: 50, trackInventory: true, sellerUid: A, shopId: A }   /* same shape as the suite's own fixture */); };
+    let n = 0;
+    const tryPay = async (payments, amount, keySuffix) => { n++; const pid = A + '_POS' + n; await prod(pid, amount); const key = 'tc-pos-' + keySuffix + '-' + n; const r = await checkout(A, sale(A, key, pid, amount, payments)); return { r, key }; };
+    /* POS-01 valid */
+    { await stk('postill_pos01', { merchantId: A, key: 'tc-pos-01-' + (n + 1), amountCents: 10000 });
+      const { r, key } = await tryPay([{ method: 'mpesa', amount: 100, ref: 'postill_pos01' }], 100, '01');
+      ok(r.ok && (await salesByKey(key)) === 1, 'POS-01', 'confirmed IntaSend payment (provider confirmed KES 100) → sale completes', r.ok ? undefined : r); }
+    /* POS-05 partial: requested 100, provider confirmed only 10 */
+    { await stk('postill_pos05', { merchantId: A, key: 'tc-pos-05-' + (n + 1), amountCents: 10000, confirmedKES: 10 });
+      const { r, key } = await tryPay([{ method: 'mpesa', amount: 100, ref: 'postill_pos05' }], 100, '05');
+      ok(!r.ok && /confirmed payment is 10 but/.test(r.msg) && (await salesByKey(key)) === 0, 'POS-05', 'PARTIAL: provider confirmed KES 10 of a KES 100 prompt → refused (gate uses the provider figure)', r.ok ? 'completed' : r.msg); }
+    /* POS-05b provider reported no amount */
+    { await stk('postill_pos05b', { merchantId: A, key: 'tc-pos-05b-' + (n + 1), amountCents: 10000, confirmedKES: null });
+      const { r, key } = await tryPay([{ method: 'mpesa', amount: 100, ref: 'postill_pos05b' }], 100, '05b');
+      ok(!r.ok && /did not report an amount/.test(r.msg) && (await salesByKey(key)) === 0, 'POS-05b', 'provider reported no amount → refused', r.ok ? 'completed' : r.msg); }
+    /* POS-08 currency */
+    { await stk('postill_pos08', { merchantId: A, key: 'tc-pos-08-' + (n + 1), amountCents: 10000, intentExtra: { currency: 'USD' } });
+      const { r, key } = await tryPay([{ method: 'mpesa', amount: 100, ref: 'postill_pos08' }], 100, '08');
+      ok(!r.ok && /Kenya shillings/.test(r.msg) && (await salesByKey(key)) === 0, 'POS-08', 'non-KES payment → refused', r.ok ? 'completed' : r.msg); }
+    /* POS-03 pending / POS-04 failed */
+    { await stk('postill_pos03', { merchantId: A, key: 'tc-pos-03-' + (n + 1), amountCents: 10000, status: 'pending' });
+      const a3 = await tryPay([{ method: 'mpesa', amount: 100, ref: 'postill_pos03' }], 100, '03');
+      await stk('postill_pos04', { merchantId: A, key: 'tc-pos-04-' + (n + 1), amountCents: 10000, status: 'failed' });
+      const a4 = await tryPay([{ method: 'mpesa', amount: 100, ref: 'postill_pos04' }], 100, '04');
+      ok(!a3.r.ok && !a4.r.ok && (await salesByKey(a3.key)) === 0 && (await salesByKey(a4.key)) === 0, 'POS-03/04', 'pending and failed payments → refused', [a3.r.msg, a4.r.msg]); }
+    /* POS-10 / POS-09 / POS-11: SIMULATED_ / fake / browser-success without a provider record */
+    { const a10 = await tryPay([{ method: 'mpesa', amount: 100, ref: 'SIMULATED_1791000000000' }], 100, '10');
+      const a9 = await tryPay([{ method: 'mpesa', amount: 100, ref: 'postill_doesnotexist' }], 100, '09');
+      const a11 = await tryPay([{ method: 'mpesa', amount: 100 }], 100, '11');
+      ok(!a10.r.ok && !a9.r.ok && !a11.r.ok && (await salesByKey(a10.key)) + (await salesByKey(a9.key)) + (await salesByKey(a11.key)) === 0, 'POS-09/10/11', 'SIMULATED_ ref, unknown ref and a reference-less "paid" line → refused', [a10.r.msg, a9.r.msg, a11.r.msg]); }
+    /* POS-15 method mismatch + unknown tenders */
+    { await stk('postill_pos15', { merchantId: A, key: 'tc-pos-15-' + (n + 1), amountCents: 10000 });
+      const a15 = await tryPay([{ method: 'card', amount: 100, ref: 'postill_pos15' }], 100, '15');
+      const aT = await tryPay([{ method: 'mpesa_till_manual', amount: 100, ref: 'QK12AB34CD' }], 100, 'T1');
+      const aB = await tryPay([{ method: 'bank', amount: 100 }], 100, 'T2');
+      const aG = await tryPay([{ method: 'gift_card', amount: 100 }], 100, 'T3');
+      ok(!a15.r.ok && /only settle an M-PESA payment/.test(a15.r.msg) && !aT.r.ok && !aB.r.ok && !aG.r.ok && /cannot settle a sale/.test(aB.r.msg)
+        && (await salesByKey(a15.key)) + (await salesByKey(aT.key)) + (await salesByKey(aB.key)) + (await salesByKey(aG.key)) === 0,
+        'POS-15', 'an M-PESA prompt used as card, manual till code, bank and gift card → refused (closed tender list)', [a15.r.msg, aT.r.msg, aB.r.msg, aG.r.msg]); }
+    /* POS-12 / POS-14: replay the POS-01 payment on another sale */
+    { const a12 = await tryPay([{ method: 'mpesa', amount: 100, ref: 'postill_pos01' }], 100, '12');
+      ok(!a12.r.ok && (await salesByKey(a12.key)) === 0, 'POS-12/14', 'a payment already confirmed for another sale cannot settle this one', a12.r.ok ? 'completed' : a12.r.msg); }
   }
 
   clearTimeout(WATCHDOG);

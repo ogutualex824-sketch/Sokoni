@@ -1,3 +1,10 @@
+## [2026-10-03] — SmartPOS server payment gate (sokoni-pos, owner P0; functions, NOT deployed)
+
+**Owner assignment:** POS workstream · posCompleteCheckout · functions/pos-zero-friction.js · P0. Built on the certified POS line (feat/pos-till-convergence-fn 3357619, which descends from live ee37437 and already added assertConfirmableStk: IntaSend intent + webhook status, same shop, same sale key, spent-once claim).
+**Gaps closed:** (1) the live webhook marks a POS prompt completed without comparing paid vs requested — the gate now settles on the PROVIDER figure (posPaymentStatus.confirmedAmountKES), never the requested amountCents; no provider figure → refused. (2) KES only. (3) closed tender list {cash, mpesa, card, wallet}: unconfirmable methods (bank, mpesa_till_manual, gift_card, …) used to count toward the tendered total with no proof. (4) an M-PESA prompt reference can only settle an M-PESA line.
+**Tests:** test-pos-payment-gate-unit.js 17/0 (3 sabotages caught; base 3357619 fails 5); emulator suite test-pos-till-convergence-server.js extended with POS-01..POS-15 — NOT RUN (512 MB gate). certify-pos-payment-ownership 40 pass, 5 T5 failures identical on the base (pre-existing provenance checks).
+**Deploy (when authorized + RAM):** functions:posCompleteCheckout only, from this tree, after a fresh live-archive diff; then the hosting 6b client port.
+
 ## 2026-09-29 (174) — 6b: SmartPOS cash converges on posCompleteCheckout — one physical sale = one server sale (NOT deployed)
 
 **Why.** SmartPOS (`pos.js`) finished a sale on the device and had three writers:
