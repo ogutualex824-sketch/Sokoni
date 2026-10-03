@@ -21,5 +21,17 @@ ck('C-4', /\['id', 'shopId', 'sellerUid', 'createdAt', 'updatedAt'\]\.forEach/.t
 ck('C-5', !!dp && !/deleteDoc/.test(strip(dp)) && /op: 'archive'/.test(dp), 'deleteProduct is an ARCHIVE request — no deleteDoc');
 ck('C-6', !/deleteDoc\([^)]*'products'/.test(strip(MV2)), 'merchant-v2 has no products deleteDoc anywhere');
 ck('C-7', /Archive this product\?/.test(MP) && /you can restore it later/.test(MP) && !/This cannot be undone/.test(MP), 'the Products dialog says Archive, and no longer claims it cannot be undone');
+/* ── the inventory pages (SokoniInventory) and the retired legacy writer (seller-wiring) ── */
+const INV = strip(read('sokoni-inventory.js')), SW = read('seller-wiring.js');
+const fnBody = (src, name) => { const i = src.indexOf('async function ' + name + '('); if (i < 0) return ''; const j = src.indexOf('\n  async function ', i + 10); return src.slice(i, j < 0 ? i + 3000 : j); };
+const save = fnBody(INV, 'saveProduct'), del = fnBody(INV, 'deleteProduct');
+ck('C-8', !!save && !/productsCol\(\)\.doc\([^)]*\)\.(set|update)/.test(save) && /_saveViaServer\(_req\)/.test(save) && /prd_\$\{_shopId\}_/.test(save),
+  'inventory saveProduct writes nothing itself; it requests merchantProduct, in the canonical id space');
+ck('C-9', !!del && /op: 'archive'/.test(del) && !/productsCol\(\)\.doc\([^)]*\)\.(set|update|delete)/.test(del), 'inventory deleteProduct is a server ARCHIVE');
+ck('C-10', /case 'save_product':\s*return _saveViaServer\(/.test(INV) && /case 'delete_product':\s*return _callCF\('merchantProduct', \{ op: 'archive'/.test(INV), 'the offline queue REPLAYS through the server too (no queued direct write)');
+ck('C-11', /typeof window\.sokoniCallable === 'function'/.test(INV) && INV.indexOf("typeof window.sokoniCallable === 'function'") < INV.indexOf('firebase.functions().httpsCallable'), 'the callable prefers the App-Check-carrying modular client');
+ck('C-12', /async function _writeProduct\(product\) \{\n    if \(_RETIRED\) return;/.test(SW.replace(/\r\n/g, '\n')) && /function _syncLocalProducts\(\) \{\n    if \(_RETIRED\) return;/.test(SW.replace(/\r\n/g, '\n')),
+  'seller-wiring\'s login-time catalogue sync and product writer are RETIRED (they recreated products from localStorage)');
+
 console.log('\nRESULT: ' + pass + ' passed, ' + fail + ' failed');
 process.exit(fail ? 1 : 0);

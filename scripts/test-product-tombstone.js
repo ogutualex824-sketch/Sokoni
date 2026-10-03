@@ -126,8 +126,10 @@ console.log('\nEvery delete/unpublish path lands in the hidden vocabulary');
      /status: 'archived', isVisible: false/.test(code('seller-wiring.js')));
   ck('admin.html still routes removal through the server',
      /adminUpdateProductStatus/.test(code('admin.html')) && /status:'removed'/.test(code('admin.html')));
+  /* 2026-10-03 security convergence: the inventory delete is now the SERVER archive (merchantProduct, canonical
+     tombstone) — still soft, never a hard delete; the invariant is unchanged, only the mechanism. */
   ck('sokoni-inventory still soft-deletes',
-     /status: 'inactive'/.test(code('sokoni-inventory.js')));
+     /_callCF\('merchantProduct', \{ op: 'archive'/.test(code('sokoni-inventory.js')) && !/\.delete\(\)/.test(code('sokoni-inventory.js').split('async function deleteProduct')[1].split('async function')[0]));
 }
 
 console.log('\nForeign keys still resolve after a tombstone');

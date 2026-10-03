@@ -489,8 +489,11 @@ const SokoniInventory = (() => {
 
     const now  = nowISO();
     const isNew= !product.id;
+    /* SECURITY CONVERGENCE (2026-10-03): the shop is the owner's account shop (shops/{uid}); new ids use the canonical
+       merchant id space prd_<shopId>_* so the server authority accepts the create. */
+    const _shopId = _sellerUid();
     if (isNew) {
-      product.id        = `prod_${uid6()}`;
+      product.id        = `prd_${_shopId}_${uid6()}`;
       product.createdAt = now;
       product.createdBy = currentUid();
     }
@@ -506,15 +509,16 @@ const SokoniInventory = (() => {
     await idbPut('products', _toInv(product.id, canonical));
     _cache.delete(`product:${product.id}`);
 
-    if (_online && _fs) {
-      /* Timeout so a stalled compat-firestore write surfaces an error instead of hanging the
-         Save button forever. */
+    /* The browser no longer writes products/{id}: merchantProduct decides ownership, fields, price, publication and the
+       plan limit. Opening stock is the product's first movement through merchantAdjustStock (idempotent on the id). */
+    const _req = { id: product.id, canonical, isNew, shopId: _shopId };
+    if (_online) {
       await Promise.race([
-        productsCol().doc(product.id).set(canonical, { merge: true }),
-        new Promise((_, rej) => setTimeout(() => rej(new Error('Save timed out — check your connection and retry')), 9000)),
+        _saveViaServer(_req),
+        new Promise((_, rej) => setTimeout(() => rej(new Error('Save timed out — check your connection and retry')), 15000)),
       ]);
     } else {
-      await _enqueue({ op: 'save_product', data: { id: product.id, canonical } });
+      await _enqueue({ op: 'save_product', data: _req });
     }
 
     emit('product_saved', { product, isNew });
@@ -561,14 +565,14 @@ const SokoniInventory = (() => {
   }
 
   async function deleteProduct(id) {
+    /* An ARCHIVE through the server (canonical tombstone — restorable, history kept), never a browser write. */
+    if (_online) {
+      await _callCF('merchantProduct', { op: 'archive', shopId: _sellerUid(), productId: id });
+    } else {
+      await _enqueue({ op: 'delete_product', data: { id, shopId: _sellerUid() } });
+    }
     await idbDelete('products', id);
     _cache.delete(`product:${id}`);
-    if (_online && _fs) {
-      /* Soft-delete on the canonical product: status inactive hides it from catalogue + inventory. */
-      await productsCol().doc(id).update({ status: 'inactive', active: false, deletedAt: nowISO(), updatedAt: nowISO() });
-    } else {
-      await _enqueue({ op: 'delete_product', data: { id } });
-    }
     emit('product_deleted', { id });
   }
 
@@ -1155,9 +1159,10 @@ const SokoniInventory = (() => {
   async function _processQueuedOp(op) {
     switch (op.op) {
       case 'save_product':
-        return productsCol().doc(op.data.id).set(op.data.canonical || op.data, { merge: true });
+        /* replayed through the server authority, exactly like an online save */
+        return _saveViaServer(op.data.canonical ? op.data : { id: op.data.id, canonical: op.data, isNew: false, shopId: op.data.shopId || _sellerUid() });
       case 'delete_product':
-        return productsCol().doc(op.data.id).update({ status: 'inactive', active: false, deletedAt: nowISO(), updatedAt: nowISO() });
+        return _callCF('merchantProduct', { op: 'archive', shopId: op.data.shopId || _sellerUid(), productId: op.data.id });
       case 'movement':
         return _callCF('inventoryAdjustStock', op.data);
       case 'create_po':
@@ -1177,7 +1182,28 @@ const SokoniInventory = (() => {
   /* ═══════════════════════════════════════════════════════════════════
      CLOUD FUNCTION CALLER
   ═══════════════════════════════════════════════════════════════════ */
+  /* The ONE product write path of this module (security convergence 2026-10-03). The canonical shape is sent as-is;
+     the server keeps only the fields it allows (price / stock / status / owner are not the browser's). */
+  async function _saveViaServer(req) {
+    const shopId = req.shopId || _sellerUid();
+    const data = Object.assign({}, req.canonical || {});
+    const opening = req.isNew && data.stock != null ? Math.floor(Number(data.stock)) : null;
+    ['stock', 'sellerUid', 'uid', 'shopId', 'status', 'updatedAt', 'updatedBy'].forEach((k) => { delete data[k]; });
+    const res = await _callCF('merchantProduct', { op: 'write', shopId, productId: req.id, mode: req.isNew ? 'create' : 'update', data });
+    if (opening && opening > 0) {
+      try { await _callCF('merchantAdjustStock', { productId: req.id, shopId, adjustmentId: 'open_' + req.id, delta: opening, reason: 'restock', note: 'Opening stock (inventory)' }); }
+      catch (e) { emit('opening_stock_failed', { id: req.id, error: e.message }); }
+    }
+    return res;
+  }
+
   async function _callCF(name, data) {
+    /* Prefer the page's modular callable (firebase.js → window.sokoniCallable): it carries the App Check token the
+       server authorities (merchantProduct, merchantAdjustStock) enforce. Compat and raw fetch remain as fallbacks. */
+    if (typeof window.sokoniCallable === 'function') {
+      const r = await window.sokoniCallable(name)(data);
+      return r && r.data;
+    }
     if (window.firebase && firebase.functions) {
       const fn = firebase.functions().httpsCallable(name);
       const result = await fn(data);

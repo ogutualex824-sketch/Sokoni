@@ -101,7 +101,12 @@
   }
 
   /* ── Write one product to Firestore public products collection ── */
+  /* RETIRED (security convergence, owner 2026-10-03: 'retire legacy writers'). A product is written ONLY by the
+     merchantProduct server authority (merchant-v2). This browser writer created products from localStorage with
+     whatever price / stock / owner the cache held (stock defaulted to 9999), on ~295 pages, at every login. */
+  const _RETIRED = true;
   async function _writeProduct(product) {
+    if (_RETIRED) return;
     const db = _getDb();
     if (!db || !product || !product.id) return;
     try {
@@ -153,6 +158,7 @@
      SokoniSync propagation; this wrapper must NOT hard-delete. Kept as a safety net that
      archives (idempotent) only if some caller reaches here without seller.js having run. */
   async function _deleteProduct(productId) {
+    if (_RETIRED) return;   /* archive is merchantProduct {op:'archive'} */
     const db = _getDb();
     if (!db || !productId) return;
     try {
@@ -219,6 +225,7 @@
 
   /* ── Sync all local sellerProducts to Firestore on login ─────── */
   function _syncLocalProducts() {
+    if (_RETIRED) return;   /* the login-time catalogue re-sync is retired with _writeProduct */
     if (!_uid || !_getDb()) return;
     try {
       const prods = JSON.parse(localStorage.getItem('sellerProducts') || '[]');
