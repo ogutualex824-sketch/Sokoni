@@ -1,3 +1,14 @@
+## [2026-10-03] — P0 SECURITY (port of 5b 0cb93bd): workspace approvals need SERVER evidence — NOT deployed
+
+- **functions/shared/approval-remediation.js + functions/business-workspace.js:**
+  - an approval is valid only with applicationDecisions/{id} (status approved, same decidedBy) or the immutable adminAudit 'application_approve' row whose performedBy === decidedBy;
+  - providers.approvalDecision 'approve' becomes an artefact, not an approval.
+  - Closes the live forged self-approval: the applicant writes {status:'approved', decidedBy:<admin uid>} on their own application.
+- **Capability-line port:** the extra SLICE 0 `approvals` reader (the one that grants service capabilities) gets the SAME server-evidence predicate, so it cannot become a bypass.
+- **Fixtures:** test-service-capabilities, test-service-leads and test-tech-service-profile now write the applicationDecisions record that applicationDecide writes for an admin decision.
+- **Tests:** p0-forged-approval 11/0, shell-approval-gate 21/0, shell-gate-mutations 9/0, business-workspace 30/0, workspace-capability 51/0, service-capabilities 17/0, service-leads 14/0, tech-service-profile 18/0, marketing-services 11/0, marketing-hub 26/0, legal-projection 96/0, role-provisioning 57/0, messages-jobs/sports/product-enquiry 8/8/7, booking-contact 5/0, provider-suspend-restore 8/0.
+- **Live release:** ships from 5b's hotfix/approval-authority-on-c7e26b6 (owner: STRICT; legacy approvals without record or audit row are re-decided by an admin).
+
 ## [2026-10-03] — Marketing Hub MK4 (server): services only in APPROVED categories, on the ONE provider-services authority; the booking snapshots the service so commission follows the BOOKED service — NOT deployed
 
 - **functions/shared/marketing-services.js (new, pure):**
