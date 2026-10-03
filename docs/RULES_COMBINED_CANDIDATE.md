@@ -319,3 +319,17 @@ ONE rules release: Jobs ×3, the construction open-RFQ PII fix, and this one. It
 complete-application's withdraw (K13-C), so both are admitted narrowly. The combined candidate's `appNoDecision` list now
 carries the same 26 keys (+17), so the combined release cannot regress the hotfix. Rows AR-9–AR-14 are added; run them
 against BOTH files. **EMULATOR PENDING.**
+
+## 2026-10-03: Sports server-only collections (sokoni-2f, sportsDispatch @ a2d55b4)
+
+REPLACED (no duplicates; one block each):
+- `teams`: read when approved / archived, or by owner / captain / managers, or admin.
+- `tournaments`: unpublished states private to the organiser; a missing status reads as draft (fail closed).
+- `sportsTournamentRegs`: admin read.
+
+NEW: `sportsTeamMembers` (own doc only) and `sportsFixtures` (public read). All writes are false (sportsDispatch only).
+Two safety tweaks on 2f's hunks, both covered by rows: `managerUids` is read with a default, so a missing list can't make
+the expression error; a missing tournament status reads as draft. Untouched by owner rule: sportsPlayers / sportsCoaches /
+sportsPosts (no server writer yet), sportsVenueBookings (owner b6f9cee) and sportsReviews (1925aaa). Retiring
+sportsOrders / sportsCoachBookings waits for zero-writer evidence. **Ships AFTER the functions carrying sportsDispatch.**
+Suite `scripts/zz-test-sports-rules.js` (S-R1a–g, R2a–d, R3a–f, R4a–b, R5, R6, R7). **EMULATOR PENDING.**
