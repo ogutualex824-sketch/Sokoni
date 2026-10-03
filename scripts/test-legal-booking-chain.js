@@ -81,8 +81,9 @@ console.log('\nLegal Hub L4 — Legal consultation on the canonical booking + se
   const s2 = await PO.settleOnPinRelease(bid, 'cust');
   ck('C5', s2 && s2.skipped && s2.credited === undefined, 'a second PIN release is a no-op — no double commission, no double credit', s2);
   const rc2 = RC();
-  ck('C13', !!rc2 && rc2.status === 'released' && rc2.heldCents === 0 && rc2.releasedCents === 500000 && rc2.platformFeeCents === 25000 && rc2.providerNetCents === 475000 && evs('released_').length === 1,
-    'PIN release → the receipt records the release ONCE: held 0, released KES 5,000, SOKONI fee 250, provider net 4,750', rc2);
+  ck('C13', !!rc2 && rc2.status === 'released' && rc2.heldCents === 0 && rc2.releasedCents === 500000 && rc2.platformFeeCents === 25000
+    && rc2.providerNetCents === PAY.settlementCents && rc2.platformFeeCents + rc2.providerNetCents === rc2.releasedCents && evs('released_').length === 1,
+    'PIN release → the receipt records ONE BALANCED release (contract v2): released KES 5,000 = SOKONI fee 250 + provider settlement 4,750 (= providerPayouts.settlementCents)', { rc2, settlementCents: PAY.settlementCents });
 
   /* C14 — refund before settlement (provider cancels a paid booking) → the receipt records the refund ONCE */
   const bk2 = await call(BS.bookingCreateService, 'cust', { providerId: 'adv', serviceId: 'legal_consult_adv', date: tomorrow(), startTime: '15:00', idempotencyKey: 'k2' });
@@ -106,6 +107,38 @@ console.log('\nLegal Hub L4 — Legal consultation on the canonical booking + se
   const rc4 = RC();
   ck('C15', rv1 && rv1.reversed && rv2 && rv2.alreadyReversed && !!rc4 && rc4.status === 'refunded' && rc4.refundedCents === 500000 && rc4.releasedCents === 500000 && evs('refunded_').length === 1,
     'refund after settlement → the released receipt records the full refund ONCE (released stays as history; status refunded)', { rv1, rc4 });
+  /* C16 — the receipt system can FAIL without touching money: the hold still lands, the failure is queued WITH a replay */
+  const TR = require(path.join(FN, 'transaction-receipts.js'));
+  const origPaid = TR.recordPaid;
+  const bk3 = await call(BS.bookingCreateService, 'cust', { providerId: 'adv', serviceId: 'legal_consult_adv', date: tomorrow(), startTime: '17:00', idempotencyKey: 'k3x' });
+  const bid3 = bk3.ok && (bk3.ok.bookingId || bk3.ok.id);
+  let c16 = { bid3 };
+  if (bid3) {
+    DOCS.set('paymentIntents/INT_' + bid3, { resourceType: 'providerBooking', resourceId: bid3, amountCents: 500000, status: 'pending' });
+    DOCS.set('payments/API_' + bid3, { apiRef: 'API_' + bid3, providerMethod: null, status: 'COMPLETE' });
+    TR.recordPaid = async () => { throw new Error('receipts store unavailable (test)'); };
+    let threw = false;
+    try { await SW.holdServiceBookingPayment(H.db, require('firebase-admin'), 'API_' + bid3, 'INT_' + bid3, 5000); } catch (_) { threw = true; }
+    TR.recordPaid = origPaid;
+    const fails = [...DOCS.keys()].filter((k) => k.startsWith(TR.FAILURES + '/')).map((k) => DOCS.get(k)).filter((f) => f.replay && f.replay.op === 'paid' && f.replay.args && f.replay.args.sourceId === bid3);
+    c16 = { threw, status: DOCS.get('providerBookings/' + bid3).paymentStatus, receipt: DOCS.has('transactionReceipts/service_booking_' + bid3), fails: fails.length };
+  }
+  ck('C16', c16.threw === false && c16.status === 'paid_held' && c16.receipt === false && c16.fails === 1,
+    'a receipts failure never blocks or reverses money: the payment is still held, and the failure is queued WITH a replay descriptor for the retry sweep', c16);
+  /* C17 — receipt security (2f / owner rows): scope, other provider, unpaid release, duplicate refund */
+  const ids = async (uid) => (await TR.receiptsFor(H.db, uid, {})).map((r) => r.receiptId + ':' + r.role).sort();
+  const asClient = await ids('cust'), asProv = await ids('adv'), stranger = await ids('stranger'), otherProv = await ids('tech');
+  const bk4 = await call(BS.bookingCreateService, 'cust', { providerId: 'adv', serviceId: 'legal_consult_adv', date: tomorrow(), startTime: '18:00', idempotencyKey: 'k4' });
+  const bid4 = bk4.ok && (bk4.ok.bookingId || bk4.ok.id);
+  const rel4 = bid4 ? await PO.settleOnPinRelease(bid4, 'cust') : null;
+  const ref2b = bid2 ? H.db.collection('providerBookings').doc(bid2) : null;
+  const dupRefund = ref2b ? await PO._disburseHeldFunds(DOCS.get('providerBookings/' + bid2), ref2b, { by: 'provider', isNoShow: false }) : 'x';
+  ck('C17', asClient.indexOf('service_booking_' + bid + ':client') > -1 && asProv.indexOf('service_booking_' + bid + ':provider') > -1
+    && stranger.length === 0 && otherProv.length === 0
+    && rel4 && rel4.skipped && !DOCS.has('transactionReceipts/service_booking_' + bid4)
+    && dupRefund === null && (DOCS.get('transactionReceipts/service_booking_' + bid2) || {}).refundedCents === 500000,
+    'receipts are scoped to the buyer and the provider only (a stranger or another provider sees none); releasing an UNPAID booking does nothing and creates no receipt; a duplicate refund changes nothing',
+    { asClient, asProv, stranger, otherProv, rel4, dupRefund });
   /* C10 — Legal rate cards name a taxonomy practice area; only a server-classified lawyer may set one (L6) */
   /* NO plan fixture (owner 10-03 + 2f 965c46d): on the FREE plan, the SOKONI-created consultation card does not count, so the advocate's own first rate card is allowed. */
   DOCS.set('providers/plumb', { status: 'active', category: 'plumbing', business: { category: 'plumbing', source: 'application' } });

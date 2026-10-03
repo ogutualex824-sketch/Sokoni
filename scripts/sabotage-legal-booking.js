@@ -21,7 +21,9 @@ const M = [
   ['paid receipt hook removed from the webhook hold', 'booking-payment-sweep.js', '      await BR.paid(db, bookingId, apiRef);', '', 'C12'],
   ['release receipt hook removed from PIN settlement', 'provider-ops.js', "settleOnPinRelease', { bookingId, uid, gross: m.gross, commission: m.commission, credited: out.credited });\n  if (out && out.credited !== undefined) await require('./shared/booking-receipts').released(_db(), bookingId, m);", "settleOnPinRelease', { bookingId, uid, gross: m.gross, commission: m.commission, credited: out.credited });", 'C13'],
   ['refund receipt hook removed from cancellation disbursement', 'provider-ops.js', "    await BR.refunded(_db(), ref.id, refundC, ref.id + '_refund',", "    void (_db(), ref.id, refundC, ref.id + '_refund',", 'C14'],
-  ['refund receipt hook removed from the reversal after settlement', 'provider-ops.js', "    await require('./shared/booking-receipts').refunded(DB(), ref.id, paidC, ref.id + '_reversal', 'refund_after_settlement');", '', 'C15'],
+  ['refund receipt hook removed from the reversal after settlement', 'provider-ops.js', "  if (out && out.reversed) await require('./shared/booking-receipts').refunded(DB(), ref.id, _rcptPaidCents, ref.id + '_reversal', 'refund_after_settlement');", '', 'C15'],
+  ['paid receipt queued WITHOUT a replay (cannot be retried)', 'shared/booking-receipts.js', "() => R.recordPaid(db, args, deps), { op: 'paid', args });", '() => R.recordPaid(db, args, deps));', 'C16'],
+  ['release recorded without the SOKONI commission', 'shared/booking-receipts.js', 'platformFeeCents: commission, providerNetCents: settle,', 'platformFeeCents: 0, providerNetCents: settle,', 'C13'],
 ];
 let caught = 0, missed = 0;
 for (const [name, file, a, b, row] of M) {

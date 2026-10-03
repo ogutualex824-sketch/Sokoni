@@ -1,3 +1,28 @@
+## [2026-10-03] — Transaction receipts for provider bookings (owner decision; sokoni-2f contract v2 65e85d1) — NOT deployed
+
+- **functions/shared/booking-receipts.js (new):** the provider-booking hooks onto the platform receipt.
+  - They NEVER throw, even if the receipts module cannot load, and never block or reverse money.
+  - Every write goes through receipts.safely WITH a replay descriptor, so the retry sweep can replay it.
+  - Releases are BALANCED: amount = held = commission + settlementCents (net + fee). No net mapping survives.
+  - A quote-converted booking is ONE receipt of kind quote (sourceId = quoteId), linking quote and booking.
+  - The method is IntaSend's own, from payments/{apiRef}.providerMethod (null → "—").
+  - taxTreatment is recorded from the provider's eTIMS registration, never computed.
+- **Hooks, each AFTER the money step commits:**
+  - booking-payment-sweep.holdServiceBookingPayment: paid. A payment on a dead booking is receipted, then refunded.
+  - provider-ops.settleOnPinRelease / settleOnShowUp: released.
+  - _disburseHeldFunds: refunded (and forfeit released for a no-show or late cancel).
+  - reverseServiceSettlement: refunded after settlement. The amount is taken inside the reversal txn, never re-read.
+- **Tests (test-legal-booking-chain 18/0; the paid_held fixture is replaced by the REAL webhook hold function):**
+  - C12: one receipt per verified payment, replay-safe.
+  - C13: one balanced release.
+  - C14 / C15: refund before and after settlement, once each.
+  - C16: a receipts failure leaves the money held and queues a replay.
+  - C17: buyer and provider scope only; an unpaid release does nothing; a duplicate refund does nothing.
+  - sabotage-legal-booking 13/13.
+- **Regressions (equal to base):** test-service-settlement-reversal 7/0, test-healthcare-payment-convergence 40/0, test-transaction-receipts 13/0, test-ent-journeys 49/0, test-ent-communications 76/0, test-booking-payment-auth 10/10, test-legal-verification 93 rows.
+- **Merges:** commercial-fn 5d799e6 and 65e85d1, the receipts contract.
+- **Deploy:** providerDispatch / bookingDispatch / webhook bundles (5b carries) + myTransactionReceipts (2f).
+
 ## [2026-10-03] — Availability server-authoritative: proof that the server availability ops are scoped to the caller and that the booking transaction re-checks (owner decision) — NOT deployed
 
 - **scripts/test-booking-provider-gate.js:**

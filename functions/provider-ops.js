@@ -477,6 +477,7 @@ async function reverseServiceSettlement(bookingId, opts) {
   const revRef = DB().collection('providerPayouts').doc(`${bookingId}_reversal`);
   if (o.decision !== 'refund_full') return { ok: false, code: 'decision_not_supported', reason: 'Only a full refund after settlement is decided.' };
   let out = null;
+  let _rcptPaidCents = 0;
   await DB().runTransaction(async (t) => {
     const [bSnap, pSnap, rSnap] = await Promise.all([t.get(ref), t.get(payRef), t.get(revRef)]);
     if (rSnap.exists) { out = { ok: true, alreadyReversed: true }; return; }
@@ -516,17 +517,14 @@ async function reverseServiceSettlement(bookingId, opts) {
         actor: o.actor || null, createdAt: TS(),
       });
     }
+    _rcptPaidCents = paidCents;   /* for the receipt hook below — taken from THIS transaction, never re-read */
     t.update(ref, { paymentStatus: 'refunded_after_settlement', refundedCents: paidCents, reversedAt: TS(), updatedAt: TS() });
     out = { ok: true, reversed: true, providerDebitShillings: debit, clawbackShortfallShillings: shortfall, buyerRefundShillings: refundShillings,
             commissionReversedCents: Number(p.commission) || 0 };
   });
   if (out && out.reversed) logger.info('reverseServiceSettlement', { bookingId, actor: o.actor || null, debit: out.providerDebitShillings, shortfall: out.clawbackShortfallShillings });
   /* Transaction receipt: the full refund after settlement, AFTER the reversal committed; never throwing. */
-  if (out && out.reversed) {
-    const b2 = (await ref.get()).data() || {};
-    const paidC = Math.round(Number(b2.heldAmount) || 0) || (Math.round(Number(b2.price) || 0) + Math.round(Number(b2.fee) || 0));
-    await require('./shared/booking-receipts').refunded(DB(), ref.id, paidC, ref.id + '_reversal', 'refund_after_settlement');
-  }
+  if (out && out.reversed) await require('./shared/booking-receipts').refunded(DB(), ref.id, _rcptPaidCents, ref.id + '_reversal', 'refund_after_settlement');
   return out;
 }
 
