@@ -38,7 +38,7 @@ So the invoice system is **not converged**. Any admin total across stores would 
 | ~~Subscription invoice created `paid` from a client reference~~ **FIXED** 3c7eec6: payment_unverified + no cross-user leak | sasos-billing.js `sasosCreateInvoice` | f3 |
 | ~~`createSupplierInvoice` shows no check that the caller owns the PO~~ **FIXED on e3's procurement line** (feat/parcel-rail-fn-on-5a0935e @ ca55f8b, not deployed): buyer derived from the authoritative PO; grnId must belong to that PO and merchant. Owner decision (via e3): an admin-approved supplier payment is a CLAIM until a verified payment matches it (e3 building) | procurement.js | sokoni-e3 |
 | ~~`_assertShop` accepts `users.role == 'admin'`~~ **FIXED** e99a961: only the Auth admin / superAdmin claim | finance-os-sprint43.js | f3 |
-| A FinOS invoice can be generated for a not-yet-COMPLETED transaction | financial-os.js `fosGenerateInvoice` | payments |
+| ~~A FinOS invoice can be generated for a not-yet-COMPLETED transaction~~ **FIXED** d3d6190 (fix/fos-invoice-completed-on-live): verified-complete only, no default, one per transaction (race-proof) | financial-os.js `fosGenerateInvoice` | f3 |
 
 ## Recommended convergence (decision needed — see the owner question)
 
