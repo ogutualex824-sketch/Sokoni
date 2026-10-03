@@ -171,7 +171,9 @@ function defaultPrefs() {
     p[c] = {
       push: true,
       inapp: true,
-      sms: c === 'security' || c === 'payments' || c === 'delivery',  /* the ones that matter offline */
+      /* SMS-ELIGIBLE categories (owner 2026-10-03): payment, ORDER, delivery and security events — still a FALLBACK for
+         commerce (only when push cannot land), still opt-out-able. Orders were off, so an order SMS could never send. */
+      sms: c === 'security' || c === 'payments' || c === 'delivery' || c === 'orders',
       email: c === 'payments' || c === 'orders',
       /* Marketing is the one exception: everything off until asked for. */
       ...(c === 'promotions' ? { push: false, sms: false, email: false, inapp: true } : {}),
@@ -475,52 +477,52 @@ async function notify({ uid, type, title, body, vars = {}, phone, email, image, 
   /* SMS — forced for critical; for commerce ONLY as a fallback when push could not
      land. Sending both by default would spam the user and burn credit for nothing. */
   const wantSms = ch.sms || (ch.smsFallback && !pushOk);
+  /* SMS — OUTCOME IS ALWAYS RECORDED (owner 2026-10-03, Notifications E2E). result.channels.sms is one of
+       queued                       attempted: handed to the SMS queue (smsQueueWorker sends; the delivery webhook confirms)
+       skipped:<reason>             not sent, for a stated reason (no_phone, invalid_phone, unverified_phone,
+                                    unsupported_destination, sms_disabled, not_eligible, push_delivered)
+       failed:<reason>              the queue refused it (provider_error, rate_limited)
+     and result.delivery.sms carries { status: attempted|skipped|failed, reason } for the audit history.
+     The RECIPIENT is resolved HERE from the server's records (shared/notify-recipient.js) — a phone supplied by the
+     caller is never used. Only types with an SMS template and a non-marketing priority are SMS-eligible, so a push
+     failure never turns an informational message into an SMS bill. */
+  result.delivery = result.delivery || {};
+  const _smsOut = (status, reason) => { result.channels.sms = status === 'attempted' ? 'queued' : status + ':' + reason; result.delivery.sms = { status, reason: reason || null }; };
   if (wantSms && t.smsTemplate) {
-    /* RESOLVE THE RECIPIENT, exactly as push and email already do.
-       `phone` is a caller OVERRIDE, not the only source. Push reads users/{uid} for its
-       tokens; email falls back to the Auth address when the caller supplies none. SMS had
-       the override and no fallback — so `wantSms && t.smsTemplate && phone` was false at
-       its last term for every caller that passes none, sms.enqueue() was never reached,
-       and smsQueueWorker drained an empty queue every minute without one error. In THIS
-       function that blocks payment_success and order_placed, both sent by webhookIntasend
-       with no caller phone.
-
-       Canonical source is users/{uid}.phoneNumber ("+254…"). The legacy `phone` field is
-       deliberately NOT read: reviving it to raise apparent reach would undo a
-       canonicalisation the write path already completed.
-
-       No phoneVerified check, deliberately. Every writer of this field sources it from
-       Firebase Auth — firebase.js at user-doc creation, wallet-engine's
-       getUserByPhoneNumber backfill, wallet-engine's phone_number-claim gate, and
-       profile.html only after a confirmed SMS code — so it is verified by provenance.
-       A flag check would add a second verification policy beside Firebase Auth. */
-    let to = phone;
-    if (!to) {
-      try {
-        const snap = await db().collection('users').doc(uid).get();
-        const pn = snap.exists ? (snap.data() || {}).phoneNumber : null;
-        if (typeof pn === 'string' && pn.trim()) to = pn.trim();
-      } catch (_) { /* a lookup failure must not break the other channels */ }
-    }
-
-    if (!to) {
-      /* VISIBLE, not silent. The old code simply skipped, leaving result.channels.sms
-         unset — which is why a healthy SMS platform looked fine while delivering nothing. */
-      result.channels.sms = 'no_phone_on_record';
+    const R = require('./shared/notify-recipient');
+    const rr = await R.resolveSmsRecipient(uid, {
+      readUser: async (u) => { const sn = await db().collection('users').doc(u).get(); return sn.exists ? (sn.data() || {}) : null; },
+      readAuthPhone: async (u) => { const au = await admin.auth().getUser(u).catch(() => null); return au && au.phoneNumber ? au.phoneNumber : null; },
+    });
+    if (!rr.ok) {
+      _smsOut('skipped', rr.reason);
     } else {
-      const r = await sms.enqueue({
-        to,
-        template: t.smsTemplate,
-        vars: { ...vars, title, body },
-        uid,
-        dedupeKey: `sms:${key}`,        /* the SMS inherits the same idempotency */
-      });
-      result.channels.sms = r.suppressed ? 'suppressed_by_preference'
-                          : r.deduped   ? 'deduped'
-                          : 'queued';
+      try {
+        const r = await sms.enqueue({
+          to: rr.phone,
+          template: t.smsTemplate,
+          vars: { ...vars, title, body },
+          uid,
+          dedupeKey: `sms:${key}`,        /* the SMS inherits the same idempotency */
+        });
+        if (r && r.suppressed) _smsOut('skipped', 'sms_disabled');
+        else if (r && r.deduped) _smsOut('skipped', 'duplicate');
+        else if (r && r.ok === false) _smsOut('failed', /rate/i.test(String(r.reason || r.error || '')) ? 'rate_limited' : 'provider_error');
+        else _smsOut('attempted', null);
+      } catch (e) {
+        _smsOut('failed', /rate|quota|429/i.test(String(e && e.message)) ? 'rate_limited' : 'provider_error');
+      }
     }
   } else if (ch.smsFallback && pushOk) {
-    result.channels.sms = 'not_needed_push_delivered';
+    _smsOut('skipped', 'push_delivered');
+  } else if (!t.smsTemplate) {
+    _smsOut('skipped', 'not_eligible');                      /* no SMS template = not an SMS-class event */
+  } else if (t.priority === 'marketing' || ((prefs[t.category] || {}).sms === false)) {
+    _smsOut('skipped', 'sms_disabled');                      /* opted out (or marketing without opt-in) */
+  } else if (quiet) {
+    _smsOut('skipped', 'quiet_hours');
+  } else {
+    _smsOut('skipped', 'not_eligible');
   }
 
   /* EMAIL — queued asynchronously so a slow SendGrid call never blocks the CF.
