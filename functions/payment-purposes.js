@@ -305,7 +305,11 @@ const PURPOSES = {
   /* ── Equipment rental booking (contract with sokoni-f3, 2026-10-03; rentalBook in marketplace-extensions.js) ──
      Priced ONLY from rentalBookings/{bookingId}, a server-only document (no client rule): totalAmount was computed by rentalBook
      from rentalProducts rates inside its transaction and is the booking's IMMUTABLE snapshot — a later rate change never
-     re-prices a booking. Payer must be the renter (buyerId); the shop must have CONFIRMED it; paymentStatus unpaid.
+     re-prices a booking. Payer must be the renter (buyerId); paymentStatus unpaid; status accepted (legacy 'confirmed') or
+     payment_pending (a retry — the deterministic ref returns the same intent). Owner lifecycle 2026-10-03 (f3 bb8634d):
+     requested → accepted → payment_pending → paid_held → active → return_pending → returned → completed. Pricing moves the
+     booking to payment_pending in ONE transaction (re-read + re-check); the webhook (5b) moves it to paid_held with the
+     IntaSend-reported method — this pricer never writes a payment method.
      amount = totalAmount + depositAmount. Commission (construction_equipment_rental, 10%) is on totalAmount ONLY — the deposit
      is the renter's money, held and refundable, never revenue (commissionBaseCents / depositCents carry the split).
      Payee = the shop owner (shops/{shopId}.ownerId, else shopId IS the owner uid — f3's shop identity model).
@@ -315,12 +319,17 @@ const PURPOSES = {
     async price(uid, data) {
       const bookingId = String(data.bookingId || '').trim();
       if (!/^[A-Za-z0-9_-]{6,128}$/.test(bookingId)) fail('invalid-argument', 'bookingId is required.');
-      const snap = await db().collection('rentalBookings').doc(bookingId).get();
-      if (!snap.exists) fail('not-found', 'Rental booking not found.');
-      const b = snap.data() || {};
-      if (b.buyerId !== uid) fail('permission-denied', 'Only the renter who made this booking can pay it.');
-      if (b.paymentStatus !== 'unpaid') fail('already-exists', 'This rental is already paid or closed.');
-      if (b.status !== 'confirmed') fail('failed-precondition', b.status === 'pending' ? 'The shop has not confirmed this rental yet.' : 'This rental can no longer be paid.');
+      const ref = db().collection('rentalBookings').doc(bookingId);
+      const PAYABLE = ['accepted', 'confirmed', 'payment_pending'];
+      const check = (snap) => {
+        if (!snap.exists) fail('not-found', 'Rental booking not found.');
+        const b = snap.data() || {};
+        if (b.buyerId !== uid) fail('permission-denied', 'Only the renter who made this booking can pay it.');
+        if (b.paymentStatus !== 'unpaid') fail('already-exists', 'This rental is already paid or closed.');
+        if (!PAYABLE.includes(b.status)) fail('failed-precondition', ['pending', 'requested'].includes(b.status) ? 'The shop has not accepted this rental yet.' : 'This rental can no longer be paid.');
+        return b;
+      };
+      const b = check(await ref.get());
       const rentCents = Math.round(Number(b.totalAmount) * 100), depositCents = Math.round(Number(b.depositAmount || 0) * 100);
       if (!Number.isFinite(rentCents) || rentCents <= 0) fail('failed-precondition', 'This rental has no payable amount.');
       if (!Number.isFinite(depositCents) || depositCents < 0) fail('failed-precondition', 'This rental deposit is inconsistent.');
@@ -329,6 +338,14 @@ const PURPOSES = {
       const shop = await db().collection('shops').doc(shopId).get();
       const owner = shop.exists && (shop.data() || {}).ownerId ? String(shop.data().ownerId) : shopId;
       if (owner === uid) fail('failed-precondition', 'You cannot pay for your own equipment.');
+      /* accepted → payment_pending, atomically: re-read, same checks, same amounts (a concurrent change refuses). */
+      if (b.status !== 'payment_pending') {
+        await db().runTransaction(async (t) => {
+          const cur = check(await t.get(ref));
+          if (cur.totalAmount !== b.totalAmount || Number(cur.depositAmount || 0) !== Number(b.depositAmount || 0)) fail('aborted', 'This rental changed. Please try again.');
+          if (cur.status !== 'payment_pending') t.update(ref, { status: 'payment_pending', paymentPendingAt: new Date() });
+        });
+      }
       return {
         amountCents: rentCents + depositCents, currency: 'KES', resourceType: 'rentalBooking', resourceId: bookingId,
         preferredRef: ('RENT-' + bookingId).slice(0, 128),

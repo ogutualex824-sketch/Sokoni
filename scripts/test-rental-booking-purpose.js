@@ -7,6 +7,7 @@
      R4  ONE intent per booking: deterministic preferredRef RENT-<bookingId>
      R5  refused: another user · pending (not confirmed) · cancelled / completed · already paid · zero / NaN rent ·
          negative deposit · no shop · paying for your own equipment · bad bookingId
+     R7  pricing moves accepted|confirmed → payment_pending in one txn (retry-safe); never writes a payment method
      R6  rental_booking is self-settling (HELD until completion — no generic credit at payment time)
    NODE_PATH=<functions/node_modules> node scripts/test-rental-booking-purpose.js */
 const path = require('path'), Module = require('module');
@@ -15,7 +16,9 @@ let pass = 0, fail = 0;
 const ck = (l, ok, d) => { console.log('  ' + (ok ? 'PASS  ' : 'FAIL  ') + l + (ok || d === undefined ? '' : '  -> ' + JSON.stringify(d).slice(0, 220))); ok ? pass++ : fail++; };
 class HttpsError extends Error { constructor (code, message) { super(message); this.code = code; } }
 let DOCS = {};
-const db = { collection: (c) => ({ doc: (id) => ({ get: async () => { const d = DOCS[c + '/' + id]; return { exists: !!d, data: () => d && JSON.parse(JSON.stringify(d)) }; } }) }) };
+const snapOf = (k) => { const d = DOCS[k]; return { exists: !!d, data: () => d && JSON.parse(JSON.stringify(d)) }; };
+const db = { collection: (c) => ({ doc: (id) => ({ _k: c + '/' + id, get: async () => snapOf(c + '/' + id) }) }),
+  runTransaction: async (fn) => fn({ get: async (ref) => snapOf(ref._k), update: (ref, patch) => { Object.assign(DOCS[ref._k], patch); } }) };
 const orig = Module.prototype.require;
 Module.prototype.require = function (id) {
   if (id === 'firebase-admin/firestore') return { getFirestore: () => db, FieldPath: { documentId: () => '__name__' } };
@@ -30,7 +33,7 @@ const CC = require(path.join(FN, 'commission-config.js'));
 const price = (uid, data) => P.PURPOSES.rental_booking.price(uid, data).then((r) => ({ ok: true, r }), (e) => ({ ok: false, code: e.code, msg: e.message }));
 function reset (over, shop) {
   DOCS = { 'rentalBookings/RB00001': Object.assign({ rentalProductId: 'RP1', shopId: 'shop1', buyerId: 'renter1', durationUnit: 'daily',
-    totalAmount: 4500, depositAmount: 2000, paymentMethod: 'none', paymentStatus: 'unpaid', status: 'confirmed' }, over || {}) };
+    totalAmount: 4500, depositAmount: 2000, paymentMethod: 'none', paymentStatus: 'unpaid', status: 'accepted' }, over || {}) };
   if (shop !== null) DOCS['shops/shop1'] = shop || { ownerId: 'owner1' };
 }
 
@@ -40,6 +43,12 @@ function reset (over, shop) {
   ck('R1 amount = rent 4,500 + deposit 2,000 from the booking; client amount ignored', x.ok && x.r.amountCents === 650000, x);
   ck('R2 commission base = rent only, category construction_equipment_rental (10%); deposit separate + refundable', x.ok && x.r.metadata.commissionBaseCents === 450000
     && x.r.metadata.depositCents === 200000 && x.r.metadata.depositRefundable === true && CC.resolveRate(x.r.metadata.commissionCategory).pct === 10);
+  ck('R7 pricing moves accepted → payment_pending; paymentStatus stays unpaid; no payment method written', DOCS['rentalBookings/RB00001'].status === 'payment_pending'
+    && DOCS['rentalBookings/RB00001'].paymentStatus === 'unpaid' && DOCS['rentalBookings/RB00001'].paymentMethod === 'none');
+  x = await price('renter1', { bookingId: 'RB00001' });
+  ck('R7b a retry at payment_pending prices again (same ref, same amount)', x.ok && x.r.preferredRef === 'RENT-RB00001' && x.r.amountCents === 650000);
+  for (const legacy of ['confirmed']) { reset({ status: legacy }); const z = await price('renter1', { bookingId: 'RB00001' }); ck('R7c legacy confirmed (= accepted) is payable', z.ok); }
+  reset(); x = await price('renter1', { bookingId: 'RB00001' });
   ck('R3 payee = shop owner, business wallet', x.ok && x.r.metadata.sellerUid === 'owner1' && x.r.metadata.payeeWallet === 'business');
   reset({}, null);
   const y = await price('renter1', { bookingId: 'RB00001' });
@@ -51,7 +60,11 @@ function reset (over, shop) {
   const refusals = [];
   const tryCase = async (label, setup, uid, id) => { setup(); const r = await price(uid || 'renter1', { bookingId: id || 'RB00001' }); refusals.push([label, r.ok ? 'PRICED' : r.code]); };
   await tryCase('another user', () => reset(), 'mallory');
-  await tryCase('pending (shop not confirmed)', () => reset({ status: 'pending' }));
+  await tryCase('pending (legacy requested)', () => reset({ status: 'pending' }));
+  await tryCase('requested', () => reset({ status: 'requested' }));
+  await tryCase('declined', () => reset({ status: 'declined' }));
+  await tryCase('paid_held', () => reset({ status: 'paid_held', paymentStatus: 'held' }));
+  await tryCase('refunded', () => reset({ status: 'refunded' }));
   await tryCase('cancelled', () => reset({ status: 'cancelled' }));
   await tryCase('completed', () => reset({ status: 'completed' }));
   await tryCase('already paid', () => reset({ paymentStatus: 'paid' }));
