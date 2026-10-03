@@ -1,3 +1,82 @@
+## [2026-10-03] - Fitness Memberships UI: gym Memberships module, member "My memberships" page, and a flag-gated buy flow (selling OFF)
+
+**Branch `hosting/fitness-memberships-on-31f5844`, on F0 containment `31f5844`, which sits on live `72dca56`. Hosting only. NOT deployed.**
+This is the UI lane of the Fitness Memberships final release. It follows the release contract and the owner's attendance and refund rules. See `docs/FITNESS_MEMBERSHIP_UI.md`.
+
+**What it does:**
+
+- **Gym module (`sokoni-fitness-memberships.js`)** — this mounts into the provider workspace. b2 owns `provider-dashboard.html`; the exact 4-line diff is in the doc.
+  - The module renders only when the server workspace reports `modules.memberships` AVAILABLE.
+  - Tabs: Active, Pending, Expired and Refunds, from `fitnessGymMemberships`.
+  - A details drawer shows the attendance ledger and settlement, from `fitnessGymMembership`.
+  - **SCAN MEMBER QR** reads the code with the camera (`SokoniQR.scan`), or staff paste it. It then calls `fitnessCheckIn`.
+  - The "ATTENDANCE RECORDED · name — Membership #… · Session N of M · Check-in: HH:MM" card is built **only** from the server response.
+  - Refusals are mapped to human text. A duplicate scan shows "Already checked in today". Offline shows "Attendance unavailable — retry when connected".
+  - Whether scanning is enabled, and the reason when it is not, comes from `fitnessScannerStatus`. For `BUSINESS_LINK_MISSING` the message points to SOKONI support.
+  - Membership offers are **listed** read-only from `providerServices`.
+- **Member page (`fitness-memberships.html` + `sokoni-fitness-member.js`)** — this loads `shared-header.js` and `sw-register.js`.
+  - A live list of the member's own memberships.
+  - "Waiting for payment confirmation" and "Payment under review" states.
+  - Sessions included, used and remaining, with "Unlimited" when there is no cap and "—" when the value is unknown.
+  - Attendance history.
+  - The owner's refund wording, exact: "Eligible to request, subject to policy" or "Not available — membership already used". **REQUEST REFUND** calls `membershipRequestRefund`, and a refusal shows the server's text verbatim.
+  - **VIEW MEMBERSHIP QR** (active only) calls `fitnessMembershipQr`. It shows a countdown and refreshes 30 seconds before the code expires.
+- **Buy (`?provider=<id>`)** — `fitnessCreateMembership` → `createPaymentIntent({purpose:'fitness_membership'})` → the existing `SokoniIntaSend.initiateSTKPush`. The card stays pending until the server changes the membership.
+  - The **BUY** button is disabled unless `featureFlags/fitness_membership_sales.enabled === true`. That collection is publicly readable and written by AdminOS. When the flag is off, the page shows "Memberships aren't on sale yet".
+- **`fitness-hub.html`** — two plain "My memberships" links.
+
+**Files:**
+- `sokoni-fitness-memberships.js` (new)
+- `sokoni-fitness-member.js` (new)
+- `fitness-memberships.html` (new)
+- `fitness-hub.html`
+- `scripts/test-fitness-memberships-ui.js` (new)
+- `scripts/test-fitness-memberships-browser.js` (new, QUEUED and not run)
+- `scripts/test-fitness-containment.js` (FT-15 and FT-16 added)
+- `docs/FITNESS_MEMBERSHIP_UI.md` (new)
+- `CHANGELOG.md`
+
+**Database:** none. The browser writes nothing. It reads:
+- `providerMemberships`, the member's own;
+- `providerMemberships/{id}/attendance`;
+- `providerServices`;
+- `featureFlags/fitness_membership_sales`.
+
+No production reads or writes were made.
+
+**API:** the browser now calls these callables:
+- `fitnessGymMemberships`, `fitnessGymMembership` and `fitnessScannerStatus`. The e3 functions lane is building these in parallel.
+- `fitnessCheckIn`, `fitnessMembershipQr` and `fitnessCreateMembership` (e3).
+- `membershipRequestRefund` and `createPaymentIntent` with `fitness_membership` (2f).
+
+None of them is deployed.
+
+**Security:**
+- No browser writes. No success is shown before the server state.
+- All user-written text goes through the canonical `escapeHTML`.
+- No SokoniPay, wa.me or localStorage.
+- The QR token is drawn locally and shows only a short ref.
+- **The flag is a presentation gate only.** `fitnessCreateMembership` must also refuse while the flag is off. That fix is handed to the functions lane.
+
+**Breaking:** none.
+
+**Tests:**
+- `node scripts/test-fitness-memberships-ui.js`: 33/0. The negative controls each fail their named row:
+  - (a) showing success before the response fails G-4;
+  - (b) removing escaping fails G-ESC;
+  - (c) showing 0 for an unknown remaining fails M-5.
+- `node scripts/test-fitness-containment.js`: 16/0. FT-16 fails on `BASE=72dca56`, as intended.
+- `node scripts/predeploy-syntax-gate.js`: 1803 JS files and 453 inline blocks parse. `perf-guard`, `audit-base64-writes`, `gate-inventory-writers` and `check-money-toast-safety` PASS; `gate-inventory` SKIPPED (no inventory files).
+- The browser certification at 390 and 1280 is **QUEUED**: free RAM was below the 512 MB floor.
+
+**Deploy:** hosting. It must not ship before all of these:
+- the e3 callables and rules;
+- 2f's `fitness_membership` payment purpose;
+- 5b's webhook membership purpose and the `memberships` workspace module;
+- the server-side sales flag.
+
+Selling stays OFF until every gate is green.
+
 ## [2026-10-03] - Fitness Hub CONTAINMENT (F0): the Fitness Hub takes no payment, makes no booking, writes no listing and shows nothing made-up as real
 
 **Branch `hosting/fitness-containment-on-72dca56`, built on live hosting `72dca56`. Hosting only. NOT deployed.**
