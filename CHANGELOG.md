@@ -1,3 +1,17 @@
+## [2026-10-03] - Tech Hub slice 4R: Super Admin commission rates read the canonical source; the dead editor is gone — hosting, NOT deployed
+
+- super-admin.html "Commission Rate Editor" wrote platformConfig/commissions from the browser, a document NO server code reads (checked on the
+  live-lineage chain and on 2f commercial-fn 03ecbe9). calculateCommission reads commission-config RATES, then commissionRules / revenueConfig.
+  An admin could "change" a rate that settlement never charged, and both the editor and the financial table showed those dead values
+  (the page did not even load the canonical snapshot).
+- Now both the editor and the financial table are read-only views of the canonical generated snapshot (sokoni-commission-rates.js, now loaded).
+  Changes go to "Manage commission rules (audited)" → commission-admin.html: createCommissionRule / updateCommissionRule, admin-only, audited
+  to finosAuditLog and honoured first by calculateCommission. No browser write remains.
+- Tests: admin-nav-context 3/0, adminos-authority-honesty 28/0, home-logo-routing 31/0/2u, admin-drawer-close-button 8/0.
+- **UNPROVEN:** test-admin-layouts and test-adminos-nav-coverage are BROWSER suites and were started below the 512 MB floor (free memory 35 MB).
+  admin-layouts reported 1 fail (super-admin@768 drawer-closes) on this tree vs 72/0 on HEAD, under memory starvation. Inconclusive, not a pass
+  and not a proven regression (the change adds a script at the end of body only). Re-run above the floor.
+
 ## [2026-10-03] - Tech Hub slice 4Q (hosting): AdminOS Services shows leads & quotes — hosting, NOT deployed
 
 - sokoni-aos.js: below the providers table, a read-only "Leads & quotes" table from adminGetServiceLeads (added to the adminOsDispatch whitelist).

@@ -730,13 +730,13 @@
       </div>
 
       <div class="sa-card">
-        <h3>Commission Rate Editor</h3>
-        <p style="font-size:12px;color:var(--muted);margin-bottom:16px">Edit category commission rates. Changes write to platformConfig/commissions.</p>
+        <h3>Commission rates</h3>
+        <p style="font-size:12px;color:var(--muted);margin-bottom:16px">The rates SOKONI charges, from the canonical commission configuration (one source; service bookings 5 %, paid by the provider at settlement). Overrides and commission holidays are <strong>audited commission rules</strong> — the server applies them first.</p>
         <div id="saCommissionEditor">
           <div class="sa-spinner"><div></div></div>
         </div>
         <div style="margin-top:16px">
-          <button class="sa-btn primary" onclick="SA.saveCommissions()">Save Commission Rates</button>
+          <a class="sa-btn primary" href="commission-admin.html" style="text-decoration:none;display:inline-block">Manage commission rules (audited) →</a>
         </div>
       </div>
     </section>
@@ -1733,24 +1733,14 @@ const SA={
   },
 
   async _loadCommissionDisplay(){
+    /* Tech Hub 4R: from the canonical generated snapshot, not platformConfig/commissions (which no server code reads). */
     const tb=document.getElementById('saCommissionRates');
-    try{
-      const doc=await this._db.collection('platformConfig').doc('commissions').get();
-      const data=doc.exists?doc.data():{};
-      const entries=Object.entries(data);
-      if(!entries.length){
-        tb.innerHTML='<tr><td colspan="3" class="empty-cell">No commission data found.</td></tr>';
-        return;
-      }
-      tb.innerHTML=entries.map(([cat,val])=>{
-        const isObj=typeof val==='object'&&val!==null;
-        const rate=isObj?(val.rate||val.percentage||'—'):val;
-        const type=isObj?(val.type||'percentage'):'percentage';
-        return `<tr><td>${_esc(cat)}</td><td><strong>${_esc(String(rate))}%</strong></td><td style="color:var(--muted);font-size:12px">${_esc(type)}</td></tr>`;
-      }).join('');
-    }catch(e){
-      tb.innerHTML='<tr><td colspan="3" class="empty-cell" style="color:var(--muted)">'+_esc(e.message)+'</td></tr>';
-    }
+    const rates=(window.SokoniCommission&&SokoniCommission.RATES)||null;
+    if(!rates){ tb.innerHTML='<tr><td colspan="3" class="empty-cell">Commission rates are not available right now.</td></tr>'; return; }
+    tb.innerHTML=Object.entries(rates).sort((a,b)=>a[0].localeCompare(b[0])).map(([cat,v])=>{
+      const pct=(v&&typeof v.pct==='number')?v.pct+'%':'—';
+      return '<tr><td>'+_esc(cat.replace(/_/g,' '))+'</td><td><strong>'+_esc(pct)+'</strong></td><td style="color:var(--muted);font-size:12px">'+_esc(v&&v.fixedKES?'+ KES '+v.fixedKES:'percentage')+'</td></tr>';
+    }).join('');
   },
 
   // ══ SECTION 4: Platform Configuration ═══════════════════
@@ -1827,51 +1817,22 @@ const SA={
   _commissionEditorData:{},
 
   async _loadCommissionEditor(){
+    /* 2026-10-03 (Tech Hub 4R, sokoni-b2). This was an editor that wrote platformConfig/commissions from the browser —
+       a document NO server code reads (calculateCommission reads commission-config RATES, then commissionRules and
+       revenueConfig overrides). Saving "changed" a rate that settlement never charged, and the table merged those dead
+       values over the real ones. It is now a read-only view of the canonical rates (sokoni-commission-rates.js, generated
+       from commission-config); changes go through the audited commission-rule callables (commission-admin.html). */
     const el=document.getElementById('saCommissionEditor');
-    el.innerHTML='<div class="sa-spinner"><div></div></div>';
-    /* This was a hardcoded fallback table (marketplace 10%, legal 10%) shown to the admin
-         before platformConfig/commissions loaded — none of those numbers matched what the
-         platform actually charged. Seed from the single config instead. */
-      let data=Object.fromEntries(Object.entries((window.SokoniCommission&&SokoniCommission.RATES)||{})
-        .map(([k,v])=>[k,v.pct]));
-    try{
-      const doc=await this._db.collection('platformConfig').doc('commissions').get();
-      if(doc.exists)data=Object.assign(data,doc.data());
-    }catch(_){}
-    this._commissionEditorData=data;
-    el.innerHTML='<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:12px">'+
-      Object.entries(data).map(([cat,val])=>{
-        const rate=typeof val==='object'?val.rate:val;
-        return `
-          <div style="background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:12px">
-            <label style="font-size:12px;color:var(--muted);display:block;margin-bottom:6px">${_esc(cat)}</label>
-            <div style="display:flex;align-items:center;gap:6px">
-              <input class="sa-input" type="number" id="comm-${_esc(cat)}" value="${_esc(String(rate))}" min="0" max="100" step="0.5" style="width:70px">
-              <span style="color:var(--muted)">%</span>
-            </div>
-          </div>
-        `;
-      }).join('')+
-    '</div>';
-  },
-
-  async saveCommissions(){
-    const data={};
-    Object.keys(this._commissionEditorData).forEach(cat=>{
-      const el=document.getElementById('comm-'+cat);
-      if(el)data[cat]={rate:parseFloat(el.value)||0,type:'percentage'};
-    });
-    _confirm(
-      'Save Commission Rates',
-      'This will update commission rates in Firestore. Existing orders are not affected.',
-      async()=>{
-        try{
-          await this._db.collection('platformConfig').doc('commissions').set(data,{merge:true});
-          _toast('Commission rates saved','success');
-        }catch(e){_toast('Error: '+e.message,'error');}
-      },
-      'Save Rates',false
-    );
+    const rates=(window.SokoniCommission&&SokoniCommission.RATES)||null;
+    if(!rates){ el.innerHTML='<div class="empty-cell">Commission rates are not available right now — —</div>'; return; }
+    el.innerHTML='<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(180px,1fr));gap:10px">'+
+      Object.entries(rates).sort((a,b)=>a[0].localeCompare(b[0])).map(([cat,v])=>{
+        const pct=(v&&typeof v.pct==='number')?v.pct+' %':'—';
+        const fixed=(v&&v.fixedKES)?' + KES '+_esc(String(v.fixedKES)):'';
+        return '<div style="background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:10px 12px">'
+          +'<div style="font-size:12px;color:var(--muted)">'+_esc(cat.replace(/_/g,' '))+'</div>'
+          +'<div style="font-weight:700;margin-top:4px">'+_esc(pct)+fixed+'</div></div>';
+      }).join('')+'</div>';
   },
 
   // ══ SECTION 5: Emergency Controls ═══════════════════════
@@ -2167,5 +2128,6 @@ const SA={
   })();
 })();
 </script>
+<script src="sokoni-commission-rates.js"></script>   <!-- Tech Hub 4R: the canonical, generated commission snapshot (read-only view) -->
 </body>
 </html>
