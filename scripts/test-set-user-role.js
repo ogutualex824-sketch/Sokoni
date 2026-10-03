@@ -12,6 +12,7 @@
  *   R6 browser-supplied permissions cannot be granted (claims / permissions / customClaims / additionalClaims in the payload)
  *   R7 Role A + independent permission X → Role B keeps X (superAdmin ⇒ admin; permsVersion never downgrades)
  *   R8 the same request twice CONCURRENTLY → one effective change, no duplicated security side effect
+ *   R10 the AdminOS Audit Logs feed (adminAudit role_updated) records each role change once, same eventId as auditLog
  *   R9 AdminOS adminUpdateUserRole delegates to the same core: claims preserved (LIVE overwrote them); additionalClaims refused
  * Offline: in-memory Firestore (serialized transactions) + Auth fakes; no network.
  */
@@ -70,6 +71,7 @@ const seed = () => { DOCS.clear(); AUTHS.clear(); AUTO = 0; MUTATIONS = []; txCh
   DOCS.set('users/t1', { status: 'active', role: 'seller' });
   AUTHS.set('t1', { uid: 't1', email: 't1@example.test', customClaims: { seller: true, merchantId: 'm_123', posId: 'till_7', featureX: true, permsVersion: 1 } }); };
 const claims = (u) => AUTHS.get(u).customClaims;
+const adminAudits = () => [...DOCS.entries()].filter(([k]) => k.startsWith('adminAudit/')).map(([, v]) => v).filter((v) => v.action === 'role_updated');
 const audits = () => [...DOCS.entries()].filter(([k]) => k.startsWith('auditLog/')).map(([, v]) => v).filter((v) => v.action === 'setUserRole');
 
 (async () => {
@@ -138,6 +140,15 @@ const audits = () => [...DOCS.entries()].filter(([k]) => k.startsWith('auditLog/
   ck('R9', i1.ok && c9.merchantId === 'm_123' && c9.posId === 'till_7' && c9.featureX === true && c9.permsVersion === 1 && c9.driver === true && audits().length === 1
     && !i2.ok && i2.code === 'invalid-argument' && MUTATIONS.length === 1,
     'AdminOS adminUpdateUserRole → the SAME core: claims preserved (LIVE overwrote them), audited once; additionalClaims refused', { c9, i2: i2.code });
+
+  /* R10 — AdminOS Audit Logs feed (adminAudit) keeps role changes (LIVE adminUpdateUserRole wrote 'role_updated'), same eventId */
+  seed(); const k1 = await call(AO.adminUpdateUserRole, 'boss', BOSS, { uid: 't1', role: 'moderator', requestId: 'aos-aa', reason: 'shift lead' });
+  await call(AO.adminUpdateUserRole, 'boss', BOSS, { uid: 't1', role: 'moderator', requestId: 'aos-aa', reason: 'shift lead' });
+  const aa = adminAudits();
+  ck('R10', k1.ok && aa.length === 1 && aa[0].eventId === k1.r.eventId && aa[0].targetUid === 't1' && aa[0].previousRole === 'seller' && aa[0].newRole === 'moderator'
+    && aa[0].performedBy === 'boss' && aa[0].reason === 'shift lead' && aa[0].resultingState.role === 'moderator' && aa[0].createdAt
+    && audits().length === 1 && audits()[0].details.eventId === k1.r.eventId,
+    'role change visible in the AdminOS feed: ONE adminAudit role_updated (actor, target, previous→new, reason, result, eventId) — retry adds none', aa);
 
   console.log('\nRESULT: ' + pass + ' passed, ' + fail + ' failed');
   process.exit(fail ? 1 : 0);

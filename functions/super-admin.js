@@ -215,6 +215,16 @@ exports.setUserRole = onCall({ cors: true, region: 'us-central1', maxInstances: 
     severity: 'high',
   });
 
+  /* ADAPTATION (d): the AdminOS Audit Logs feed (adminGetAuditLogs → adminAudit) — LIVE adminUpdateUserRole wrote
+     'role_updated' there; role changes must stay visible in AdminOS (owner audit contract), same eventId as auditLog. */
+  const _pc = currentClaims;
+  const previousRole = _pc.superAdmin ? 'superAdmin' : _pc.admin ? 'admin' : _pc.seller ? 'seller' : _pc.driver ? 'driver' : _pc.moderator ? 'moderator' : 'buyer';
+  await db.collection('adminAudit').add({
+    eventId, action: 'role_updated', targetUid: cleanUid, previousRole, newRole: cleanRole, performedBy: request.auth.uid,
+    reason: (request.data && typeof request.data.reason === 'string') ? _stripHtml(request.data.reason).slice(0, 500) || null : null,
+    resultingState: { role: cleanRole, permsVersion: mergedClaims.permsVersion }, createdAt: FieldValue.serverTimestamp(),
+  });
+
   return { success: true, uid: cleanUid, role: cleanRole, permsVersion: mergedClaims.permsVersion, eventId };
 });
 

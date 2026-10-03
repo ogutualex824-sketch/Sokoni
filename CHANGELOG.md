@@ -1,3 +1,10 @@
+## 2026-10-04 — Role changes stay visible in the AdminOS audit feed (b2 re-comparison gap) (NOT deployed)
+
+- **Gap (b2):** LIVE adminUpdateUserRole wrote adminAudit {action:'role_updated'}, the feed AdminOS Audit Logs reads (adminGetAuditLogs). After delegation, setUserRole wrote only auditLog + controlEvents, so AdminOS role changes vanished from AdminOS's audit view.
+- **Fix:** setUserRole also writes ONE adminAudit `role_updated` record (eventId shared with auditLog, actor, target, previousRole→newRole, reason, resultingState, createdAt). It is written by the winner only, so an idempotent retry adds none. Stated adaptation (d) to the live Authority Core body. The Users drawer's "Role changes" history (adminAudit /role/) now fills too.
+- **Correction for the record:** live adminUpdateUserRole was already super-admin-only (admin-os.js _requireSuperAdmin = superAdmin claim). The delegation is not a tightening.
+- **Files:** functions/super-admin.js, scripts/test-set-user-role.js (R10). **Tests:** set-user-role 10/0; mutants 8/8 (Q8 adminAudit removed → R10 FAILS). **DB:** adminAudit gains role_updated records from both UIs.
+
 ## 2026-10-04 — Legacy banned production census (read-only) — 0 accounts
 
 - **Run 2026-10-03T23:22Z against sokoni-aeb26** with `scripts/census-legacy-banned.js` (read-only; positive control: the same query shape on status=="active" returned 1).
