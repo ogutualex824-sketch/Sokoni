@@ -1,3 +1,57 @@
+## [2026-10-03] - Jobs workspace: "Message applicant" (J4) + be4e1b7 contract (jobsCapabilities, listMyJobs, getEmployerApplications, pausedByRole) — NOT deployed
+
+- **What:** every application card in the merchant-v2 Jobs workspace now has an enabled "Message applicant" button.
+  - If `SokoniInbox.openForTransaction` exists, it is called with exactly `('job_application', applicationId)`.
+  - Otherwise the button navigates to `/messages.html?tx=job_application&txId=<encodeURIComponent(id)>`.
+  - Only the application id is sent; the server (sokoni-b2 J4, `8aaa868`) derives the parties. There is no
+    WhatsApp, mailto or tel hand-off.
+  - The disabled "Messaging for applications is coming" stub is gone. The Messages view now explains that conversations
+    open per application.
+- **Release:** this tree's `messages.html` has no `tx`/`txId` handling and its `sokoni-inbox.js` has no
+  `openForTransaction`. The button works only once b2's hosting (`hosting/techhub-on-chain`, with
+  `job_application` in `TX_TYPES`) and server ship **in the same release**. The earlier release order still applies:
+  the Jobs rules hotfix ships first, the pages ship with server a515270, and nothing deploys without the owner.
+- **Shell:** both paths navigate the top-level document to `messages.html`, so they leave /merchant. This was accepted
+  as instructed; an in-shell conversation view is the follow-up.
+- **Server contract be4e1b7** (tip of `functions/jobs-on-ca55f8b`; `855c8c1` changes nothing for the employer):
+  - Detection uses `jobsCapabilities`. Its `employerTransitions` drives the application buttons at runtime, with the
+    source table as fallback. The `{op:''}` probe is gone. "Unknown services operation" means an old server: the
+    "Valid ops:" text is a hint (`submitJob` listed means J2), and otherwise the page assumes J1. A transport failure
+    withholds the form.
+  - Reads are one `listMyJobs` and one `getEmployerApplications`. The direct `jobs` read and the per-vacancy
+    `getJobApplications` calls are used only when the server reports those ops as unknown.
+  - Resume is hidden when `pausedByRole === 'admin'`, no longer via `moderationReason`. The server's "…Only SOKONI
+    can restore it." refusal is shown verbatim.
+  - The fixtures were regenerated from the handlers of be4e1b7, a515270 and ffa2c47.
+- **Deploy together:** server be4e1b7 with these pages. The earlier order still holds: the rules hotfix first, J2 with
+  AdminOS Jobs, and the owner decides.
+- **Tests:** `scripts/test-merchant-jobs-workspace.js` 48/0 (36 rows plus 12 negative controls).
+  - New rows:
+    - M1: exactly two arguments, no party, and the button on every card.
+    - M2: the URL is encoded and carries only the `tx` and `txId` keys.
+    - D1: the capabilities table drives the buttons, with no probe.
+    - D2: `be4e1b7` makes one `listMyJobs` and one `getEmployerApplications` call.
+    - D3: the `a515270` fallbacks are used.
+    - D4: an unknown op with no list gives J1; a transport failure withholds the form.
+    - J8: Resume follows `pausedByRole`, and the refusal is shown verbatim.
+    - A1b: the matrix on the fallback table.
+    - H2 was rewritten.
+  - New negative controls:
+    - N7: a seekerUid is sent (fails M1).
+    - N8: a phone is appended to the URL (fails M2).
+    - N9: the id is not encoded (fails M2).
+    - N10: `pausedByRole` is ignored (fails J8).
+    - N11: the capabilities table is ignored (fails D1).
+    - N1b: an illegal move in the fallback table (fails A1b).
+  - `test-mv2-1-sidebar` 14/0. Syntax gate clean.
+- **Files:** sokoni-merchant-jobs.js, merchant-v2.html (comment), sokoni-merchant-routes.js (comment),
+  scripts/test-merchant-jobs-workspace.js, scripts/gen-jobs-workspace-fixtures.js, scripts/fixtures/jobs-workspace-server.json,
+  docs/JOBS_EMPLOYER_WORKSPACE.md, CHANGELOG.md.
+- **Database / rules / functions:** none.
+- **API:** consumes be4e1b7's new ops and adds none.
+- **Security:** one fewer client Firestore read on the current server. An admin pause cannot be undone from this page,
+  and the server refuses it too.
+
 ## [2026-10-03] - Jobs EMPLOYER WORKSPACE in merchant-v2 (J5 hosting) — built on a515270 (J2) + ffa2c47 (J1) shapes; NOT deployed
 
 **Release:** server `a515270` (J2 moderation, carrying J1 `ffa2c47`) and these pages **deploy TOGETHER**: the old
