@@ -560,6 +560,15 @@
     .edu-subsection{margin-top:12px;display:flex;flex-direction:column;gap:6px;}
     .edu-subsection h4{margin:0;font-size:14px;}
     .edu-code{font-weight:700;letter-spacing:1px;}
+    /* Learner dashboard (Education E2) */
+    .edu-learner-home{max-width:1200px;margin:16px auto 0;padding:0 16px;}
+    .edu-learner-home.hidden{display:none;}
+    .edu-tiles{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:10px;margin-top:10px;}
+    .edu-tile{padding:12px;border-radius:14px;border:1px solid rgba(255,255,255,0.1);background:rgba(255,255,255,0.03);text-align:left;color:inherit;font:inherit;}
+    .edu-tile[data-state="AVAILABLE"]{cursor:pointer;border-color:rgba(113,255,0,0.3);}
+    .edu-tile[data-state="LOCKED"],.edu-tile[data-state="NOT_IMPLEMENTED"]{opacity:.65;cursor:default;}
+    .edu-tile small{display:block;font-size:11px;color:var(--muted);margin-top:4px;}
+    .edu-app-card{padding:10px 12px;border-radius:12px;border:1px solid rgba(255,255,255,0.1);margin-top:8px;font-size:13px;}
   </style>
 </head>
 <body>
@@ -602,6 +611,12 @@
     <!-- EDUCATION E1 (2026-10-03): the body Sign In / Sign Out link is REMOVED. Sign-out belongs to the shared header's
          account menu (window.sokoniSignOut: listener teardown + storage wipe); signed-out visitors get #eduLoginPrompt. -->
   </div>
+</section>
+
+<!-- EDUCATION E2 (owner 2026-10-03): the learner dashboard. Rendered ONLY from the server's educationWorkspace answer
+     (access, modules, workspaces, applications); hidden for guests. Unknown renders "—". -->
+<section id="learn" class="edu-learner-home hidden" aria-label="My learning dashboard">
+  <div id="eduLearnerHome"></div>
 </section>
 
 

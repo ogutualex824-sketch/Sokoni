@@ -187,15 +187,17 @@ window.SokoniEducation = (() => {
 
       if (user) {
         if (myLearningBtn) myLearningBtn.classList.remove('hidden');
-        if (teachBtn)      teachBtn.classList.remove('hidden');
+        /* E2: the Teach button waits for the server's workspace answer (renderLearnerHome) — never shown on sign-in alone */
         if (loginPrompt)   loginPrompt.classList.add('hidden');
         /* Refresh enrolments in background */
         _loadMyEnrollments().catch(() => {});
+        loadLearnerHome().catch(() => {});
       } else {
         if (myLearningBtn) myLearningBtn.classList.add('hidden');
         if (teachBtn)      teachBtn.classList.add('hidden');
         if (loginPrompt)   loginPrompt.classList.remove('hidden');
         _myEnrollments = [];
+        const home = document.getElementById('learn'); if (home) home.classList.add('hidden');
       }
     });
   }
@@ -395,6 +397,94 @@ window.SokoniEducation = (() => {
     await _loadMyEnrollments();
     renderMyEnrollments(_myEnrollments);
     loadLearnerProfile().catch(() => {});
+  }
+
+  /* ─── Learner dashboard (Education E2, owner 2026-10-03) ───────────────────
+     Everything shown here is the server's educationWorkspace answer: the learner's access, which modules are
+     AVAILABLE / LOCKED / NOT_IMPLEMENTED, the workspaces this account may open (teacher / institution / enterprise —
+     decided by approval + server type, never by this page) and the account's own Education applications. */
+  const LEARNER_TILES = [
+    ['myLearning', 'My Learning', '📖'], ['discover', 'Discover', '🔎'], ['courses', 'Courses', '📚'], ['liveClasses', 'Live classes', '🎥'],
+    ['tutoring', 'Tutoring', '🧑‍🏫'], ['bookings', 'Bookings', '📅'], ['certificates', 'Certificates', '🎓'], ['messages', 'Messages', '💬'],
+    ['receipts', 'Receipts', '🧾'], ['profile', 'Profile', '👤'], ['settings', 'Settings', '⚙️'],
+  ];
+  const STATE_NOTE = { LOCKED: 'Needs an age check or a guardian link', NOT_IMPLEMENTED: 'Coming soon' };
+  const WORKSPACE_LABEL = { teacher: 'Teacher workspace', institution: 'Institution workspace', enterprise: 'Company training' };
+  const APP_LABEL = { tutor: 'Teacher application', school: 'Institution application', 'online-course': 'Institution application', 'education-enterprise': 'Company application' };
+  let _workspace = null;
+
+  async function loadLearnerHome() {
+    const sec = document.getElementById('learn');
+    const box = document.getElementById('eduLearnerHome');
+    if (!sec || !box || !_uid) return;
+    sec.classList.remove('hidden');
+    box.innerHTML = '<p class="edu-muted">Loading your learning dashboard…</p>';
+    try {
+      const res = await _callable('educationWorkspace')({});
+      _workspace = res.data || null;
+      renderLearnerHome(_workspace);
+    } catch (_) {
+      _workspace = null;
+      renderLearnerHome(null);
+    }
+  }
+
+  function renderLearnerHome(ws) {
+    const box = document.getElementById('eduLearnerHome');
+    if (!box) return;
+    const teachBtn = document.getElementById('eduTeachBtn');
+    if (!ws) {
+      /* the server did not answer: no access level, no workspace and no teaching tools are inferred */
+      box.innerHTML = '<h2 class="edu-section-title">My learning</h2><p class="edu-muted">Your dashboard is unavailable right now (—).</p>';
+      if (teachBtn) teachBtn.classList.add('hidden');
+      return;
+    }
+    const learner = ws.learner || {};
+    const access = learner.access || null;
+    const mods = learner.modules || {};
+    const accessText = access && access.ageStatus ? (ACCESS_TEXT[access.ageStatus] || '—') : '—';
+    const tiles = LEARNER_TILES.map(([k, label, icon]) => {
+      const m = mods[k] || {};
+      const state = m.state || 'UNKNOWN';
+      const note = state === 'AVAILABLE' ? '' : (STATE_NOTE[state] || '—');
+      return `<button class="edu-tile" data-state="${_esc(state)}" data-module="${_esc(k)}" ${state === 'AVAILABLE' ? 'onclick="SokoniEducation.openLearnerModule(this.dataset.module)"' : 'disabled aria-disabled="true"'}>
+        <span aria-hidden="true">${icon}</span> ${_esc(label)}${note ? '<small>' + _esc(note) + '</small>' : ''}</button>`;
+    }).join('');
+    const spaces = (ws.dashboards || []).filter((d) => d.actor !== 'learner').map((d) => {
+      const label = WORKSPACE_LABEL[d.actor] || '—';
+      return d.state === 'AVAILABLE' && d.route
+        ? `<a class="btn btn-primary btn-sm" href="${_esc(d.route)}">${_esc(label)} →</a>`
+        : `<span class="edu-muted">${_esc(label)}: ${_esc(d.state === 'NOT_IMPLEMENTED' ? 'being built' : d.state === 'LOCKED' ? 'suspended' : '—')}</span>`;
+    }).join(' ');
+    const apps = ws.applications === null
+      ? '<p class="edu-muted">Applications: —</p>'
+      : (ws.applications || []).map((a) => `<div class="edu-app-card"><strong>${_esc(APP_LABEL[a.category] || 'Application')}</strong> · ${_esc(a.status || '—')}
+          ${(a.missing || []).length ? '<br><span class="edu-muted">SOKONI needs: ' + a.missing.map(_esc).join('; ') + '</span>' : ''}
+          <br><a href="complete-application.html">Track this application</a></div>`).join('');
+    box.innerHTML = `
+      <h2 class="edu-section-title">My learning</h2>
+      <p class="edu-access" data-age-status="${_esc((access && access.ageStatus) || 'unknown')}">${_esc(accessText)}</p>
+      <div class="edu-tiles">${tiles}</div>
+      ${spaces ? '<div class="edu-subsection"><h4>Your workspaces</h4>' + spaces + '</div>' : ''}
+      ${apps ? '<div class="edu-subsection"><h4>Your applications</h4>' + apps + '</div>' : ''}`;
+    /* Teaching tools appear only for an APPROVED teacher / institution (the server's dashboards list); everyone else is
+       offered the application instead of a course editor. */
+    const canTeach = (ws.dashboards || []).some((d) => (d.actor === 'teacher' || d.actor === 'institution') && d.state === 'AVAILABLE');
+    if (teachBtn) {
+      teachBtn.classList.remove('hidden');
+      teachBtn.textContent = canTeach ? '✏️ Teach on SOKONI' : '✏️ Apply to teach';
+      teachBtn.onclick = canTeach ? () => showCreateForm() : () => { if (window.HubRegister) window.HubRegister.open({ hub: 'education', category: 'tutor' }); else window.location.href = 'complete-application.html'; };
+    }
+  }
+
+  function openLearnerModule(key) {
+    const m = (_workspace && _workspace.learner && _workspace.learner.modules && _workspace.learner.modules[key]) || {};
+    if (m.state !== 'AVAILABLE') return;   /* the tile is disabled anyway; the server's state is the gate */
+    if (key === 'myLearning' || key === 'profile') { openMyLearning(); return; }
+    if (key === 'discover' || key === 'courses') {
+      const s = document.getElementById('eduSearch'); if (s && s.focus) s.focus();
+      const g = document.getElementById('eduResultsList'); if (g && g.scrollIntoView) g.scrollIntoView({ behavior: 'smooth' });
+    }
   }
 
   /* ─── Learner profile + guardian links (owner decisions 2026-10-03) ─────────
@@ -1167,6 +1257,9 @@ window.SokoniEducation = (() => {
     renderStars,
     loadLearnerProfile,
     renderLearnerProfile,
+    loadLearnerHome,
+    renderLearnerHome,
+    openLearnerModule,
     saveLearnerProfile,
     verifyLearnerAge,
     requestGuardianCode,
