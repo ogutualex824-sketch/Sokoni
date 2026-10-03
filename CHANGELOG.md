@@ -1,3 +1,8 @@
+## 2026-10-03 — Sports coaches priced sports_coaching via the provider-hub lane (NOT deployed)
+
+- **Change:** provider-hub: decided coach applications → lane sports_coaching (stamped at approval) → commissionArgsForHub → sports_coaching 5%, no subscriptionRole.
+- **Test:** test-sports-commercial 8/0.
+
 ## 2026-10-03 — Sports server authority: teams, memberships, tournaments, registrations, one canonical fixture, results/standings (NOT deployed)
 
 - **New:** functions/sports.js (sportsDispatch); notify.js sports_* types.

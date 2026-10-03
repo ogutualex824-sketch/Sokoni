@@ -97,10 +97,19 @@ function classifyDecidedApplication(decided) {
   if (ROLE_TO_HUB[role]) return { hub: ROLE_TO_HUB[role], entClass: null };
   const entClass = require('./shared/ent-booking-identity').classifyApplication(decided);
   if (entClass) return { hub: 'entertainment', entClass };
+  /* SPORTS COACH (owner 2026-10-03): a decided application whose category is a coach type books on the provider engine
+     and is priced sports_coaching (flat 5%). Read from the DECIDED application only — frozen once decided. */
+  if (isCoachApplication(decided)) return { hub: 'sports_coaching', entClass: null };
   return out;
 }
 
-const _LANE_HUBS = ['healthcare', 'entertainment', DEFAULT_HUB];
+const COACH_TYPES = Object.freeze(new Set(['coach', 'sports-coach', 'sports_coach', 'sports coach', 'sports-trainer', 'sports_trainer']));
+function isCoachApplication(app) {
+  const cands = [app && app.subcategory, app && app.category, app && app.businessCategory].concat(Array.isArray(app && app.categories) ? app.categories : []);
+  return cands.some((c) => COACH_TYPES.has(String(c || '').trim().toLowerCase()));
+}
+
+const _LANE_HUBS = ['healthcare', 'entertainment', 'sports_coaching', DEFAULT_HUB];
 const _millis = (v) => (v && typeof v.toMillis === 'function' ? v.toMillis() : (typeof v === 'number' ? v : (v ? Date.parse(v) || 0 : 0)));
 
 async function resolveProviderClassification(db, providerId) {
@@ -174,6 +183,10 @@ function commissionArgsForHub(hub) {
   if (String(hub || '') === 'entertainment') {
     return { category: 'entertainment_bookings', hubId: 'entertainment', skipMinimum: true };
   }
+  /* Sports coaching (owner 2026-10-03): the explicit sports_coaching row — flat 5 %, no subscriptionRole, no floor. */
+  if (String(hub || '') === 'sports_coaching') {
+    return { category: 'sports_coaching', hubId: 'sports', skipMinimum: true };
+  }
   /* Fitness bookings / memberships: the fixed 5 % fitness lane (commission-config FIXED_RATE_CATEGORIES, floor-exempt). */
   if (String(hub || '') === 'fitness') {
     return { category: 'fitness', hubId: 'fitness', skipMinimum: true };
@@ -187,4 +200,4 @@ function commissionArgsForHub(hub) {
   return { category: 'services', hubId: 'provider', skipMinimum: true };
 }
 
-module.exports = { resolveProviderHub, resolveProviderClassification, classifyDecidedApplication, commissionArgsForHub, ROLE_TO_HUB, DEFAULT_HUB };
+module.exports = { resolveProviderHub, resolveProviderClassification, classifyDecidedApplication, commissionArgsForHub, isCoachApplication, ROLE_TO_HUB, DEFAULT_HUB };

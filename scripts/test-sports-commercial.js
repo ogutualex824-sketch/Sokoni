@@ -35,6 +35,17 @@ Module.prototype.require = orig;
   const bare = sportsFiles.filter((f) => /category:\s*['"]sports['"]/.test(fs.readFileSync(path.join(FN, f), 'utf8')));
   ck('S1b bare "venue_booking" (the general venue purpose) is NOT a Sports alias', CC.resolveRate('venue_booking').category !== 'sports_venue_bookings');
   ck('S3 bare "sports" = events (event ticket); no Sports server file prices with bare "sports"', CC.resolveRate('sports').category === 'events' && bare.length === 0, bare);
+  /* S4 — coaches book on the provider engine and are priced sports_coaching */
+  const H = require(path.join(FN, 'provider-hub.js'));
+  const coach = H.classifyDecidedApplication({ role: 'provider', category: 'coach' });
+  const args = H.commissionArgsForHub(coach.hub);
+  ck('S4a a decided coach application → lane sports_coaching → category sports_coaching (no subscriptionRole, no floor)',
+    coach.hub === 'sports_coaching' && args.category === 'sports_coaching' && !('subscriptionRole' in args) && args.skipMinimum === true, { coach, args });
+  ck('S4b a non-coach provider stays on the generic services lane; a role-mapped hub (health) still wins',
+    H.classifyDecidedApplication({ role: 'provider', category: 'plumber' }).hub === 'provider' && H.classifyDecidedApplication({ role: 'health', category: 'coach' }).hub === 'healthcare');
+  const stamped = await H.resolveProviderClassification({ collection: (c) => ({ doc: () => ({ get: async () => ({ exists: true, data: () => ({ business: { lane: { hub: 'sports_coaching' } } }) }) }) }) }, 'C1');
+  ck('S4c a lane stamped sports_coaching at approval is honoured at booking time', stamped.hub === 'sports_coaching', stamped);
+
   console.log(`\n${pass} passed, ${fail} failed`);
   process.exit(fail ? 1 : 0);
 })().catch((e) => { console.log('CRASH', e && e.stack); process.exit(1); });
