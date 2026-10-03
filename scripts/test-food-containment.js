@@ -69,5 +69,11 @@ ck('FC-5', !/>16\+</.test(FOOD) && !/WELCOME50/.test(FOOD), 'no invented "16+ re
 ck('FC-6', !/\ninit\(\);\n/.test(DASH) && /_foodPortalClosed/.test(DASH) && !/onSnapshot\(/.test(DASH),
   'the Restaurant Portal no longer opens a made-up "Jambo Burgers" dashboard for any signed-in user, and starts no live listener');
 ck('FC-7', /HubRegister\.open\(\{hub:'food'/.test(FOOD), 'CONTROL: the real application route (HubRegister, hub food) is still offered');
+/* owner 2026-10-03: an honest first-order line, no reward promise; the 50% coupon is gone from shipped code */
+const SF = read('sokoni-food.js');
+const FOOD_VISIBLE = FOOD.replace(/<!--[\s\S]*?-->/g, '');
+ck('FC-8', /Your first Sokoni Food order is coming soon/.test(FOOD_VISIBLE) && !/\d+\s*%\s*OFF/i.test(FOOD_VISIBLE) && !/earning points/i.test(FOOD_VISIBLE),
+  'the first-order line is honest: coming soon, no % discount, no points promise yet');
+ck('FC-9', !/WELCOME50|50% OFF first/.test(SF), 'the WELCOME50 50% coupon is removed from sokoni-food.js');
 console.log('\nRESULT: ' + pass + ' passed, ' + fail + ' failed');
 process.exit(fail ? 1 : 0);

@@ -268,7 +268,6 @@ window.SokoniFood = (function () {
 
   /* ══ PROMO CODES ══ */
   const SYSTEM_PROMOS = [
-    {code:'WELCOME50',type:'percent',value:50,max:500,minOrder:500,uses:1,desc:'50% OFF first Sokoni Food order'},
     {code:'FOOD20',type:'percent',value:20,max:300,minOrder:800,uses:10,desc:'20% OFF any food order'},
     {code:'FREEDELIVERY',type:'delivery',value:200,max:200,minOrder:600,uses:5,desc:'Free delivery on your order'},
     {code:'FRIDAY200',type:'flat',value:200,max:200,minOrder:1000,uses:3,desc:'KES 200 OFF every Friday'},
