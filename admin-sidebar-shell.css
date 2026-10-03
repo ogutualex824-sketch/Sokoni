@@ -1,0 +1,116 @@
+/* ════════════════════════════════════════════════════════════════════════════
+   ADMIN + SUPER ADMIN SIDEBAR — the merchant-v2.html shell style (owner 2026-10-03).
+   Used by admin-os.html (.aos-*) and super-admin.html (.sa-*). STYLE ONLY: no markup, no
+   controls, no behaviour change. Each page loads it LAST, so it wins over the page's own
+   <style> and sokoni-admin-responsive.css.
+
+   Same size as merchant-v2: a 232px rail, 64px when collapsed; on a phone a drawer of
+   min(84vw, 232px). Same surface, hairlines, rounded nav items, accent-outlined active item
+   and small uppercase group labels.
+
+   FIXED + SCROLLABLE: the rail is fixed full-height. The logo header and the account footer
+   are pinned (position:sticky inside the one scrolling column), so only the menu scrolls —
+   the sign-out button never scrolls out of reach, and a long menu is never clipped.
+   ════════════════════════════════════════════════════════════════════════════ */
+:root{
+  --adm-rail-w:232px;                            /* merchant-v2 --rail-w */
+  --adm-rail-collapsed:64px;                     /* merchant-v2 --rail-collapsed */
+  --adm-side-surface:#0d0d0d;                    /* merchant-v2 --surface */
+  --adm-side-line:rgba(255,255,255,.09);         /* merchant-v2 --line */
+  --adm-side-txt:#f4f4f4;                        /* merchant-v2 --txt */
+  --adm-side-txt2:#a8a8a8;                       /* merchant-v2 --txt2 */
+  --adm-side-txt3:#6d6d6d;                       /* merchant-v2 --txt3 */
+  --adm-side-acc:#71ff00;                        /* merchant-v2 --acc */
+  --adm-side-acc-dim:rgba(113,255,0,.12);        /* merchant-v2 --acc-dim */
+  --adm-side-acc-line:rgba(113,255,0,.32);       /* merchant-v2 --acc-line */
+  /* the pages size their main column from these — same rail width on both */
+  --aos-sidebar-w:var(--adm-rail-w);
+  --sidebar-w:var(--adm-rail-w);
+}
+
+/* ── THE RAIL ─────────────────────────────────────────────────────────────── */
+:is(.aos-sidebar,.sa-sidebar){
+  width:var(--adm-rail-w);
+  position:fixed;top:0;bottom:0;left:0;
+  height:100vh;height:100dvh;min-height:0;
+  background:var(--adm-side-surface);
+  border-right:1px solid var(--adm-side-line);
+  box-shadow:none;
+  display:flex;flex-direction:column;
+  overflow-x:hidden;overflow-y:auto;overscroll-behavior:contain;
+  -webkit-overflow-scrolling:touch;
+  scrollbar-width:thin;scrollbar-color:rgba(255,255,255,.14) transparent;
+}
+:is(.aos-sidebar,.sa-sidebar)::-webkit-scrollbar{width:6px}
+:is(.aos-sidebar,.sa-sidebar)::-webkit-scrollbar-thumb{background:rgba(255,255,255,.14);border-radius:6px}
+:is(.aos-sidebar,.sa-sidebar)::-webkit-scrollbar-track{background:transparent}
+:is(.aos-main,.sa-main){margin-left:var(--adm-rail-w)}
+
+/* ── PINNED HEADER (merchant-v2 .side-head) ──────────────────────────────── */
+:is(.aos-sidebar,.sa-sidebar) :is(.aos-logo,.sa-logo){
+  position:sticky;top:0;z-index:2;flex:0 0 auto;
+  background:var(--adm-side-surface);
+  gap:10px;padding:13px 12px;padding-top:calc(13px + env(safe-area-inset-top,0px));
+  border-bottom:1px solid var(--adm-side-line);
+}
+:is(.aos-sidebar,.sa-sidebar) .logo-icon{
+  width:36px;height:36px;border-radius:10px;
+  background:var(--adm-side-acc-dim);border:1px solid var(--adm-side-acc-line);padding:3px;
+}
+:is(.aos-sidebar,.sa-sidebar) .logo-text{font-size:13.5px;font-weight:800;letter-spacing:0;color:var(--adm-side-txt);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+:is(.aos-sidebar,.sa-sidebar) .logo-sub{font-size:11px;color:var(--adm-side-txt3)}
+:is(.aos-sidebar,.sa-sidebar) :is(.aos-sidebar-toggle,.sa-sidebar-toggle){border-radius:9px;border-color:var(--adm-side-line);color:var(--adm-side-txt3)}
+
+/* ── MENU (merchant-v2 .side-scroll / .side-group / .nav-item) ───────────── */
+:is(.aos-sidebar,.sa-sidebar) .nav-group{padding:0 8px;flex:0 0 auto}
+:is(.aos-sidebar,.sa-sidebar) .nav-group-label{
+  margin:10px 6px 4px;padding:0;
+  font-size:10.5px;font-weight:800;letter-spacing:.09em;text-transform:uppercase;
+  color:var(--adm-side-txt3);
+}
+:is(.aos-sidebar,.sa-sidebar) .nav-item{
+  gap:11px;padding:10px 11px;margin-bottom:2px;border-radius:11px;
+  border:1px solid transparent;
+  font-size:14px;font-weight:600;color:var(--adm-side-txt2);
+  white-space:nowrap;overflow:hidden;text-overflow:ellipsis;
+}
+/* a nav item that sits directly in the rail (super-admin "Back to Admin") gets the same gutter */
+:is(.aos-sidebar,.sa-sidebar) > .nav-item{width:calc(100% - 16px);margin:8px 8px 2px}
+:is(.aos-sidebar,.sa-sidebar) .nav-item .nav-icon{width:20px;font-size:15px}
+:is(.aos-sidebar,.sa-sidebar) .nav-item:hover{background:rgba(255,255,255,.05);color:var(--adm-side-txt)}
+:is(.aos-sidebar,.sa-sidebar) .nav-item.active{
+  background:var(--adm-side-acc-dim);color:var(--adm-side-acc);
+  border-color:var(--adm-side-acc-line);font-weight:600;
+}
+:is(.aos-sidebar,.sa-sidebar) .nav-item:focus-visible{outline:2px solid var(--adm-side-acc-line);outline-offset:1px}
+
+/* ── PINNED FOOTER (merchant-v2 .side-foot) ──────────────────────────────── */
+:is(.aos-sidebar,.sa-sidebar) :is(.aos-sidebar-footer,.sa-sidebar-footer){
+  position:sticky;bottom:0;z-index:2;flex:0 0 auto;margin-top:auto;
+  background:var(--adm-side-surface);
+  border-top:1px solid var(--adm-side-line);
+  padding:8px 12px calc(8px + env(safe-area-inset-bottom,0px));
+}
+:is(.aos-sidebar,.sa-sidebar) :is(.aos-user-info-text,.sa-user-info-text) strong{color:var(--adm-side-txt)}
+:is(.aos-sidebar,.sa-sidebar) :is(.aos-user-info-text,.sa-user-info-text) span{color:var(--adm-side-txt3)}
+:is(.aos-sidebar,.sa-sidebar) .signout-btn{border-radius:11px;border-color:var(--adm-side-line);color:var(--adm-side-txt3)}
+
+/* ── COLLAPSED RAIL (desktop) — the same 64px icon rail as merchant-v2 ───── */
+@media (min-width:769px){
+  body.sidebar-collapsed .aos-sidebar,body.sa-collapsed .sa-sidebar{width:var(--adm-rail-collapsed)}
+  body.sidebar-collapsed .aos-main,body.sa-collapsed .sa-main{margin-left:var(--adm-rail-collapsed)}
+  body.sidebar-collapsed .aos-sidebar .aos-logo,body.sa-collapsed .sa-sidebar .sa-logo{padding:13px 6px;justify-content:center}
+  body.sidebar-collapsed .aos-sidebar .nav-group,body.sa-collapsed .sa-sidebar .nav-group{padding:0 6px}
+  body.sidebar-collapsed .aos-sidebar .nav-item,body.sa-collapsed .sa-sidebar .nav-item{padding:10px 0;justify-content:center}
+  body.sidebar-collapsed .aos-sidebar .aos-sidebar-footer,body.sa-collapsed .sa-sidebar .sa-sidebar-footer{padding:8px 6px}
+}
+
+/* ── PHONE DRAWER — the same width rule as merchant-v2 ───────────────────── */
+@media (max-width:768px){
+  :is(.aos-sidebar,.sa-sidebar){width:min(84vw,var(--adm-rail-w));z-index:100}
+  :is(.aos-main,.sa-main){margin-left:0}
+}
+
+@media (prefers-reduced-motion:reduce){
+  :is(.aos-sidebar,.sa-sidebar),:is(.aos-main,.sa-main){transition:none}
+}

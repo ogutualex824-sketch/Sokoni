@@ -1,3 +1,12 @@
+## [2026-10-03] - Admin + Super Admin sidebars in the merchant-v2 style: same size, fixed, header/footer pinned, menu scrolls
+
+Hosting only. New `admin-sidebar-shell.css`, linked LAST in `admin-os.html` and `super-admin.html`. **Style only, not deployed.**
+- **Size:** the same as merchant-v2: a 232px rail (was 220px), 64px collapsed (was 66px), and a phone drawer of min(84vw, 232px).
+- **Look:** merchant-v2's surface, hairlines, text tones, rounded nav items, small uppercase group labels and the green accent-outlined active item. The Super Admin sidebar now uses the same green accent instead of its purple.
+- **Fixed + scrollable:** the rail is fixed full-height and scrolls (`min-height:0`). The logo header and the account/sign-out footer are pinned (sticky), so only the menu scrolls. The sign-out button never scrolls away, and a long menu is never clipped.
+- **No behaviour change:** no markup, nav item, control or behaviour changed. Each page differs from live 72dca56 by one `<link>`.
+- **Tests:** `scripts/test-adminos-sidebar-style.js` 15/0 (a negative control proves the "no hidden control" row bites). The rendered browser check is OWED until memory is ≥ 512 MB.
+
 ## [2026-09-30] - Entry experience E1: "Create Free Account" opens the one account wizard; the premium colour-journey splash returns, once per visit, full screen
 
 **Branch `hosting/entry-experience-on-2bcdae2`, built DIRECTLY on live `2bcdae2`** (owner 2026-09-30: ship only this slice;
