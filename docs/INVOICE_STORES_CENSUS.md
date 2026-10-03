@@ -35,9 +35,9 @@ So the invoice system is **not converged**. Any admin total across stores would 
 
 | Hole | Where | Owner |
 |---|---|---|
-| Any signed-in user can create a subscription invoice already `paid` from a client reference | sasos-billing.js `sasosCreateInvoice` | payments (5b) / commercial (2f) |
-| `createSupplierInvoice` shows no check that the caller owns the PO | procurement.js | merchant ops |
-| `_assertShop` accepts `users.role == 'admin'` (a profile field, not the admin claim) as shop access | finance-os-sprint43.js | f3 |
+| ~~Subscription invoice created `paid` from a client reference~~ **FIXED** 3c7eec6: payment_unverified + no cross-user leak | sasos-billing.js `sasosCreateInvoice` | f3 |
+| `createSupplierInvoice` shows no check that the caller owns the PO | procurement.js | **sokoni-e3 (handed over 2026-10-04)** |
+| ~~`_assertShop` accepts `users.role == 'admin'`~~ **FIXED** e99a961: only the Auth admin / superAdmin claim | finance-os-sprint43.js | f3 |
 | A FinOS invoice can be generated for a not-yet-COMPLETED transaction | financial-os.js `fosGenerateInvoice` | payments |
 
 ## Recommended convergence (decision needed — see the owner question)
