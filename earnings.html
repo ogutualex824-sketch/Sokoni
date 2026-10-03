@@ -486,7 +486,8 @@
     if(f.listings_limit!=null)        out.push(_fnum(f.listings_limit)+' listings');
     if(f.photos_per_listing!=null)    out.push(_fnum(f.photos_per_listing)+' photos/listing');
     if(f.featured_listings)           out.push(_fnum(f.featured_listings)+' featured');
-    if(f.commission_discount_pct)     out.push(f.commission_discount_pct+'% commission off');
+    /* commission_discount_pct is NOT rendered (2026-10-03): no plan discount reaches a sale — marketplace sales use the absolute
+       plan ladder and service bookings are a flat 5 %, so the chip would advertise a discount nobody receives. */
     if(f.analytics)                   out.push('Analytics');
     if(f.ai_assistant)                out.push('AI assistant');
     if(f.bulk_import)                 out.push('Bulk import');

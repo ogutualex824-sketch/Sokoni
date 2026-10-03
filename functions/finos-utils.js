@@ -568,6 +568,9 @@ async function calculateCommission(db, opts) {
   if (fixedCategory) {
     /* The POS lane is not plan-keyed and takes no adjustment — recorded, not silently skipped. */
     planSkipped = 'fixed_rate_category';
+  } else if (CC.isFlatBookingCategory(category)) {
+    /* A service booking is a flat 5 % on every plan (owner 2026-10-03) — no plan may discount or surcharge it. */
+    planSkipped = 'flat_booking_rate';
   } else if (mktPct !== null) {
     /* The marketplace ladder IS this seller's plan pricing. Discounting it here would apply
        the plan twice — a Pro seller would pay 5% less a Pro discount. The ladder is absolute
