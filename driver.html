@@ -37,6 +37,7 @@
     <button class="dh-hbtn" id="dhMenuBtn" type="button" aria-label="Open menu" aria-controls="dhSide" aria-expanded="false">☰</button>
     <div class="dh-title" id="dhTitle">Overview</div>
     <button class="dh-pres" id="dhPresChip" type="button" aria-live="polite" data-go="overview"><span class="dh-dot" id="dhPresDot"></span><span id="dhPresTxt">—</span></button>
+    <div id="dhAcct" style="flex:0 0 auto;display:flex;align-items:center"></div>
   </header>
 
   <aside class="dh-side" id="dhSide" aria-label="Delivery Hub navigation">
@@ -107,6 +108,16 @@
 
 <script src="sokoni-geo.js"></script>
 <script type="module" src="sokoni-rider-hub.js"></script>
+<!-- Account + role menu (owner 2026-10-01: every dashboard has the profile dropdown). The Delivery Hub has its own
+     chrome and does not load shared-header.js, so — like merchant-v2 — it mounts the ONE implementation,
+     sokoni-profile-menu.js, into its header slot. Roles come only from SokoniRoleAuthority (loaded in <head>). -->
+<script src="sokoni-profile-menu.js"></script>
+<script>
+(function () {
+  try { if (window.SokoniProfileMenu) window.SokoniProfileMenu.mount(document.getElementById('dhAcct'), { size: 40 }); }
+  catch (e) { /* the Delivery Hub must render even if the menu cannot */ }
+})();
+</script>
 <script src="sw-register.js" defer></script>
 </body>
 </html>
