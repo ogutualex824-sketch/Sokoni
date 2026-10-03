@@ -403,37 +403,14 @@ exports.bookingCreate = onCall(
     let paymentStatus     = 'awaiting';
     let paymentNote       = null;
 
+    /* A CLIENT-SUPPLIED paymentId NEVER pays a venue booking (2026-10-03, venue money-path audit). The old check accepted
+       ANY of the caller's terminal payments that covered the total — a marketplace payment, or one already used for another
+       booking — and marked this booking paid WITHOUT creating its venueSettlements row, so the venue owner was never paid
+       and a refund could be filed against someone else's payment. No page sends paymentId. A venue booking is paid ONLY
+       through its own intent (createPaymentIntent purpose 'venue_booking' → verified webhook → venueOnBookingPayment),
+       which ties the money to THIS booking and creates the HELD settlement. The booking is created unpaid and proceeds. */
     if (paymentId) {
-      /* One definition, in shared/constants.js — a second copy of a financial
-         vocabulary is one drift from two answers to 'has this been paid?'. */
-      const { TERMINAL_PAID } = require('./shared/constants');
-      const REVERSED      = new Set(['REFUNDED', 'REVERSED', 'CHARGEBACK', 'CANCELLED']);
-      try {
-        const paySnap = await db.collection('payments').doc(String(paymentId)).get();
-        if (!paySnap.exists) {
-          paymentNote = 'payment_not_found';
-        } else {
-          const pay    = paySnap.data() || {};
-          const status = String(pay.status || '').toUpperCase();
-          const payer  = pay.uid || pay.ownerUid || null;
-          const paid   = Number.isFinite(Number(pay.amountCents))
-            ? Number(pay.amountCents) / 100
-            : Number(pay.amount);
-
-          if (REVERSED.has(status))            paymentNote = 'payment_reversed';
-          else if (!TERMINAL_PAID.has(status)) paymentNote = 'payment_not_terminal';
-          else if (payer && payer !== uid)     paymentNote = 'ownership_mismatch';
-          else if (Number.isFinite(paid) && paid + 0.01 < Number(pricingBreakdown.total))
-            paymentNote = 'amount_short';
-          else {
-            verifiedPaymentId = String(paymentId);
-            paymentStatus     = 'paid';
-          }
-        }
-      } catch (e) {
-        paymentNote = 'verification_failed';
-        console.error('[bookingCreate] payment verification failed', { paymentId, err: e.message });
-      }
+      paymentNote = 'client_payment_not_accepted';
       if (paymentNote) {
         console.warn('[bookingCreate] payment rejected', { uid, paymentId, reason: paymentNote });
       }

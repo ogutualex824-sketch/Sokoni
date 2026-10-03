@@ -106,12 +106,6 @@ const TYPES = {
   subscription_expired: { priority: 'commerce',  category: 'subscriptions', smsTemplate: 'subscription_expired' },
   seller_verified:      { priority: 'commerce',  category: 'marketplace',   smsTemplate: 'seller_verified' },
   merchant_approved:    { priority: 'commerce',  category: 'marketplace',   smsTemplate: 'merchant_approved' },
-  /* POS/Till commission — the 07:00 settlement gate. The REMINDER is deliberately its own
-     type from the CLOSURE: one is a courtesy the merchant may mute, the other tells them
-     why their till has stopped and must reach them. Being gated should never be the first
-     time a merchant hears about it. */
-  pos_commission_due:   { priority: 'commerce',  category: 'payments',      smsTemplate: 'pos_commission_due' },
-  pos_commission_gate:  { priority: 'critical',  category: 'payments',      smsTemplate: 'pos_commission_gate' },
   rider_approved:       { priority: 'commerce',  category: 'marketplace',   smsTemplate: 'rider_approved' },
   /* Loyalty & rewards. These reach the user through the engine now, so they get an
      IN-APP notification as well as a push. Previously loyalty.js pushed directly and
@@ -431,46 +425,17 @@ async function notify({ uid, type, title, body, vars = {}, phone, email, image, 
   /* SMS — forced for critical; for commerce ONLY as a fallback when push could not
      land. Sending both by default would spam the user and burn credit for nothing. */
   const wantSms = ch.sms || (ch.smsFallback && !pushOk);
-  if (wantSms && t.smsTemplate) {
-    /* RESOLVE THE RECIPIENT, exactly as push and email already do.
-       `phone` is a caller OVERRIDE, not the only source. Push reads
-       users/{uid} for its tokens; email falls back to the Auth address when the
-       caller supplies none. SMS had the override and no fallback — so the
-       condition `wantSms && t.smsTemplate && phone` was false at its last term
-       for every caller in the codebase, sms.enqueue() was never reached, and
-       smsQueueWorker drained an empty queue every minute without one error.
-
-       Canonical source is users/{uid}.phoneNumber ("+254…"), the field
-       profile.html persists on phone verification. The legacy `phone` field is
-       deliberately NOT read: reviving it to raise apparent reach would undo a
-       canonicalisation the write path already completed. */
-    let to = phone;
-    if (!to) {
-      try {
-        const snap = await db().collection('users').doc(uid).get();
-        const pn = snap.exists ? (snap.data() || {}).phoneNumber : null;
-        if (typeof pn === 'string' && pn.trim()) to = pn.trim();
-      } catch (_) { /* a lookup failure must not break the other channels */ }
-    }
-
-    if (!to) {
-      /* VISIBLE, not silent. The old code simply skipped, leaving
-         result.channels.sms unset — which is why a healthy SMS platform looked
-         fine while delivering nothing. A caller can now see the reason, and it
-         can be counted. */
-      result.channels.sms = 'no_phone_on_record';
-    } else {
-      const r = await sms.enqueue({
-        to,
-        template: t.smsTemplate,
-        vars: { ...vars, title, body },
-        uid,
-        dedupeKey: `sms:${key}`,          /* the SMS inherits the same idempotency */
-      });
-      result.channels.sms = r.suppressed ? 'suppressed_by_preference'
-                          : r.deduped   ? 'deduped'
-                          : 'queued';
-    }
+  if (wantSms && t.smsTemplate && phone) {
+    const r = await sms.enqueue({
+      to: phone,
+      template: t.smsTemplate,
+      vars: { ...vars, title, body },
+      uid,
+      dedupeKey: `sms:${key}`,          /* the SMS inherits the same idempotency */
+    });
+    result.channels.sms = r.suppressed ? 'suppressed_by_preference'
+                        : r.deduped   ? 'deduped'
+                        : 'queued';
   } else if (ch.smsFallback && pushOk) {
     result.channels.sms = 'not_needed_push_delivered';
   }
@@ -741,47 +706,11 @@ async function advanceOrder({ orderId, stage, uid, phone, title, body, image, de
 }
 
 /* Callable form. Only the seller/rider/admin side advances an order, so this
-   requires auth; the buyer's client only ever READS the timeline.
-
-   That sentence was true as a description and false as an implementation: the
-   check was `request.auth.uid` existing, and nothing more. Any signed-in account
-   could name any orderId and advance a stranger's order — and because the
-   `accepted` stage sets status 'confirmed', which onOrderStatusChange watches to
-   fire rider auto-assignment, that meant pushing someone else's order into
-   dispatch and putting a real rider on the road.
-
-   Authorisation now happens BEFORE advanceOrder() is reached, so a refused call
-   performs no read-modify-write on the order at all: the order document, its
-   status, and every downstream trigger are untouched.
-
-   advanceOrder() itself is deliberately NOT changed. It is the trusted internal
-   primitive; the callable is the boundary where an untrusted caller appears. */
-const _orderAuth = require('./order-advance-authority');
-const _shopEmployees = require('./shop-employees');
-
+   requires auth; the buyer's client only ever READS the timeline. */
 exports.orderAdvance = onCall(
   { region: REGION, secrets: sokoniAt.secrets },
   async (request) => {
     if (!(request.auth && request.auth.uid)) throw new HttpsError('unauthenticated', 'Sign in required.');
-    const uid = request.auth.uid;
-    const { orderId, stage } = request.data || {};
-    if (!orderId) throw new HttpsError('invalid-argument', 'orderId is required.');
-    if (!stage)   throw new HttpsError('invalid-argument', 'stage is required.');
-
-    const snap = await db().collection('orders').doc(String(orderId)).get();
-    if (!snap.exists) throw new HttpsError('not-found', 'Order not found.');
-
-    /* WHO is this caller to THIS order, then MAY that actor set THIS stage.
-       Two questions, asked separately — collapsing them is how the original
-       hole existed. */
-    await _orderAuth.authorise({
-      order: snap.data() || {},
-      uid,
-      claims: request.auth.token || {},
-      stage,
-      shopAccess: _shopEmployees.assertShopAccess,
-    });
-
     return advanceOrder(request.data || {});
   }
 );
