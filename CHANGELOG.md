@@ -1,3 +1,7 @@
+## 2026-10-03 — Hub-aware lead ledger (b2b + construction prices by hub/tier, one fee per commercialEventId) (NOT deployed)
+
+- **Test:** test-lead-ledger-hubs 7/0.
+
 ## 2026-10-03 — Construction commission rows: materials 15%, contractor work 0% fixed, unpriced products refused (NOT deployed)
 
 - **Change:** commission-config construction rows/aliases + UNPRICED_CATEGORIES; finos-utils refuses unpriced categories; client snapshot rebuilt.

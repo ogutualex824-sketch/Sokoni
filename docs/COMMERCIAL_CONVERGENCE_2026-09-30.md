@@ -895,3 +895,16 @@ No duplicate authority was found on the money side.
 - **Not built yet (needs owner prices):** the construction per-lead fee (it will reuse the b2b-leads pattern: supplier pays, monthly invoice, recovery from settlement) and the Free / Professional / Business-Contractor plans. A project/milestone fee is NOT added (it needs an explicit owner number).
 - **Policy version:** `2026-10-03.construction`.
 - **Tests:** `scripts/test-construction-commercial.js` 6/0. The commission sweep is green; the only failure (commercial-facts 3b) was already on base.
+
+## 23 · One hub-aware lead ledger (owner 2026-10-03, via sokoni-f3)
+
+- **One ledger:** `b2b-leads.js` serves every hub. Rows stay in `b2bLeads` (no migration) and gain `hub` ('b2b' | 'construction'), `tier`, `commercialEventId` and a `priceKES` snapshot.
+- **Prices:** by hub + tier from `revenueConfig/lead_prices` (Super Admin), with owner defaults:
+  - b2b standard 200 (`revenueConfig/b2b_leads.priceKES` still overrides it);
+  - construction standard 200, qualified 500;
+  - all + 16% VAT, exclusive; the provider pays and buyers never do.
+  - An unknown hub has **no** price; the writer refuses it rather than defaulting.
+- **Qualified tier:** server-only. `QUALIFIED_RULES_ENABLED = false`, so every lead is 'standard' and a caller-sent 'qualified' is downgraded. Nothing classifies on an amount.
+- **One event → one fee:** `leadClaimWrite(t, db, {commercialEventId, hub, leadId, supplierBusinessId})` does `create()` of `leadClaims/{commercialEventId}` in the SAME transaction as the lead row. A contactRequest that becomes an RFQ reuses the same id, so a second fee is impossible.
+- **Month end:** each lead is billed at its snapshot or its hub price; one invoice per supplier-month whose description names each hub.
+- **Tests:** `scripts/test-lead-ledger-hubs.js` 7/0. lead-fee 24/0 and lead-recovery 21/0 are unchanged (backward compatible).

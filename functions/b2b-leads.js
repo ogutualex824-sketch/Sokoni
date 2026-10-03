@@ -75,10 +75,55 @@ async function leadPrice(db) {
   }
 }
 
+/* ── HUB-AWARE LEADS (owner 2026-10-03, via sokoni-f3) ──────────────────────────────────────────────────────────────
+   ONE lead ledger for every hub (b2b, construction …) — not a second ledger per vertical. Rows stay in b2bLeads.
+   Prices by hub + tier (owner starting values, Super-Admin configurable in revenueConfig/lead_prices):
+     b2b          standard KES 200 (revenueConfig/b2b_leads.priceKES still overrides it — the original control)
+     construction standard KES 200 · qualified KES 500 (+ 16% VAT, provider pays; buyers never pay)
+   QUALIFIED is a SERVER classification. Until explicit rules exist (QUALIFIED_RULES_ENABLED), every lead is 'standard' —
+   a caller that sends tier 'qualified' is downgraded, and nothing ever classifies on an amount the buyer typed.
+   ONE commercial event → ONE fee: the writer creates leadClaims/{commercialEventId} with create() in the SAME transaction as
+   the lead row (leadClaimWrite). A contactRequest that later becomes an RFQ reuses the event id, so it can never bill twice. */
+const LEAD_PRICES_DOC = ['revenueConfig', 'lead_prices'];
+const HUB_DEFAULTS = Object.freeze({ b2b: Object.freeze({ standard: 200 }), construction: Object.freeze({ standard: 200, qualified: 500 }) });
+const QUALIFIED_RULES_ENABLED = false;
+const CLAIMS = 'leadClaims';
+
+function normaliseTier (tier) { return QUALIFIED_RULES_ENABLED && tier === 'qualified' ? 'qualified' : 'standard'; }
+
+/** Price for (hub, tier). Unknown hub → null (a lead for a hub with no price is refused by the writer, never defaulted). */
+async function leadPriceFor (db, hub, tier) {
+  const h = String(hub || 'b2b');
+  const t = normaliseTier(tier);
+  const def = HUB_DEFAULTS[h];
+  if (!def || def[t] == null) return null;
+  if (h === 'b2b' && t === 'standard') { const p = await leadPrice(db); return { priceKES: p.priceKES, source: p.source, hub: h, tier: t }; }
+  try {
+    const sn = await db.collection(LEAD_PRICES_DOC[0]).doc(LEAD_PRICES_DOC[1]).get();
+    const v = sn && sn.exists && sn.data() && sn.data()[h] ? sn.data()[h][t] : undefined;
+    if (v !== undefined && _validPrice(v)) return { priceKES: v, source: 'admin_override', hub: h, tier: t };
+    return { priceKES: def[t], source: v === undefined ? 'default' : 'default_invalid_override_ignored', hub: h, tier: t };
+  } catch (_) { return { priceKES: def[t], source: 'default', hub: h, tier: t }; }
+}
+
+/** The one-fee-per-event claim. Call INSIDE the transaction that writes the lead row (it is a write; no read needed). */
+function leadClaimWrite (t, db, { commercialEventId, hub, leadId, supplierBusinessId }) {
+  const id = String(commercialEventId || '');
+  if (!/^[A-Za-z0-9_-]{6,160}$/.test(id)) throw Object.assign(new Error('commercialEventId required'), { code: 'invalid-argument' });
+  t.create(db.collection(CLAIMS).doc(id), { commercialEventId: id, hub: String(hub || 'b2b'), leadId: String(leadId || ''),
+    supplierBusinessId: String(supplierBusinessId || ''), createdAt: new Date() });
+}
+
 /** Fields rfq.js adds to each lead row it writes: the price the lead was received at. Never throws. */
-async function leadFields(db) {
-  const p = await leadPrice(db);
-  return { priceKES: p.priceKES, priceSource: p.source };
+async function leadFields(db, opts) {
+  const o = opts || {};
+  if (!o.hub || o.hub === 'b2b') {
+    const p = await leadPrice(db);
+    return Object.assign({ priceKES: p.priceKES, priceSource: p.source }, o.hub ? { hub: 'b2b', tier: 'standard' } : {});
+  }
+  const p = await leadPriceFor(db, o.hub, o.tier);
+  if (!p) throw Object.assign(new Error('No lead price for hub ' + o.hub), { code: 'failed-precondition' });
+  return { priceKES: p.priceKES, priceSource: p.source, hub: p.hub, tier: p.tier };
 }
 
 /** Group one month's lead rows by supplier. Rows priced at write time keep that price; rows without one take `fallbackKES`. */
@@ -88,11 +133,13 @@ function groupLeads(rows, fallbackKES) {
     const sup = String(r.supplierBusinessId || '');
     if (!ID_RE.test(sup)) continue;
     if (r.buyerBusinessId && String(r.buyerBusinessId) === sup) continue; /* a supplier's own RFQ is never a lead */
-    const g = by.get(sup) || { supplierBusinessId: sup, billToUid: null, leadCount: 0, netKES: 0, unsnapshottedLeads: 0 };
+    const g = by.get(sup) || { supplierBusinessId: sup, billToUid: null, leadCount: 0, netKES: 0, unsnapshottedLeads: 0, byHub: {} };
     if (!g.billToUid && r.supplierOwnerUid) g.billToUid = String(r.supplierOwnerUid);
     const snap = Number.isInteger(r.priceKES) && r.priceKES >= 1 && r.priceKES <= MAX_KES;
+    const fb = typeof fallbackKES === 'function' ? fallbackKES(r) : fallbackKES;
     g.leadCount += 1;
-    g.netKES += snap ? r.priceKES : fallbackKES;
+    g.netKES += snap ? r.priceKES : fb;
+    const hk = String(r.hub || 'b2b'); g.byHub[hk] = (g.byHub[hk] || 0) + 1;
     if (!snap) g.unsnapshottedLeads += 1;
     by.set(sup, g);
   }
@@ -135,7 +182,9 @@ async function invoiceSupplierMonth(db, aggId, deps, totals) {
   try {
     r = await issue({
       sellerUid: a.billToUid, feeType: FEE_TYPE, amount: Number(a.netKES), reference: String(aggId),
-      description: `${a.leadCount} B2B lead${a.leadCount === 1 ? '' : 's'} received, ${a.month}`,
+      description: a.byHub && Object.keys(a.byHub).length > 1
+        ? Object.keys(a.byHub).map((h) => a.byHub[h] + ' ' + h + ' lead' + (a.byHub[h] === 1 ? '' : 's')).join(', ') + ' received, ' + a.month
+        : `${a.leadCount} ${(a.byHub && Object.keys(a.byHub)[0] === 'construction') ? 'construction' : 'B2B'} lead${a.leadCount === 1 ? '' : 's'} received, ${a.month}`,
       vatInclusive: VAT_TREATMENT.vatInclusive, taxCategory: VAT_TREATMENT.taxCategory,
     });
   } catch (err) {
@@ -172,7 +221,9 @@ async function invoiceMonth(db, month, deps) {
   }
   out.leads = rows.length;
   const price = await leadPrice(db);
-  const groups = groupLeads(rows, price.priceKES);
+  const hubFallback = {};
+  for (const h of new Set(rows.map((r) => String(r.hub || 'b2b')))) { const p = await leadPriceFor(db, h, 'standard'); hubFallback[h] = p ? p.priceKES : price.priceKES; }
+  const groups = groupLeads(rows, (r) => hubFallback[String(r.hub || 'b2b')] || price.priceKES);
   out.suppliers = groups.length;
   for (const g of groups) {
     const r = await invoiceSupplierMonth(db, g.supplierBusinessId + '__' + month, deps, Object.assign({ month }, g));
@@ -409,6 +460,7 @@ let b2bLeadMonthlyInvoices, b2bLeadInvoiceSweep, adminSetB2bLeadPrice, b2bLeadPr
 module.exports = {
   LEAD_FEE_DEFAULT_KES, VAT_TREATMENT, FEE_TYPE, CONFIG_DOC, LEADS, MONTHS,
   monthOf, previousMonth, leadPrice, leadFields, groupLeads, statementFor, invoiceSupplierMonth,
+  leadPriceFor, leadClaimWrite, normaliseTier, HUB_DEFAULTS, QUALIFIED_RULES_ENABLED, CLAIMS,
   outstandingFor, prepareLeadDeduction, preparePayment, commitLeadRecovery, commitLeadDeduction, leadInvoiceGate, payNowAmount, RECOVERIES, OVERDUE_MS, invoiceMonth, sweepPending,
   b2bLeadMonthlyInvoices, b2bLeadInvoiceSweep, b2bLeadPrice, b2bLeadStatement, adminSetB2bLeadPrice,
 };
