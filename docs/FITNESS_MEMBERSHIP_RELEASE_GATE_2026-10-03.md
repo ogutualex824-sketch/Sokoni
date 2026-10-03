@@ -50,8 +50,8 @@
 | Firestore rules + emulator flows | e3 / all | — | — | free RAM 348 MB < 512 | BLOCKED (memory) |
 | Member / gym / AdminOS / Super Admin browser flows | e3 | — | — | RAM | BLOCKED (memory) |
 | Live webhook hold | 5b | — | — | port requested (after P0 + REVIEW slices) | BLOCKED (5b) |
-| AdminOS fitness switch screen | e3 | — | — | not built | UNPROVEN |
-| Price consistency editor → offer → membership → intent | e3 / 2f | D1–D3 (defaults), e3 snapshot test | defaults pass | editor pre-fill not yet wired to `fitness-offer-defaults` | UNPROVEN |
+| AdminOS fitness screen (lifecycle, why-locked, refunds via membershipDecideRefund / membershipRequestException, explicit-boolean switch with re-read) | e3 | e3 AdminOS suite | 16/0 (3/3 controls) | hosting d70eca5 | PROVEN (unit) |
+| Price consistency: editor pre-filled from fitness-offer-defaults → offer → membership snapshot → intent | e3 / 2f | D1–D3 + e3 OF-DEF row + snapshot test | pass | functions c90e526 + hosting d70eca5 | PROVEN (unit) |
 
 ## Next release gate
 1. When free RAM is ≥ 512 MB, run on THIS branch: the e3 rules suite + emulator flows, then the browser flows (member, gym, AdminOS, Super Admin).
@@ -64,3 +64,6 @@
 - The offline suite set is all green on the integration tip, plus `test-commission-5pct-agreement` 62/0. creator-callback still shows the same 4 pre-existing failures.
 - Still UNPROVEN: the gym offer editor pre-fill and the AdminOS fitness screen (sokoni-e3's hosting branch, in progress).
 - Still BLOCKED: emulator / browser (RAM) and the live webhook (sokoni-5b).
+
+## Certification pair (later 2026-10-03)
+Functions `integration/fitness-membership-2f @ c90e526` (+ e3 6d555b7: audit method 'qr', 5 composite indexes) · Hosting `hosting/fitness-memberships-on-31f5844 @ d70eca5` (e3: UI 51/0, AdminOS 16/0, containment 16/0). AdminOS / Super Admin link wiring is an assembly-time diff (docs/FITNESS_MEMBERSHIP_UI.md) so live never links to pages before their server exists. Runtime still BLOCKED (RAM ~210–350 MB).
