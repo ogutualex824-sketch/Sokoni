@@ -398,12 +398,12 @@ const TOOLS = [
   },
   {
     name: "approve_seller",
-    description: "Approve or suspend a seller account.",
+    description: "Suspend a seller account. KASS cannot APPROVE sellers — approvals are made by an administrator in AdminOS (applicationDecide), which writes the server decision record.",
     input_schema: {
       type: "object",
       properties: {
         sellerId: { type: "string", description: "The seller document ID" },
-        approve:  { type: "boolean", description: "true to approve, false to suspend" },
+        approve:  { type: "boolean", description: "Must be false (suspend). true is refused: approve in AdminOS." },
         note:     { type: "string", description: "Admin note" },
       },
       required: ["sellerId", "approve"],
@@ -583,13 +583,22 @@ async function executeTool(name, input) {
       }
 
       case "approve_seller": {
+        /* P0-G (owner 2026-10-03): KASS is not an approval authority. Approval = applicationDecide → applicationDecisions →
+           capability; this tool never writes an approved / active state. Suspension (containment) stays available. */
+        if (input.approve !== false) {
+          return { success: false, error: "KASS cannot approve sellers. Approve the application in AdminOS (Applications) — only an administrator's decision there is an approval.", code: "APPROVAL_NOT_IN_KASS" };
+        }
+        if (typeof input.sellerId !== "string" || !input.sellerId || /[/]/.test(input.sellerId)) {
+          return { success: false, error: "sellerId is required.", code: "INVALID_SELLER" };
+        }
         await db.collection("providers").doc(input.sellerId).set({
-          status: input.approve ? "active" : "suspended",
+          status: "suspended",
           adminNote: input.note || "",
           reviewedAt: admin.firestore.FieldValue.serverTimestamp(),
           reviewedBy: "kass-admin-agent",
         }, { merge: true });
-        return { success: true, sellerId: input.sellerId, status: input.approve ? "active" : "suspended" };
+        await db.collection("adminAudit").add({ action: "kass_seller_suspend", targetId: input.sellerId, performedBy: "kass-admin-agent", note: input.note || "", at: admin.firestore.FieldValue.serverTimestamp() });
+        return { success: true, sellerId: input.sellerId, status: "suspended" };
       }
 
       case "get_analytics": {
