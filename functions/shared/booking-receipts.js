@@ -18,6 +18,13 @@
 function _R() { try { return require('../transaction-receipts'); } catch (_) { return null; } }
 
 function _ident(bookingId, b) {
+  /* Work/Job Engine milestone (b2 WE2, sokoni-2f contract 87ce8eb): the source IS a providerBookings doc → kind
+     'service_booking' (receipt-reconciliation expects service_booking_<id>), subtype 'work_milestone', and the project +
+     milestone links (2f's _links whitelist accepts them). */
+  if (b && b.kind === 'work_milestone') {
+    return { kind: 'service_booking', sourceId: String(bookingId), subtype: 'work_milestone',
+      links: { bookingId: String(bookingId), workProjectId: String(b.workProjectId || ''), milestoneId: String(b.milestoneId || '') } };
+  }
   const q = b && (b.quoteId || b.leadId);
   return q ? { kind: 'quote', sourceId: String(q), links: { quoteId: String(q), bookingId: String(bookingId) } }
     : { kind: 'service_booking', sourceId: String(bookingId), links: { bookingId: String(bookingId) } };
@@ -50,7 +57,7 @@ async function paid(db, bookingId, apiRef, deps) {
     const p = prov && prov.exists ? prov.data() : {};
     const id = _ident(bookingId, b);
     const args = {
-      kind: id.kind, sourceId: id.sourceId, links: id.links, clientUid: b.customerUid, counterpartyId: b.providerId,
+      kind: id.kind, sourceId: id.sourceId, links: id.links, ...(id.subtype ? { subtype: id.subtype } : {}), clientUid: b.customerUid, counterpartyId: b.providerId,
       counterpartyName: p.businessName || p.name || null, serviceLabel: b.service || null,
       quotedCents: Math.round(Number(b.price) || 0) + Math.round(Number(b.fee) || 0), paidCents: _held(b),
       paymentRef: String(apiRef), providerRef: (pay && pay.exists && (pay.data() || {}).invoiceId) || null,

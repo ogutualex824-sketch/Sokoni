@@ -1,3 +1,9 @@
+## [2026-10-03] — Receipts: Work/Job Engine milestone identity (b2 WE2 + sokoni-2f contract 87ce8eb) — NOT deployed
+
+- **functions/shared/booking-receipts.js `_ident`:** a providerBookings doc with kind 'work_milestone' → receipt kind 'service_booking' (sourceId = booking id, so receipt-reconciliation's service_booking_<id> still matches), subtype 'work_milestone', and links {bookingId, workProjectId, milestoneId}. The paid() hook passes `subtype` to recordPaid; 2f's store keeps it via its SUBTYPES allowlist and _links whitelist.
+- Ordinary and quote bookings are unchanged.
+- **Tests:** scripts/test-booking-receipts-milestone.js 3/0 (the real paid() hook with a recording receipt store).
+
 ## [2026-10-03] — Transaction receipts for provider bookings (owner decision; sokoni-2f contract v2 65e85d1) — NOT deployed
 
 - **functions/shared/booking-receipts.js (new):** the provider-booking hooks onto the platform receipt.
