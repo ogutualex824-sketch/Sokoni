@@ -1,3 +1,9 @@
+## 2026-10-03 — B2B lead recovery: the OPERATION is the idempotency unit (op header) — a retry after a new invoice no longer cuts again (NOT deployed)
+
+- **Defect:** found in sokoni-f3's review.
+- **Fix:** b2bLeadRecoveries/<opKey> header created on every commit; prepare replays from it.
+- **Tests:** test-b2b-lead-recovery 21/0; header-read mutant fails 6 named rows.
+
 ## 2026-10-03 — Jobs commission 0% (fixed lane; freelance/gig aliases) (NOT deployed)
 
 - **Change:** commission-config RATES.jobs 0%, FIXED + floor-exempt; client snapshot rebuilt; schedule/5pct suites amended.

@@ -812,7 +812,7 @@ No duplicate authority was found on the money side.
 **Read/write split** (Firestore: all reads before writes):
 - `prepareLeadDeduction(t, db, {settlementId, billToUid, settlementKES})` (or `preparePayment`): discovers candidate invoice ids outside the transaction, then `t.get()`s every invoice **and** this operation's claim inside it. Amounts come only from those reads.
 - `commitLeadDeduction(t, state)`: `create()` per claim, decrement `outstandingKES`, set status `paid` at 0. Returns `{deductedKES, replayedKES, totalRecoveredKES, netKES, lines}`.
-- **Retries:** a retry of the same settlement recovers 0 more and returns the **same** net.
+- **Retries:** the **operation** is the idempotency unit. Every commit, zero lines included, creates `b2bLeadRecoveries/<opKey>` with its totals. `prepare` reads it first and, if present, returns a pure replay: 0 more and the **same** net, even if a new invoice was issued between runs (defect found in sokoni-f3's review, fixed). The same holds for a replayed Pay Now webhook.
 - **Late changes:** a Pay Now that commits between discovery and the release is re-read as 0. An invoice issued after discovery carries forward.
 - **Reversals:** a refund or void of the B2B order after a deduction does **not** reverse it (owner policy required).
 
@@ -822,7 +822,7 @@ No duplicate authority was found on the money side.
 - **Owner of both ends:** 2f owns the producer and the consumer (a second reason inside evaluateMerchantGate/assertGateOpen on the gated POS line, with its own card).
 - **Enforcement:** it starts enforcing only after the Pay Now is certified.
 
-**Tests:** `scripts/test-b2b-lead-recovery.js` 16/0.
+**Tests:** `scripts/test-b2b-lead-recovery.js` 21/0 (adds D3c/D3d/D3e and P1e).
 - **Mutants:** dropping the claim read fails D3; trusting discovery amounts instead of the in-transaction re-read fails D4.
 
 ## 18 · Education commission (owner 2026-10-03, via sokoni-5b)

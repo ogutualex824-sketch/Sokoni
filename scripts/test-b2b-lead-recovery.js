@@ -53,9 +53,11 @@ function fakeDb (seed, hooks) {
 const L = require(path.join(FN, 'b2b-leads.js'));
 const DAY = 86400000, NOW = Date.parse('2026-11-05T09:00:00Z');
 const inv = (key, uid, outKES, issuedAtMs, extra) => ({ ['b2bLeadMonths/' + key]: Object.assign({ billToUid: uid, status: 'issued', month: key.split('__')[1], outstandingKES: outKES, paidKES: 0, issuedAtMs, invoiceId: 'INV_' + key }, extra || {}) });
-const deduct = (db, settlementId, settlementKES, uid) => db.runTransaction(async (t) => { const st = await L.prepareLeadDeduction(t, db, { settlementId, billToUid: uid || 'uidA', settlementKES }); return L.commitLeadDeduction(t, st); });
-const payNow = (db, ref, amountKES, uid) => db.runTransaction(async (t) => { const st = await L.preparePayment(t, db, { paymentRef: ref, billToUid: uid || 'uidA', amountKES }); return L.commitLeadRecovery(t, st); });
-const claims = (db) => [...db._docs.keys()].filter((k) => k.startsWith('b2bLeadRecoveries/'));
+/* Errors come back as values so a row FAILS BY NAME (a crash is not a refusal). */
+const deduct = (db, settlementId, settlementKES, uid) => db.runTransaction(async (t) => { const st = await L.prepareLeadDeduction(t, db, { settlementId, billToUid: uid || 'uidA', settlementKES }); return L.commitLeadDeduction(t, st); }).catch((e) => ({ error: e.code || e.message }));
+const payNow = (db, ref, amountKES, uid) => db.runTransaction(async (t) => { const st = await L.preparePayment(t, db, { paymentRef: ref, billToUid: uid || 'uidA', amountKES }); return L.commitLeadRecovery(t, st); }).catch((e) => ({ error: e.code || e.message }));
+const claims = (db) => [...db._docs.keys()].filter((k) => k.startsWith('b2bLeadRecoveries/') && !db._docs.get(k).header);
+const headers = (db) => [...db._docs.keys()].filter((k) => k.startsWith('b2bLeadRecoveries/') && db._docs.get(k).header);
 
 (async () => {
   /* I1 */
@@ -80,6 +82,21 @@ const claims = (db) => [...db._docs.keys()].filter((k) => k.startsWith('b2bLeadR
   r = await deduct(db, 'set1', 500000);
   ck('D3a RETRY of the same settlement after commit → 0 more, SAME net 499,304 (replayed 696); still one claim',
     r.deductedKES === 0 && r.replayedKES === 696 && r.netKES === 499304 && claims(db).length === 1, r);
+
+  /* D3c — f3's defect: a NEW invoice issued between the first commit and a retry of the same settlement */
+  db = fakeDb(inv('supA__2026-09', 'uidA', 300, NOW - 40 * DAY));
+  r = await deduct(db, 'setC', 1000);
+  ck('D3c-1 run 1: settlement 1,000 vs 300 → deduct 300, net 700; one op header', r.deductedKES === 300 && r.netKES === 700 && headers(db).length === 1, r);
+  db._docs.set('b2bLeadMonths/supA__2026-10', { billToUid: 'uidA', status: 'issued', month: '2026-10', outstandingKES: 500, paidKES: 0, issuedAtMs: NOW });
+  r = await deduct(db, 'setC', 1000);
+  ck('D3c-2 RETRY after a new 500 invoice → pure replay: 0 more, SAME net 700; the new invoice stays 500 open',
+    r.deductedKES === 0 && r.netKES === 700 && r.replay === true && db._docs.get('b2bLeadMonths/supA__2026-10').outstandingKES === 500, r);
+  db = fakeDb({});
+  r = await deduct(db, 'setZ', 1000);
+  ck('D3d run 1 with NOTHING outstanding still writes the op header (net 1,000)', r.deductedKES === 0 && r.netKES === 1000 && headers(db).length === 1, r);
+  db._docs.set('b2bLeadMonths/supA__2026-10', { billToUid: 'uidA', status: 'issued', month: '2026-10', outstandingKES: 500, paidKES: 0, issuedAtMs: NOW });
+  r = await deduct(db, 'setZ', 1000);
+  ck('D3e RETRY of that zero-recovery settlement after a new invoice → 0, same net 1,000 (case B)', r.deductedKES === 0 && r.netKES === 1000 && db._docs.get('b2bLeadMonths/supA__2026-10').outstandingKES === 500, r);
 
   /* D2 */
   db = fakeDb(Object.assign({}, inv('supA__2026-09', 'uidA', 300, NOW - 40 * DAY), inv('supA__2026-10', 'uidA', 696, NOW - 5 * DAY)));
@@ -118,6 +135,9 @@ const claims = (db) => [...db._docs.keys()].filter((k) => k.startsWith('b2bLeadR
     && db._docs.get('b2bLeadMonths/supA__2026-09').status === 'paid' && db._docs.get('b2bLeadMonths/supA__2026-10').status === 'paid', r);
   r = await payNow(db, 'PAY1', 996);
   ck('P1b a replayed payment recovers nothing twice (replayed 996)', r.deductedKES === 0 && r.replayedKES === 996 && claims(db).length === 2, r);
+  db._docs.set('b2bLeadMonths/supA__2026-11', { billToUid: 'uidA', status: 'issued', month: '2026-11', outstandingKES: 400, paidKES: 0, issuedAtMs: NOW });
+  r = await payNow(db, 'PAY1', 996);
+  ck('P1e a REPLAYED webhook after a NEW invoice is issued recovers nothing more (the 400 stays open)', r.deductedKES === 0 && r.replay === true && db._docs.get('b2bLeadMonths/supA__2026-11').outstandingKES === 400, r);
   db = fakeDb(inv('supA__2026-10', 'uidA', 196, NOW - 5 * DAY));
   r = await payNow(db, 'PAY2', 696);
   ck('P1c a payment larger than the balance (deducted meanwhile) applies 196 and REPORTS the 500 surplus — never applied elsewhere', r.deductedKES === 196 && r.netKES === 500, r);

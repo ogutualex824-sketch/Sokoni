@@ -260,6 +260,18 @@ async function _prepare(t, db, { opKey, kind, billToUid, capKES }) {
   const uid = String(billToUid || '');
   const cap = _r2(capKES);
   if (!uid || !(cap >= 0)) throw new Error('bad recovery request');
+  /* THE OPERATION IS THE IDEMPOTENCY UNIT (fix 2026-10-03, defect found by sokoni-f3's review). Every commit — even one
+     that recovered nothing — creates b2bLeadRecoveries/<opKey>. If it exists, this is a replay: return its stored totals
+     and touch nothing, so an invoice issued AFTER the first run can never be cut by a retry of the same settlement or a
+     replayed webhook. (Claiming per invoice alone left exactly that hole.) Read first, inside the txn. */
+  const headerRef = db.collection(RECOVERIES).doc(String(opKey));
+  const header = await t.get(headerRef);
+  if (header.exists) {
+    const h = header.data() || {};
+    return { opKey: String(opKey), kind, billToUid: uid, capKES: cap, headerRef, replay: true,
+      replayed: { totalRecoveredKES: _r2(h.totalRecoveredKES), netKES: _r2(h.netKES), lines: Array.isArray(h.lines) ? h.lines : [] },
+      replayKES: 0, lines: [], _prepared: true };
+  }
   /* Discovery (outside the txn): candidate invoices + any invoice this op already claimed. Ids only — no amounts. */
   const [open, mine] = await Promise.all([
     db.collection(MONTHS).where('billToUid', '==', uid).where('status', '==', 'issued').limit(100).get(),
@@ -291,7 +303,7 @@ async function _prepare(t, db, { opKey, kind, billToUid, capKES }) {
     left = _r2(left - amount);
     lines.push(Object.assign({}, c, { amount }));
   }
-  return { opKey: String(opKey), kind, billToUid: uid, capKES: cap, replayKES, lines, _prepared: true };
+  return { opKey: String(opKey), kind, billToUid: uid, capKES: cap, headerRef, replay: false, replayKES, lines, _prepared: true };
 }
 
 /** Read phase for a settlement deduction. Call BEFORE any write in the release transaction. */
@@ -308,6 +320,11 @@ function preparePayment(t, db, { paymentRef, billToUid, amountKES }) {
 /** Write phase. Claims by create() (a concurrent duplicate aborts the whole txn); never touches the buyer. */
 function commitLeadRecovery(t, state, deps) {
   if (!state || !state._prepared) throw new Error('commit without prepare');
+  if (state.replay) {
+    /* Pure replay: the SAME totals the first run returned; nothing is written. */
+    return { deductedKES: 0, replayedKES: state.replayed.totalRecoveredKES, totalRecoveredKES: state.replayed.totalRecoveredKES,
+      netKES: state.replayed.netKES, lines: state.replayed.lines, replay: true };
+  }
   const ts = (deps && deps.serverTs) || (() => new Date());
   let recovered = 0;
   const lines = [];
@@ -322,7 +339,11 @@ function commitLeadRecovery(t, state, deps) {
     lines.push({ invoiceKey: l.key, month: l.month, amountKES: l.amount, outstandingAfter: after });
   }
   const total = _r2(recovered + state.replayKES);
-  return { deductedKES: recovered, replayedKES: state.replayKES, totalRecoveredKES: total, netKES: _r2(state.capKES - total), lines };
+  const netKES = _r2(state.capKES - total);
+  /* The operation header — written on EVERY commit, zero lines included (create(): a concurrent twin aborts). */
+  t.create(state.headerRef, { opKey: state.opKey, kind: state.kind, header: true, billToUid: state.billToUid, capKES: state.capKES,
+    totalRecoveredKES: total, netKES, lines, createdAt: ts() });
+  return { deductedKES: recovered, replayedKES: state.replayKES, totalRecoveredKES: total, netKES, lines, replay: false };
 }
 const commitLeadDeduction = commitLeadRecovery;
 
