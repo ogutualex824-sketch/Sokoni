@@ -93,6 +93,24 @@ as text"* and a **Send my story as text** button. The server receives storage **
   route), `financial-os.html`, and the loans pane for merchant finance.
 - USSD banner kept, labelled **"External — dial from your phone"**. Deep links: `banking.html#saccos` etc.
 
+## 2026-10-03 updates (NOT deployed)
+
+- **Transparency is verified-only.** "Verified donations received" = `balance.verified`, "Verified donations
+  available" = `balance.available` (verified − reserved). `requiresReconciliation` appears only as "Still being
+  reconciled: KES n (not counted as received)" when > 0. An answer without a numeric `verified` (the older,
+  mixed shape) renders `—` and shows the "being reconciled" badge; `totalReceived` is never shown publicly.
+- **Story media:** `contentType` `video/mp4` → `<video preload="none" poster=thumbUrl>`; images `<img loading=lazy>`.
+- **Checkout donation is a separate payment.** checkout.html no longer adds the donation to the order total (the
+  server-quoted total had silently replaced it — buyers were shown a donation they were never charged for).
+  `impactCheckoutDonate` now records a pledge `CHK_<orderId>`; only when it answers `ok` + `status:'pledged'`
+  does the success overlay show "Complete your KES n donation" → `foundation.html?pledge=<id>`.
+- **`?pledge=<id>`** (PLG_/CHK_): signed-in; `impactGetMyPledge` must return the caller's pledge with status
+  `pledged`; the wizard skips `impactPledgeDonation` and runs `createPaymentIntent({purpose:'donation', pledgeId})`
+  → STK → the same bounded poll. Other states are explained, never paid twice.
+- **Banking Hub trust markers:** "Registration reviewed by SOKONI" only when `registrationReviewed === true`
+  (server tooltip via title + aria-describedby + visually-hidden text), "Featured" only when `featured === true`,
+  licence line only from `licenceVerification`. "Listed by SOKONI" stays. See [[FINANCIAL_PARTNER_WORKSPACE]].
+
 ## Not deployed / unproven
 
 - Callables: `impactPledgeDonation`, `impactGetMyPledge`, `foundationContentDispatch`, `financialPartnerDispatch`

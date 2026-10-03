@@ -80,6 +80,29 @@ Rates/prices are shown as entered by the partner ("as you advertise it").
 3. Hosting: page + JS ported onto the current live hosting line.
 4. Order: functions (sokoni-27's lifecycle + this callable, same tree) → rules (financialProviders read) → hosting.
 
+## Plan & billing, paid promotion, registration review (page, 2026-10-03 — NOT deployed)
+* **Plan & billing** (owner/manager; only the owner can pay): current plan from `getWorkspace.plan`
+  (name, active, paid-until, limits). Plan cards and **every price** come only from
+  `getCommercial.catalogue.plans`; `selfServe:false` (Enterprise) shows "Contact SOKONI" and is never buyable.
+* **Purchase path** (plan and paid promotion): `createPaymentIntent({purpose:'partner_subscription', planId})` /
+  `({purpose:'promotion_purchase', productId, days?})` → the existing `SokoniIntaSend.initiateSTKPush(phone,
+  intent.amount, intent.ref, {category, serviceDesc})` → bounded `getCommercial` poll (4 s × 30).
+  "Payment confirmed" only when the plan is active with a later expiry (or newly that plan), or a campaign with
+  `campaignId === ref` is `active`. A `review` campaign says "Payment received — SOKONI is reviewing this
+  payment" with the reason. Timeout says "Not confirmed yet" + **Check again** — never success.
+* **Promote**: free request kept; paid products from `catalogue.promotions` (Listing Boost per day, 1–30 days;
+  7-day products); campaign list active / under review + reason / stopped / ended. Copy: "Promotion ranks your
+  listing and is marked Promoted; it never verifies or endorses you."
+* **Registration**: optional licence fields (type, number, issuing authority, expiry) labelled *self-declared until
+  SOKONI checks the register*; states under_review / approved / needs_information / rejected; reviewer note +
+  resubmit form only for needs_information / rejected. Badge **"Registration reviewed by SOKONI"** only from
+  `markers.registrationReviewed === true`, tooltip = `markers.reviewBadge.tooltip` (title + aria-describedby).
+  Licence line from `markers.licenceVerification` only ("Licence checked against the <authority> register on
+  <date>" / "Licence expired (<date>)"). See [[SOKONI_FOUNDATION]] for the Banking Hub side.
+* Analytics card only when `getWorkspace.analytics` is present; plan-limit refusals shown verbatim.
+* Known: `sokoni-intasend.js` keeps `_activePayment` set after a successful push, so a second purchase in the
+  same page session may be refused ("Another payment is already in progress") until reload.
+
 ## Page notes
 * The page does **not** load `sokoni-role-authority.js`: its `guardPage()` would send managers/officers (no `financial_partner` claim) to the application form. Access is decided per call by the server.
 * `WORKSPACE_HUBS.financial_partner` (sokoni-27) routes approved owners here from the earn page and business-apply.
