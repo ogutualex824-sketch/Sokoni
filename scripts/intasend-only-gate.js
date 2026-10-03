@@ -51,7 +51,8 @@ const DARAJA_ACTIVE = [
 ];
 const FABRICATE = [
   /['"`]SIMULATED_['"`]\s*\+/,
-  /setTimeout\([^;]{0,400}?(Payment confirmed|Payment Confirmed|paid\s*:\s*true|status\s*:\s*['"](paid|completed)['"])/,
+  /* a timer body (semicolons allowed — BnB's fake spanned statements) that announces payment or writes paid */
+  /setTimeout\(\s*(\(\s*\)\s*=>|function\s*\(\s*\))\s*\{[\s\S]{0,320}?(Payment confirmed|Payment Confirmed|paid\s*:\s*true|status\s*:\s*['"](paid|completed)['"])/,
 ];
 
 const files = walk(ROOT);

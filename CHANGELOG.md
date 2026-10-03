@@ -1,3 +1,10 @@
+## [2026-10-03] - IntaSend-only payment gate: evidence tool and first measurement — docs and tooling, NOT deployed
+
+- scripts/intasend-only-gate.js: read-only gate for any tree (ACTIVE Daraja, FABRICATED client payments, OLD Daraja guard, BLANKET
+  deploys; initiateSTKPush counted as IntaSend). Fabrication detector widened after it missed BnB's multi-statement timer.
+- docs/release-gates/intasend-only-gate.md: the owner's gate with per-item evidence and 17 measured trees. Status NOT CLEAN;
+  functions deploys stay explicitly scoped.
+
 ## [2026-10-03] - Payments: Daraja code removed from functions (owner order: IntaSend only) — functions source, NOT deployed
 
 The four live Daraja functions were deleted from production earlier today. This removes the code, so no deploy from this lineage
