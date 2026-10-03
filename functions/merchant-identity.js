@@ -75,13 +75,18 @@ const EMPLOYEE_ROLES = {
   staff: { role: 'staff', label: 'Staff' },
   manager: { role: 'manager', label: 'Manager' },
   supervisor: { role: 'manager', label: 'Manager' },
+  /* OWNER DECISION 2026-10-03: an explicit inventory role may adjust stock through the server (merchantAdjustStock) and
+     do nothing else — no selling, refunds, discounts or shifts. Employment is owner-granted: the served rules let only
+     the shop owner create shopEmployees/{uid} naming their shop (shopOwnerId == request.auth.uid). */
+  inventory: { role: 'inventory', label: 'Inventory' },
 };
 
 /* Operations an employment role may perform. Deliberately explicit: a new role
    grants nothing until it is listed here. */
 const ROLE_CAPABILITIES = {
-  owner: ['sell', 'refund', 'discount', 'openShift', 'closeShift', 'manageStaff'],
-  manager: ['sell', 'refund', 'discount', 'openShift', 'closeShift'],
+  owner: ['sell', 'refund', 'discount', 'openShift', 'closeShift', 'manageStaff', 'adjustStock'],
+  manager: ['sell', 'refund', 'discount', 'openShift', 'closeShift', 'adjustStock'],
+  inventory: ['adjustStock'],
   cashier: ['sell', 'openShift'],
   staff: ['sell'],
 };

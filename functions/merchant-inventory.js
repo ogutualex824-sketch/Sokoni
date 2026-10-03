@@ -129,6 +129,18 @@ exports.merchantAdjustStock = onCall(
     const mvRef    = db.collection('stockMovements').doc(adjustmentId);
     const isAdmin  = await _isPlatformAdmin(uid);
 
+    /* OWNER DECISION 2026-10-03 — staff stock authority, ADDED alongside the unchanged owner path. The product's own
+       seller (p.sellerUid === uid) keeps exactly today's behaviour, whatever shopId / merchantId the caller files
+       under. NEW: a shop employee whose ONE staff authority (merchant-identity.resolveActor — owner-granted, see
+       EMPLOYEE_ROLES) holds 'adjustStock' (manager, inventory) may adjust that shop owner's products. Cashiers and plain
+       staff hold no 'adjustStock'. Resolved before the transaction; a resolution failure simply grants nothing. */
+    let actor = null;
+    if (!isAdmin) {
+      try { actor = await require('./merchant-identity')._internal.resolveActor(uid, shopId); } catch (_) { actor = null; }
+    }
+    const _staffOk = !!(actor && actor.ok && actor.servedBy && actor.servedBy.role !== 'owner' && (actor.capabilities || []).includes('adjustStock'));
+    const _staffOwnerUid = _staffOk ? String((actor.shop && (actor.shop.sellerUid || actor.shop.ownerId)) || shopId) : null;
+
     const result = await db.runTransaction(async (t) => {
       /* Idempotency is claimed INSIDE the transaction. A replay returns the
          original outcome and performs no second mutation. */
@@ -165,7 +177,9 @@ exports.merchantAdjustStock = onCall(
          that as stock-write authority would let a caller mint their own
          permission. Do not add an employee branch here by reading that
          collection — it needs a verified contract first. */
-      if (!isAdmin && p.sellerUid !== uid)
+      const _ownerOk = p.sellerUid === uid;
+      const _staffOnProduct = _staffOk && p.sellerUid === _staffOwnerUid;
+      if (!isAdmin && !_ownerOk && !_staffOnProduct)
         throw new HttpsError('permission-denied', 'That product does not belong to this seller.');
 
       /* The caller's asserted scope must agree with the product's own, when the
@@ -212,6 +226,7 @@ exports.merchantAdjustStock = onCall(
         source:      'merchantAdjustStock',
         actorUid:    uid,
         actorIsAdmin: isAdmin,
+        actorRole:   isAdmin ? 'admin' : (p.sellerUid === uid ? 'owner' : ((actor && actor.servedBy && actor.servedBy.role) || null)),
         createdAt:   _ts(),
       });
 
