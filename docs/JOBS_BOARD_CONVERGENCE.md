@@ -142,3 +142,18 @@ The fix is on the hotfix candidate `33b2ae4` and the combined candidate `94ea7c6
 - The hosting changes for the new statuses must ship with or after this function. The old employer UI still sends
   `reviewing` / `shortlisted` / `rejected` / `hired`, and the new server refuses a rejection without a reason and a hire
   without an accepted offer. Ship J5 hosting together.
+
+## Release unit (as of 2026-10-03) — nothing deployed
+
+| Part | Branch @ commit | Tests |
+|---|---|---|
+| Rules hotfix (FIRST) | sok-caprules `firestore.rules.hotfix-jobs` @ 33b2ae4 | zz-test-jobs-rules **EMULATOR PENDING** |
+| Jobs server J1+J2 (+ e3 asks) | functions/jobs-on-ca55f8b @ d922713 | lifecycle 55/0, moderation 50/0, 15 mutants |
+| AdminOS Jobs + candidate pages | hosting/jobs-adminos-on-72dca56 @ a3de2ef | aos 17/0, pages 21/0 |
+| Employer workspace (sokoni-e3) | hosting/jobs-employer-on-bc9a48c @ 04c0d19 | 56/0 incl. 14 negative controls |
+| Jobs messages (sokoni-b2) | messages.js feat/tech-taxonomy-on-13f74f3 @ 8aaa868 + hosting 4ef3301 / a51215b (must carry job_application in SokoniInbox TX_TYPES) | 8/0, 7/7 mutations |
+| Search J3 | f3 background agent (in progress) | — |
+
+Deferred: a cursor / page op beyond `hasMore` (listMyJobs 200, getEmployerApplications 500); business-keyed employers
+(businessId + staff roles); CV upload; interviews as first-class records; employer verification; paid products
+(unpriced, owner).
