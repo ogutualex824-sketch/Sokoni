@@ -1,3 +1,20 @@
+## [2026-10-03] — Jobs pages on the J1/J2 contract (candidate actions, honest employer flow, Freelance/Gig) — hosting source, NOT deployed
+
+**Summary:**
+- **Candidates:** `jobs.html` shows the server's status labels, the applicant's own rejection reason, and Withdraw /
+  Accept offer / Decline actions (only when the server says they are available), plus a status history.
+- **Legacy employer screens** (`job-post.html`, `jobs.html#employer`, until sokoni-e3's merchant-v2 workspace replaces
+  them): the status dropdown offers only the server's legal next steps, a rejection asks for a reason, and
+  expectedVersion is sent. Posting submits for SOKONI review and says so (it never claims the vacancy is live).
+  Vacancy cards label review states and show SOKONI's review reason.
+- The Freelance / Gig type is in the filters and the post form.
+- Both pages now load `sw-register.js`, so they self-update after deploys.
+
+**Files:** `sokoni-jobs.js`, `jobs.html`, `job-post.html`, `scripts/test-jobs-pages-static.js` (18/0; dropdown parity
+with the server's EMPLOYER_TRANSITIONS and op existence, both read from the J2 tree and failing closed).
+**Deploy:** together with functions/jobs-on-ca55f8b @ 8ef3d53 (servicesDispatch + jobsExpirySweep) and AdminOS Jobs
+(6c7ff91). The rules hotfix goes first. NOT authorized.
+
 ## [2026-10-03] — AdminOS › Jobs (J2 moderation workspace) — hosting source, NOT deployed
 
 **Summary:** A Jobs section in the ONE canonical `admin-os.html`: tabs for the review queue, changes requested,

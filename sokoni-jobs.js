@@ -50,21 +50,25 @@ window.SokoniJobs = (() => {
     legal:'⚖️', engineering:'⚙️', admin:'📋', other:'💼',
   };
 
-  const JOB_TYPES = ['full-time','part-time','contract','internship','remote'];
+  /* 'freelance-gig' (owner 2026-10-03): freelance gigs are a job type on this one board (functions/jobs.js J1). */
+  const JOB_TYPES = ['full-time','part-time','contract','internship','remote','freelance-gig'];
 
   const TYPE_LABELS = {
     'full-time':'Full-time','part-time':'Part-time',
-    'contract':'Contract','internship':'Internship','remote':'Remote',
+    'contract':'Contract','internship':'Internship','remote':'Remote','freelance-gig':'Freelance / Gig',
   };
 
+  /* Application states — the SERVER (functions/jobs.js J1) owns transitions and returns statusLabel; these are only
+     colours and fallback labels for display. */
   const STATUS_COLORS = {
-    pending:'#ff9800', reviewing:'#2196f3', shortlisted:'#7c4dff',
-    rejected:'#f44336', hired:'#4caf50',
+    pending:'#ff9800', reviewing:'#2196f3', shortlisted:'#7c4dff', interview:'#00bcd4', offer:'#8bc34a',
+    offer_accepted:'#4caf50', hired:'#4caf50', rejected:'#f44336', withdrawn:'#9e9e9e', offer_declined:'#9e9e9e', closed:'#9e9e9e',
   };
 
   const STATUS_LABELS = {
-    pending:'Pending', reviewing:'Reviewing', shortlisted:'Shortlisted',
-    rejected:'Rejected', hired:'Hired',
+    pending:'Submitted', reviewing:'Under review', shortlisted:'Shortlisted', interview:'Interview', offer:'Offer made',
+    offer_accepted:'Offer accepted', hired:'Hired', rejected:'Not selected', withdrawn:'Withdrawn',
+    offer_declined:'Offer declined', closed:'Vacancy closed',
   };
 
   // ─── Utility helpers ────────────────────────────────────────────────────────
@@ -728,7 +732,16 @@ window.SokoniJobs = (() => {
       listEl.innerHTML = apps.map(app => {
         const job       = app.job || {};
         const statusCol = STATUS_COLORS[app.status] || '#6b7280';
-        const statusLbl = STATUS_LABELS[app.status]  || _cap(app.status || 'pending');
+        const statusLbl = app.statusLabel || STATUS_LABELS[app.status] || _cap(app.status || 'pending');
+        const appId     = _esc(app.id || '');
+        /* Actions the server says are available now (it re-checks on the call). */
+        const actions = [
+          app.canRespondToOffer ? `<button type="button" class="btn-sm btn-primary" onclick="SokoniJobs.respondToOffer('${appId}', true)">Accept offer</button>
+            <button type="button" class="btn-sm" onclick="SokoniJobs.respondToOffer('${appId}', false)">Decline</button>` : '',
+          app.canWithdraw ? `<button type="button" class="btn-sm" onclick="SokoniJobs.withdrawApp('${appId}')">Withdraw</button>` : '',
+          `<button type="button" class="btn-sm" onclick="SokoniJobs.showAppHistory('${appId}')" aria-expanded="false">History</button>`,
+        ].join(' ');
+        const reason = app.status === 'rejected' && app.rejectionReason ? `<div class="my-app-reason">${_esc(app.rejectionReason)}</div>` : '';
 
         return `
           <div class="my-app-card">
@@ -746,6 +759,9 @@ window.SokoniJobs = (() => {
               </span>
               <span class="my-app-date">${_esc(_timeAgo(app.appliedAt))}</span>
             </div>
+            ${reason}
+            <div class="my-app-actions" style="display:flex;gap:6px;flex-wrap:wrap;margin-top:8px">${actions}</div>
+            <div class="my-app-history" id="appHistory-${appId}" hidden></div>
           </div>`;
       }).join('');
 
@@ -753,6 +769,42 @@ window.SokoniJobs = (() => {
       console.error('[SokoniJobs] getMyApplications error:', err);
       listEl.innerHTML = `<div class="apps-error">Could not load applications. ${_esc(err.message)}</div>`;
     }
+  }
+
+  /* Applicant actions (functions/jobs.js J1). A success toast appears only after the server confirmed. */
+  async function withdrawApp(applicationId) {
+    if (!applicationId) return;
+    if (!window.confirm('Withdraw this application? The employer will be told, and you cannot undo it.')) return;
+    try {
+      await _callable('withdrawApplication')({ applicationId });
+      toast('Application withdrawn.', 'success');
+      _loadMyApplications();
+    } catch (err) { toast(err.message || 'Could not withdraw the application.', 'error'); }
+  }
+
+  async function respondToOffer(applicationId, accept) {
+    if (!applicationId) return;
+    if (!window.confirm(accept ? 'Accept this offer? The employer will be told and can then confirm your hire.' : 'Decline this offer? This cannot be undone.')) return;
+    try {
+      await _callable('respondToJobOffer')({ applicationId, accept: accept === true });
+      toast(accept ? 'Offer accepted — the employer has been told.' : 'Offer declined.', 'success');
+      _loadMyApplications();
+    } catch (err) { toast(err.message || 'Could not send your response.', 'error'); }
+  }
+
+  async function showAppHistory(applicationId) {
+    const box = document.getElementById('appHistory-' + applicationId);
+    if (!box) return;
+    if (!box.hidden) { box.hidden = true; return; }
+    box.hidden = false;
+    box.innerHTML = '<div class="apps-loading">Loading history…</div>';
+    try {
+      const res = await _callable('getApplicationHistory')({ applicationId });
+      const ev = (res.data && res.data.events) || [];
+      box.innerHTML = ev.length ? '<ol class="app-history">' + ev.map(e =>
+        `<li><b>${_esc(e.label || e.to)}</b> <span class="my-app-date">${e.at ? _esc(new Date(e.at).toLocaleString('en-KE', { day:'numeric', month:'short', hour:'2-digit', minute:'2-digit' })) : '—'}</span>${e.reason ? `<div class="my-app-reason">${_esc(e.reason)}</div>` : ''}</li>`).join('') + '</ol>'
+        : '<div class="empty-sub">No history recorded.</div>';
+    } catch (err) { box.innerHTML = `<div class="apps-error">Could not load the history. ${_esc(err.message)}</div>`; }
   }
 
   // ─── Seeker profile ──────────────────────────────────────────────────────────
@@ -941,9 +993,12 @@ window.SokoniJobs = (() => {
         description,
         requirements:  reqs || null,
         expiresInDays: expiresIn,
+        submit:        true,   /* J2: this form has no draft step, so it submits for review */
       });
 
-      toast('Job posted successfully! It is now live.', 'success');
+      /* J2: a vacancy goes live only after SOKONI review — never claim it is live. */
+      const st = res && res.data && res.data.job && res.data.job.status;
+      toast(st === 'pending_review' ? 'Vacancy submitted for SOKONI review. It goes live once approved.' : 'Vacancy saved.', 'success');
 
       // Clear form
       ['jpTitle','jpLocation','jpSalaryMin','jpSalaryMax','jpDescription','jpRequirements'].forEach(id => {
@@ -1024,9 +1079,13 @@ window.SokoniJobs = (() => {
       ? (job.expiresAt.toMillis() < Date.now() ? 'expired' : 'active')
       : (job.status || 'active');
 
-    const statusColors = { active:'#4caf50', closed:'#6b7280', expired:'#f44336' };
+    /* J2 vacancy states (functions/jobs.js): 'active' is shown as Published; review states are explained, never hidden. */
+    const statusColors = { active:'#4caf50', closed:'#6b7280', expired:'#f44336', draft:'#9e9e9e', pending_review:'#ff9800',
+      changes_requested:'#ff5722', paused:'#607d8b', archived:'#6b7280', rejected:'#f44336' };
+    const VAC_LABELS   = { active:'Published', pending_review:'Pending review', changes_requested:'Changes requested', draft:'Draft',
+      paused:'Paused', closed:'Closed', archived:'Archived', rejected:'Rejected', expired:'Expired' };
     const statusCol    = statusColors[status] || '#6b7280';
-    const statusLabel  = _cap(status);
+    const statusLabel  = VAC_LABELS[status] || _cap(status);
 
     return `
       <div class="employer-job-card">
@@ -1040,6 +1099,8 @@ window.SokoniJobs = (() => {
             <span class="employer-apps-count">👥 ${_esc(String(apps))} applicants</span>
             <span class="employer-posted">Posted ${timeStr}</span>
           </div>
+          ${job.moderationReason && ['changes_requested','rejected','paused','closed'].includes(job.status)
+            ? `<div class="my-app-reason">SOKONI review: ${_esc(job.moderationReason)}</div>` : ''}
         </div>
         <div class="employer-job-actions">
           <button class="btn btn-sm btn-outline" onclick="SokoniJobs.selectJobForApps('${id}')">
@@ -1112,10 +1173,14 @@ window.SokoniJobs = (() => {
     const timeStr  = _esc(_timeAgo(app.appliedAt));
     const status   = app.status || 'pending';
 
-    const statusOptions = ['pending','reviewing','shortlisted','rejected','hired'];
-    const statusOptHtml = statusOptions.map(s =>
-      `<option value="${_esc(s)}" ${s === status ? 'selected' : ''}>${_esc(STATUS_LABELS[s] || _cap(s))}</option>`
-    ).join('');
+    /* Only the moves the server allows from the CURRENT status (functions/jobs.js EMPLOYER_TRANSITIONS); the server
+       re-checks. Hiring is offered only after the applicant accepted an offer. */
+    const NEXT = { pending:['reviewing','shortlisted','rejected'], reviewing:['shortlisted','rejected'], shortlisted:['interview','rejected'],
+      interview:['offer','rejected'], offer:['rejected'], offer_accepted:['hired'] };
+    const statusOptions = NEXT[status] || [];
+    const statusOptHtml = `<option value="" selected>${_esc(app.statusLabel || STATUS_LABELS[status] || _cap(status))} — choose next step</option>` +
+      statusOptions.map(s => `<option value="${_esc(s)}">${_esc(STATUS_LABELS[s] || _cap(s))}</option>`).join('');
+    const ver = Number(app.statusVersion) || 1;
 
     const skillsHtml = skills.length
       ? skills.map(s => `<span class="skill-tag">${_esc(s)}</span>`).join('')
@@ -1174,27 +1239,33 @@ window.SokoniJobs = (() => {
         <div class="app-status-row">
           <label class="status-label">Application Status</label>
           <div class="status-controls">
-            <select class="status-select" id="status-${id}">
+            ${statusOptions.length ? `<select class="status-select" id="status-${id}" aria-label="Next step for this application">
               ${statusOptHtml}
             </select>
-            <button class="btn btn-sm btn-primary" onclick="SokoniJobs.updateAppStatus('${id}', document.getElementById('status-${id}').value)">
+            <button class="btn btn-sm btn-primary" onclick="SokoniJobs.updateAppStatus('${id}', document.getElementById('status-${id}').value, ${ver})">
               Update
-            </button>
+            </button>` : `<span class="status-badge">${_esc(app.statusLabel || STATUS_LABELS[status] || _cap(status))}</span>`}
           </div>
         </div>
       </div>`;
   }
 
-  async function updateAppStatus(appId, status) {
+  async function updateAppStatus(appId, status, expectedVersion) {
     if (!appId || !status) return;
+    let reason = '';
+    if (status === 'rejected') {
+      reason = (window.prompt('Tell the applicant briefly why (they will see this):') || '').trim();
+      if (reason.length < 3) { toast('A short reason is required to reject an application.', 'warn'); return; }
+    }
 
     const btn = document.querySelector(`#app-${CSS.escape(appId)} .btn-primary`);
     if (btn) { btn.disabled = true; btn.textContent = 'Saving…'; }
 
     try {
       const fn = _callable('updateApplicationStatus');
-      await fn({ applicationId: appId, status });
+      await fn({ applicationId: appId, status, reason, expectedVersion });
       toast(`Status updated to "${STATUS_LABELS[status] || status}".`, 'success');
+      const sel = document.getElementById('jpAppJobSelector'); if (sel && sel.value) loadApplications(sel.value);
     } catch (err) {
       console.error('[SokoniJobs] updateAppStatus error:', err);
       toast(err.message || 'Failed to update status.', 'error');
@@ -1241,6 +1312,10 @@ window.SokoniJobs = (() => {
     closeMyApps,
     loadSeekerProfile,
     saveSeekerProfile,
+    // Applicant actions (J1)
+    withdrawApp,
+    respondToOffer,
+    showAppHistory,
     // Employer page
     postJob,
     loadMyJobs,
