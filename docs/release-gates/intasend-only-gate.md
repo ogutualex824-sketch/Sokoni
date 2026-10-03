@@ -78,6 +78,23 @@ Columns count files. Functions = Daraja server code; Website = Daraja in pages o
   `scripts/test-daraja-leftovers.js` only lets its pending list shrink.
 - **Another agent's tree:** never edited blindly. Each owner converges at its own deploy.
 
+## Certification state (owner, 2026-10-03)
+
+| Unit | State |
+|---|---|
+| sokoni-e3 parcel tree | GREEN locally |
+| sokoni-e3 reports tree | GREEN locally |
+| card-method branch (5aa7711 + port) | GREEN locally |
+| parcel IntaSend method recording | GREEN locally |
+| **SOKONI estate** | **NOT CERTIFIED** |
+| **Production** | **NO DEPLOYMENT** |
+
+Local green is not a release. Each still needs the estate-level gate, an exact deploy scope, the 512 MB prerequisite and the
+remaining payment-security work. Convergence means copying only the approved repairs into each tree, preserving ownership,
+re-running the tree-local gate, then the estate-level gate. The lawyer test on the a545818 line stays recorded as
+pre-existing drift: never fixed by changing the test or the role model; re-run and classify when that line takes the
+role update. Website Daraja hits stay separate: clean server trees are not edited to remove non-server references.
+
 ## Progress since the first measurement
 
 - **sok-parcel-fn2** (sokoni-e3): Daraja removal hand-ported onto the 5a0935e line (8d64df0); functions/ CLEAN, guard PASS.
