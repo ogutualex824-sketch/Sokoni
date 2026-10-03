@@ -187,6 +187,29 @@ exports.updateClickAndCollectStatus = onCall(CF_OPTIONS, async ({ auth, data }) 
   if (!snap.exists) throw new HttpsError('not-found', 'Order not found.');
 
   const order = snap.data();
+
+  /* ── SECURITY HOTFIX 2026-10-03 ───────────────────────────────────────────────────────────────────────────────
+     The C&C document is NOT a server fact: the served rules let any signed-in customer create one in any seller's
+     subcollection and let the seller update every field. LIVE consequence: a seller created sellers/{self}/
+     clickAndCollect/{ANY orderId}, marked it ready, and the Admin SDK below rewrote orders/{thatOrder}.status,
+     overwrote deliveryPins/{thatOrder} and created a rider job for it — and a cancel restored stock to whatever
+     productIds the document listed, any shop's. Now the cross-collection effects are bound to server facts:
+       · an existing orders/{orderId} must be THIS seller's (sellerUid / sellerId);
+       · an existing rider job packageRequests/DEL{orderId} must be THIS seller's;
+       · the order is MIRRORED only when it exists — never created by a set-merge;
+       · a cancel restores stock only to products this seller owns. Admins are unchanged. */
+  const _elevated = _isElevated(auth);
+  const _oRef = db.doc(`orders/${orderId}`);
+  const _oSnap = await _oRef.get();
+  const _order = _oSnap.exists ? (_oSnap.data() || {}) : null;
+  if (_order && !_elevated && ![_order.sellerUid, _order.sellerId].filter(Boolean).map(String).includes(String(sellerId))) {
+    throw new HttpsError('permission-denied', 'That order belongs to another shop.');
+  }
+  const _prSnap = await db.doc(`packageRequests/DEL${orderId}`).get();
+  if (_prSnap.exists && !_elevated && String((_prSnap.data() || {}).sellerUid || '') !== String(sellerId)) {
+    throw new HttpsError('permission-denied', 'That delivery belongs to another shop.');
+  }
+
   const TRANSITIONS = { pending: ['ready', 'cancelled'], ready: ['collected', 'cancelled'] };
   if (!(TRANSITIONS[order.status] ?? []).includes(status))
     throw new HttpsError(
@@ -205,8 +228,16 @@ exports.updateClickAndCollectStatus = onCall(CF_OPTIONS, async ({ auth, data }) 
       // Restore stock to the SAME canonical products.stock the order deducted (was the empty
       // sellers/{uid}/products subcollection). Bumps inventoryVersion + stamps source so the
       // indexProductUpdate trigger records a 'restock' movement.
-      for (const item of order.items ?? []) {
-        t.update(db.collection('products').doc(String(item.productId)), {
+      /* hotfix 2026-10-03: ALL reads first, then restore ONLY this seller's own products (the same ownership test
+         createClickAndCollect applied when it deducted). A forged line naming another shop's product restores nothing. */
+      const _items = (order.items ?? []).filter((it) => it && it.productId && Number(it.qty) > 0);
+      const _pSnaps = [];
+      for (const item of _items) _pSnaps.push(await t.get(db.collection('products').doc(String(item.productId))));
+      for (let _i = 0; _i < _items.length; _i++) {
+        const item = _items[_i], _ps = _pSnaps[_i];
+        const _pd = _ps.exists ? (_ps.data() || {}) : null;
+        if (!_pd || String(_pd.sellerUid || _pd.uid || '') !== String(sellerId)) continue;
+        t.update(_ps.ref, {
           stock:            FieldValue.increment(item.qty),
           inventoryVersion: FieldValue.increment(1),
           updatedAt:        FieldValue.serverTimestamp(),
@@ -280,9 +311,10 @@ exports.updateClickAndCollectStatus = onCall(CF_OPTIONS, async ({ auth, data }) 
           issuedAt: now,
         }, { merge: true });
         await ref.update({ dispatchStatus: 'awaiting_rider', deliveryRef: delId });
-        try { await db.doc(`orders/${orderId}`).set({ status: 'awaiting_rider', deliveryRef: delId, readyAt: now, updatedAt: now }, { merge: true }); } catch (_) {}
+        /* hotfix: mirror onto an EXISTING order of this seller only (ownership checked above); never create one */
+        if (_order) { try { await _oRef.update({ status: 'awaiting_rider', deliveryRef: delId, readyAt: now, updatedAt: now }); } catch (_) {} }
       } else {
-        try { await db.doc(`orders/${orderId}`).set({ status: 'ready_for_pickup', readyAt: now, updatedAt: now }, { merge: true }); } catch (_) {}
+        if (_order) { try { await _oRef.update({ status: 'ready_for_pickup', readyAt: now, updatedAt: now }); } catch (_) {} }
       }
 
       if (buyerUid) {
