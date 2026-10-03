@@ -1,3 +1,65 @@
+## 2026-10-03 — Fitness memberships FINAL RELEASE, functions lane: staff scanning, gym read callables, check-in notifications, payBy (NOT deployed)
+
+**Summary**
+- **Staff scanning.** The deny-all staff seam is replaced.
+  - The gym's business is resolved SERVER-side from `providers/{id}.linkedBusinessId`, verified against `businesses/{id}` (ownerId, merchantId, status).
+  - No link → `BUSINESS_LINK_MISSING`. The link is never inferred from `businesses.where(ownerId)`.
+  - Staff need an ACTIVE `workspaceMemberships` row in THAT business with the explicit `attendance` permission. This is decided by `workforce-identity._assertBusinessPermission`, imported; no third guard.
+  - Gym gate: an approved provider + `business-workspace.assertModule('memberships')` once sokoni-5b ships the key. Until then the gate reports PENDING.
+- **New read callables:** `fitnessGymMemberships`, `fitnessGymMembership`, `fitnessScannerStatus`.
+  - Scoped to the caller's own gym (owner) or the ONE gym they hold `attendance` at (staff). Never a client providerId.
+  - Bounded: ≤50 rows + cursor, ≤100 attendance rows, ≤60 payouts.
+  - The member's displayName only. Unknown values → null.
+- **Notifications.** The member is notified via notify.js after each recorded check-in, never on a duplicate. The first check-in notice says the membership is no longer refundable.
+- **Check-in response** now carries `member.displayName`, `title` and `checkedInAt` for the result card.
+- **payBy.** `fitnessCreateMembership` writes `payBy` = creation + the booking hold window (5 min, booking-service `HOLD_MS`, source-pinned). Double-tap reuse never outlives payBy. This aligns with sokoni-2f df88d4b S3, which is merged into this branch.
+
+**Files affected**
+- functions/fitness-attendance.js
+- functions/fitness-gym-memberships.js (new)
+- functions/fitness-membership-create.js
+- functions/workforce-identity.js (`attendance` key, in NO role default)
+- functions/index.js (3 exports)
+- firestore.indexes.json
+- scripts/test-fitness-attendance.js
+- scripts/test-fitness-membership-create.js
+- docs/FITNESS_MEMBERSHIP_ATTENDANCE.md (§6, §7, §9–§13)
+
+**Database**
+- New fields:
+  - `providerMemberships.payBy` (server);
+  - `providers.linkedBusinessId` (read only; nothing writes it yet).
+- New indexes:
+  - `providerMemberships (providerId, createdAt desc)`;
+  - `providerMemberships (providerId, status, createdAt desc)`.
+
+**API**
+- 3 new callables.
+- `fitnessCheckIn` response: additive fields.
+- `fitnessCreateMembership` response: adds `payBy`.
+
+**Security**
+- Staff are authorized only through the workforce guard, in the gym's LINKED business.
+- Link state is never told to strangers.
+- No member uid, phone or email is returned.
+
+**Tests**
+- test-fitness-attendance 46/0, negative controls 8/8.
+- test-fitness-membership-create 17/0, negative controls 6/6.
+- test-membership-offer-module 6/0.
+- test-membership-settlement 53/0.
+- test-employee-authority-map 24/6/4. The 6 fails are pre-existing and identical without this change.
+- Emulator: QUEUED (RAM).
+
+**Hand-offs (exact text in the docs §13)**
+- **Owner + sokoni-5b:** provider business provisioning (`_ensureProviderBusiness` + projectProvider). Until it lands, staff scanning refuses `BUSINESS_LINK_MISSING`.
+- **sokoni-5b:** the `memberships` module key and capability mapping; export `HOLD_MS`.
+- **f3:** protect `providers.linkedBusinessId`; the tree's `businesses` create rule does not pin `ownerId` (pre-existing).
+- **2f:** missing payment_review / refund-executed-to-gym / exception notifications.
+- **Hosting:** the `sokoni-workspace.js` ATTENDANCE mirror.
+
+**Breaking:** none.
+
 ## 2026-10-03 — Fitness membership offers in provider services + fitnessCreateMembership (NOT deployed)
 
 - **Owner decision:** "a gym publishes its membership offers IN ITS PROVIDER SERVICES".
