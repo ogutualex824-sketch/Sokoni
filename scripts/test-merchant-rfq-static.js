@@ -26,15 +26,23 @@ const SERVER_OPS = ['cancel', 'create', 'decline', 'get', 'listMine', 'listRecei
 const used = Array.from(new Set((src.match(/rfq\('([a-zA-Z]+)'/g) || []).map(m => m.slice(5, -1)))).sort();
 ok('O1 every client op exists on the server', used.length > 0 && used.every(o => SERVER_OPS.includes(o)));
 ok('O2 every server op has a client surface', SERVER_OPS.every(o => used.includes(o)));
-const callables = Array.from(new Set((src.match(/call\('([a-zA-Z]+)'/g) || []).map(m => m.slice(6, -1)))).sort();
-ok('O3 callables limited to rfqDispatch/findSuppliers/setSupplyParticipation', JSON.stringify(callables) === '["findSuppliers","rfqDispatch","setSupplyParticipation"]');
+const callables = Array.from(new Set((src.match(/call\('([a-zA-Z0-9]+)'/g) || []).map(m => m.slice(6, -1)))).sort();
+ok('O3 callables limited to b2bLeadPrice/rfqDispatch/findSuppliers/setSupplyParticipation', JSON.stringify(callables) === '["b2bLeadPrice","findSuppliers","rfqDispatch","setSupplyParticipation"]');
 
 /* M — money / tax honesty */
 ok('M1 no client-side total arithmetic on quotes (server totals rendered)', /q\.totalKES/.test(src) && !/totalKES\s*=/.test(src));
 ok('M2 quote refuses a missing VAT choice', /SOKONI never assumes it/.test(src));
 ok('M3 no hard-coded 0.16 VAT', !/0\.16/.test(src));
-ok('M4 consent states the owner lead price + VAT + monthly + no order commission',
-  /KES 200 \+ 16% VAT per RFQ received/.test(src) && /invoiced monthly/.test(src) && /no commission on the orders you win/.test(src));
+ok('M4 consent states the lead price + VAT from the server, monthly, no order commission',
+  /call\('b2bLeadPrice'/.test(src) && /kes\(p\.priceKES\)/.test(src) && /esc\(p\.vat\)/.test(src)
+  && /invoiced monthly/.test(src) && /no commission on the orders you win/.test(src));
+/* The price is admin-configurable (adminSetB2bLeadPrice) and its VAT wording is the commercial authority's. */
+/* (The supplier's own quote VAT choice "16% VAT (I am VAT-registered)" is the supplier's declaration, not a lead fee.) */
+ok('M7 no hard-coded lead price or lead VAT in the module', !/KES 200/.test(src) && !/\+ 16% VAT/.test(src));
+ok('M8 opt-in disabled while the price is unknown (button + click guard); opt-out always allowed',
+  /data-rfq-consent="on"' \+ \(known \? '' : ' disabled/.test(src)
+  && /if \(on && !\(lp && !lp\.error && Number\(lp\.priceKES\) > 0\)\)/.test(src)
+  && /data-rfq-consent="off">Stop receiving RFQs/.test(src));
 ok('M5 held payment not faked — shown as not available yet', /held until delivery\) is not available yet/.test(src));
 ok('M6 kes() renders unknown as —', /isFinite\(v\) && v >= 0 \? 'KES ' .*: '—'/.test(src));
 

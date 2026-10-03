@@ -5,7 +5,7 @@
    respond / cancel), plus procurement.findSuppliers (discovery) and setSupplyParticipation (consent). This module
    renders and calls; it never decides a status, a price, a VAT rate or a lead.
 
-   Owner decisions (2026-10-03): a supplier pays KES 200 + 16% VAT per RFQ it RECEIVES, invoiced monthly, and only if it
+   Owner decisions (2026-10-03): a supplier pays a lead fee per RFQ it RECEIVES (price + VAT wording from b2bLeadPrice; admin-configurable), invoiced monthly, and only if it
    has switched on "Receive paid RFQs"; no % on wholesale orders; an accepted quote becomes a purchase order paid
    through SOKONI and held until delivery (payment ships with its own server purpose — shown as not available yet).
    Messaging is SOKONI's one conversation system (tx 'rfq', when the messages server accepts it).
@@ -169,11 +169,18 @@
           : '<div class="rfq-muted" style="margin-top:8px">' + (mq ? 'Your quote: ' + kes(mq.totalKES) + ' (version ' + esc(mq.version) + ')' : '') + ' This RFQ is no longer open for quotes.</div>')
         + '</div>';
     }
+    /* The lead price is admin-configurable (adminSetB2bLeadPrice) and its VAT wording is the commercial authority's
+       (b2bLeadPrice, sokoni-2f). Both are rendered from the server, never hard-coded here. While the price is unknown
+       a supplier cannot opt in: consent to a fee needs the fee in front of them. Switching OFF is always allowed. */
     function renderConsent () {
+      var p = state.data.leadPrice, known = !!(p && !p.error && Number(p.priceKES) > 0);
+      var price = known ? '<b>' + kes(p.priceKES) + (p.vat ? ' ' + esc(p.vat) : '') + ' per RFQ received</b>, invoiced monthly'
+        : p && p.error ? '<b>— (the lead price could not be loaded; you can switch on once it is shown)</b>'
+        : '<b>— (loading the lead price…)</b>';
       return '<div class="rfq-card"><div style="font-weight:800">Receive paid RFQs</div>'
-        + '<div class="rfq-note" style="margin:8px 0">Each RFQ you receive is a business lead. SOKONI charges <b>KES 200 + 16% VAT per RFQ received</b>, invoiced monthly. There is no commission on the orders you win. You only receive RFQs while this is on, and you can switch it off at any time.</div>'
+        + '<div class="rfq-note" style="margin:8px 0">Each RFQ you receive is a business lead. SOKONI charges ' + price + '. There is no commission on the orders you win. You only receive RFQs while this is on, and you can switch it off at any time.</div>'
         + '<div class="rfq-muted">Your business must also be set up to supply other businesses (Supply → Products I Supply).</div>'
-        + '<div style="display:flex;gap:6px;margin-top:10px;flex-wrap:wrap"><button type="button" class="rfq-btn pri" data-rfq-consent="on">Receive paid RFQs</button><button type="button" class="rfq-btn" data-rfq-consent="off">Stop receiving RFQs</button></div></div>';
+        + '<div style="display:flex;gap:6px;margin-top:10px;flex-wrap:wrap"><button type="button" class="rfq-btn pri" data-rfq-consent="on"' + (known ? '' : ' disabled aria-disabled="true"') + '>Receive paid RFQs</button><button type="button" class="rfq-btn" data-rfq-consent="off">Stop receiving RFQs</button></div></div>';
     }
     function renderBody () {
       var b = host.querySelector('[data-rfq-body]'); if (!b) return;
@@ -189,6 +196,7 @@
     function load (sec) {
       renderBody();
       if (sec === 'mine') rfq('listMine').then(function (d) { state.data.mine = { rfqs: (d && d.rfqs) || [] }; renderBody(); }).catch(function (e) { state.data.mine = { error: e }; renderBody(); });
+      if (sec === 'consent' && !(state.data.leadPrice && !state.data.leadPrice.error)) call('b2bLeadPrice', {}).then(function (d) { state.data.leadPrice = d || { error: true }; renderBody(); }).catch(function () { state.data.leadPrice = { error: true }; renderBody(); });
       if (sec === 'received' && !state.open) rfq('listReceived').then(function (d) { state.data.received = { rfqs: (d && d.rfqs) || [] }; renderBody(); }).catch(function (e) { state.data.received = { error: e }; renderBody(); });
     }
     function readDraft () {
@@ -278,7 +286,9 @@
       if ((b = t.closest('[data-rfq-chat]'))) { chat(b.getAttribute('data-rfq-chat')); return; }
       if ((b = t.closest('[data-rfq-consent]'))) {
         var on = b.getAttribute('data-rfq-consent') === 'on';
-        if (on && global.confirm && !global.confirm('Receive paid RFQs? Each RFQ you receive costs KES 200 + 16% VAT, invoiced monthly.')) return;
+        var lp = state.data.leadPrice;
+        if (on && !(lp && !lp.error && Number(lp.priceKES) > 0)) { msg('The lead price is not shown yet — you can switch on once it is.', '#fbbf24'); return; }
+        if (on && global.confirm && !global.confirm('Receive paid RFQs? Each RFQ you receive costs ' + kes(lp.priceKES) + (lp.vat ? ' ' + lp.vat : '') + ', invoiced monthly.')) return;
         /* supply.enabled must accompany every participation update (the server refuses an implicit one); switching
            RFQs on keeps supply enabled, switching them off leaves supply as it is but withdraws lead consent. */
         call('setSupplyParticipation', { businessId: state.merchantId, supply: { enabled: true, acceptsLeads: on } })
