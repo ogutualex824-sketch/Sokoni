@@ -92,9 +92,41 @@ function _scoreRider(rider, stats, pickupLat, pickupLng, vehicleRequired) {
   return { score, distKm: parseFloat(distKm.toFixed(2)) };
 }
 
+/* ── SECURITY HOTFIX 2026-10-03: dispatch + delivery authority ─────────────────────────────────────────────────
+   LIVE EXPLOIT (census, verified on the live archive): navDispatchRider required only a signed-in caller and took
+   `manualRiderId` from the request, so ANY user could make THEMSELVES the rider on ANY order; navCompleteTrip then
+   accepted them (trip.riderId == uid) and flipped the order to `delivered` — which fires onOrderStatusChange's rider
+   payout (assignedDriverUid || riderId) and, via auto-confirm, the seller's settlement on an order that may never
+   have been paid.
+   Now:
+     · dispatch is an admin or the ORDER'S OWN SELLER; a manual rider is an admin decision only;
+     · a terminal / already-assigned order is never (re)dispatched by a non-admin;
+     · the trip records WHO dispatched it (`dispatchedBy`, `dispatchAuthority`) — server-written;
+     · the nav path marks an order `delivered` only for a trip created under that authority, whose rider IS the
+       order's rider, on a PAID order that is not already terminal. Anything else completes the TRIP only; the order
+       is delivered through the canonical PIN / buyer-confirm path (delivery-complete.js). */
+const _NAV_TERMINAL = ['delivered', 'completed', 'cancelled', 'refunded', 'returned', 'failed'];
+const _navIsAdmin = (t) => !!(t && (t.admin === true || t.superAdmin === true));
+const _navOrderPaid = (o) => !!(o && (o.paymentVerified === true || o.paid === true
+  || String(o.paymentStatus || '').toLowerCase() === 'paid'));
+const _navOrderRiders = (o) => [o && o.assignedDriverUid, o && o.riderId, o && o.assignedRiderId].filter(Boolean).map(String);
+/* Whether a trip may move its order to `delivered`. Pure: the order and trip as read. */
+function _navMayDeliver(trip, order) {
+  if (!trip || !order) return { ok: false, why: 'missing' };
+  if (!trip.dispatchedBy || !['admin', 'seller'].includes(trip.dispatchAuthority)) return { ok: false, why: 'trip_not_authorised' };
+  /* A seller dispatch must deliver through the order's own rider; an ADMIN-authority trip (navAssignTrip / manual
+     dispatch) is itself the authorised rider decision. */
+  if (trip.dispatchAuthority !== 'admin' && !_navOrderRiders(order).includes(String(trip.riderId || ''))) return { ok: false, why: 'rider_not_order_rider' };
+  if (String(order.tripId || '') && String(order.tripId) !== String(trip.__id || '')) return { ok: false, why: 'not_the_order_trip' };
+  if (_NAV_TERMINAL.includes(String(order.status || '').toLowerCase())) return { ok: false, why: 'order_terminal' };
+  if (!_navOrderPaid(order)) return { ok: false, why: 'order_unpaid' };
+  return { ok: true };
+}
+
 /* ═══════════════════════════════════════════════════════════════════════
    1. navDispatchRider — find and assign best available rider
 ═══════════════════════════════════════════════════════════════════════ */
+exports._navInternal = { _navMayDeliver, _navOrderPaid, _NAV_TERMINAL };
 exports.navDispatchRider = onCall({ enforceAppCheck: true }, async request => {
   _requireAuth(request.auth);
   const { orderId, vehicleRequired, manualRiderId } = request.data;
@@ -104,6 +136,17 @@ exports.navDispatchRider = onCall({ enforceAppCheck: true }, async request => {
   const orderSnap = await db.collection('orders').doc(orderId).get();
   if (!orderSnap.exists) throw new HttpsError('not-found', 'Order not found');
   const order = orderSnap.data();
+
+  /* AUTHORITY (hotfix 2026-10-03) — before anything is read or written on the order's behalf. */
+  const _isAdmin  = _navIsAdmin(request.auth.token);
+  const _isSeller = [order.sellerUid, order.sellerId].filter(Boolean).map(String).includes(request.auth.uid);
+  if (!_isAdmin && !_isSeller) throw new HttpsError('permission-denied', 'Only the seller or an administrator can dispatch this order.');
+  if (manualRiderId && !_isAdmin) throw new HttpsError('permission-denied', 'Choosing a specific rider is an administrator action.');
+  if (!_isAdmin) {
+    if (_NAV_TERMINAL.includes(String(order.status || '').toLowerCase())) throw new HttpsError('failed-precondition', 'This order can no longer be dispatched.');
+    if (_navOrderRiders(order).length || order.tripId) throw new HttpsError('failed-precondition', 'This order already has a rider.');
+    if (!_navOrderPaid(order)) throw new HttpsError('failed-precondition', 'This order is not paid yet.');
+  }
 
   // Build stops from order
   const stops = [];
@@ -135,7 +178,10 @@ exports.navDispatchRider = onCall({ enforceAppCheck: true }, async request => {
   let assignedDistKm  = 0;
 
   if (manualRiderId) {
-    assignedRiderId = manualRiderId;
+    /* admin-only (checked above); the rider must exist */
+    const _rd = await db.collection('drivers').doc(String(manualRiderId)).get();
+    if (!_rd.exists) throw new HttpsError('not-found', 'That rider does not exist.');
+    assignedRiderId = String(manualRiderId);
   } else {
     // Auto-dispatch: find best available rider
     const pickupLat = stops[0]?.lat || stops[stops.length - 1].lat;
@@ -184,6 +230,8 @@ exports.navDispatchRider = onCall({ enforceAppCheck: true }, async request => {
     dispatchScore:  assignedScore,
     dispatchDistKm: assignedDistKm,
     vehicleRequired: vehicleRequired || null,
+    dispatchedBy:      request.auth.uid,                         /* server-recorded authority (hotfix 2026-10-03) */
+    dispatchAuthority: _isAdmin ? 'admin' : 'seller',
     startedAt:      null,
     completedAt:    null,
     earnings:       null,
@@ -256,13 +304,20 @@ exports.navUpdateTripStatus = onCall({ enforceAppCheck: true }, async request =>
     arrived_pickup:       'driver_at_pickup',
     en_route_delivery:    'out_for_delivery',
     arrived_delivery:     'driver_at_door',
-    completed:            'delivered',
+    /* 'completed' → 'delivered' REMOVED (hotfix 2026-10-03): delivery is navCompleteTrip's guarded path or the
+       canonical PIN path — never a free status string. */
   };
   if (orderStatusMap[status] && trip.orderId) {
-    await db.collection('orders').doc(trip.orderId).update({
-      status:    orderStatusMap[status],
-      updatedAt: FieldValue.serverTimestamp(),
-    }).catch(() => {});
+    const _oSnap = await db.collection('orders').doc(trip.orderId).get();
+    const _o = _oSnap.exists ? (_oSnap.data() || {}) : null;
+    /* Only the order's own rider on an authorised trip moves the order's progress, and never out of a terminal state. */
+    if (_o && trip.dispatchedBy && _navOrderRiders(_o).includes(String(trip.riderId || ''))
+        && !_NAV_TERMINAL.includes(String(_o.status || '').toLowerCase())) {
+      await _oSnap.ref.update({
+        status:    orderStatusMap[status],
+        updatedAt: FieldValue.serverTimestamp(),
+      }).catch(() => {});
+    }
   }
 
   // Notify buyer when en_route_delivery
@@ -384,7 +439,16 @@ exports.navSubmitPOD = onCall({ enforceAppCheck: true }, async request => {
 
   await snap.ref.update(updates);
 
+  /* hotfix 2026-10-03: the same delivery authority as navCompleteTrip — an authorised trip of the order's own rider
+     on a paid, live order. Otherwise the stops complete and the order is left for the canonical PIN path; neither
+     the order flip NOR the earnings queue below happens. */
+  let _podMay = { ok: false, why: 'no_order' };
   if (allDone && trip.orderId) {
+    const _oSnap = await db.collection('orders').doc(trip.orderId).get();
+    _podMay = _navMayDeliver(Object.assign({ __id: tripId }, trip), _oSnap.exists ? _oSnap.data() : null);
+    if (!_podMay.ok) console.warn('[navSubmitPOD] stops complete WITHOUT delivering the order', { tripId, orderId: trip.orderId, why: _podMay.why });
+  }
+  if (allDone && trip.orderId && _podMay.ok) {
     await db.collection('orders').doc(trip.orderId).update({
       status:    'delivered',
       deliveredAt: FieldValue.serverTimestamp(),
@@ -584,13 +648,22 @@ exports.navCompleteTrip = onCall({ enforceAppCheck: true }, async request => {
     updatedAt:   FieldValue.serverTimestamp(),
   });
 
-  // Update order to delivered
+  // Update order to delivered — ONLY for an authorised trip of the order's own rider on a paid, live order
+  let _delivered = false, _why = null;
   if (trip.orderId) {
-    batch.update(db.collection('orders').doc(trip.orderId), {
-      status:    'delivered',
-      deliveredAt: FieldValue.serverTimestamp(),
-      updatedAt: FieldValue.serverTimestamp(),
-    });
+    const _oSnap = await db.collection('orders').doc(trip.orderId).get();
+    const _v = _navMayDeliver(Object.assign({ __id: tripId }, trip), _oSnap.exists ? _oSnap.data() : null);
+    if (_v.ok) {
+      batch.update(_oSnap.ref, {
+        status:    'delivered',
+        deliveredAt: FieldValue.serverTimestamp(),
+        updatedAt: FieldValue.serverTimestamp(),
+      });
+      _delivered = true;
+    } else {
+      _why = _v.why;
+      console.warn('[navCompleteTrip] trip completed WITHOUT delivering the order', { tripId, orderId: trip.orderId, why: _why, uid });
+    }
   }
 
   // Update driver stats (activity counters only — earnings are NOT taken from the client)
@@ -608,7 +681,7 @@ exports.navCompleteTrip = onCall({ enforceAppCheck: true }, async request => {
      amount was a double-pay + client-trust vector; removed. If order-less trip payouts are
      ever needed, add a SERVER-derived amount here — never request.data. */
 
-  return { ok: true };
+  return { ok: true, orderDelivered: _delivered, reason: _why };
 });
 
 /* ═══════════════════════════════════════════════════════════════════════
@@ -706,6 +779,8 @@ exports.navAssignTrip = onCall({ enforceAppCheck: true }, async request => {
   await tripRef.set({
     orderId:         orderId || null,
     riderId,
+    dispatchedBy:      request.auth.uid,          /* admin (checked above) — hotfix 2026-10-03 */
+    dispatchAuthority: 'admin',
     status:          'assigned',
     stops:           stops.map((s, i) => ({
       type:    s.type || 'delivery',
