@@ -1,3 +1,12 @@
+## 2026-10-03 — Profile verifications & trust display: real scores, honest states, working verify routes (NOT deployed)
+
+- **Trust score:** nine widgets read a field the server never sent and always showed 0. They now show the real score (_skNormOv). An unknown score shows —.
+- **Identity grid:** shows Under review / Needs attention (with reason) / Expired instead of "Tap to verify".
+- **Verify routes:** email and phone open the on-page flows, Add address opens the inline editor, and #verify routes correctly. Ported from 76fd002, 58dcda7, 7f64c30 and f43da27 (built earlier, never live). An empty hash restores Overview.
+- **Trust insights:** no level/delta chips until the score is known; the baseline is per account.
+- **Tests:** scripts/test-profile-trust-display.js (new, 11/0; production fails 10), scripts/test-profile-completion-routing.js (ported, 111/0; one functions-lineage check reported N/A).
+- **Server pair:** fix/profile-trust-authority-on-72dca56 @ 76b2b9b.
+
 ## 2026-10-03 — Profile: buyer only; floating Active Role card readable; every link resolves; real order counts; Recent Activity in sync (NOT deployed)
 
 - **Floating Active Role card:** it still floats and now has an opaque background.
