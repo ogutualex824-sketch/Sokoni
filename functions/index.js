@@ -9797,6 +9797,8 @@ exports.adminSubGetAnalytics      = subBilling.adminSubGetAnalytics;
 exports.adminSubManualAction      = subBilling.adminSubManualAction;
 exports.adminSubProcessRefund     = subBilling.adminSubProcessRefund;
 exports.adminSubExportBilling     = subBilling.adminSubExportBilling;
+/* Admin Invoices page (owner 2026-10-04: merchant invoices only) — read-only list + database-computed summary. */
+exports.adminInvoicesList = require('./admin-invoices').adminInvoicesList;
 exports.subProcessExpirations     = subBilling.subProcessExpirations;
 exports.subSendRenewalReminders   = subBilling.subSendRenewalReminders;
 

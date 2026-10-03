@@ -1,3 +1,11 @@
+## [2026-10-04] — adminInvoicesList: the admin Invoices page's server read (merchant invoices only)
+
+**Owner decision (2026-10-04):** the admin Invoices page covers merchant invoices only (the `invoices` store behind finance-os invoiceCreate / Send / MarkPaid / Void). The other invoice stores (etims, hub, procurement supplier, sasos, fos) are not mixed in until the Financial Core names its one document system.
+**What:** a new callable `adminInvoicesList` (admin / superAdmin claim, App Check, read-only). It returns a page (≤100; tabs all / draft / open / overdue / paid / void; opaque cursor) with a SERVER-derived display status (sent + past due → overdue + days) and the shop name, plus a catalogue-wide **summary** computed by Firestore aggregations: counts, total invoiced (sent + paid), paid in the last 30 days, open, overdue, and aging (current, 1–30, 31–60, 61–90, 91+, plus undated). Each figure is independent: one the database cannot compute (missing index) is `null` with its reason, never 0 and never an estimate. A client-typed `paymentRef` is exposed only as presence (`paymentReferenced`).
+**Files:** `functions/admin-invoices.js` (new), `functions/index.js` (one export), `firestore.indexes.json` (+3 `invoices` composites: status+createdAt desc, status+dueDate, status+paidAt), `scripts/test-admin-invoices.js`.
+**Tests:** test-admin-invoices 13/0 (SABOTAGE: failed aggregate reported as 0 → I6 fails).
+**Deployment:** NOT deployed. Order: the 3 indexes (`firestore:indexes`, additive), then a scoped `--only functions:adminInvoicesList` from a tree carrying this module, then the hosting page. Until the indexes build, the affected figures and tabs report "index missing".
+
 ## [2026-09-01] — fix(adminos): admin-os.js lineage convergence to production 252ff65 + pilot (UNMERGED / UNDEPLOYED)
 
 Reconciles `functions/admin-os.js` on main (`9d42fa9`) back to the **proven deployed source** of the
