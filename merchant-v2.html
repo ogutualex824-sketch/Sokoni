@@ -770,6 +770,8 @@ input[type=date].search{color:var(--txt);font:inherit;font-size:13px;min-width:0
 <script src="sokoni-merchant-disputes-ui.js"></script>
 <script src="sokoni-merchant-messages.js"></script>
 <script src="sokoni-merchant-messages-ui.js"></script>
+<!-- Provider rate cards (#rates; b2 mounts the same module at mkt-rates). docs/RATE_CARD_EDITOR.md -->
+<script src="sokoni-merchant-ratecard.js"></script>
 <script src="sokoni-merchant-customers.js"></script>
 <script src="sokoni-merchant-customers-ui.js"></script>
 <script src="sokoni-merchant-store.js"></script>
@@ -2789,6 +2791,17 @@ input[type=date].search{color:var(--txt);font:inherit;font-size:13px;min-width:0
                         onOpenAvailability: function () { go('availability'); },
                         onToast: toast });
                     } }; } },
+    /* Provider rate cards. ctx is the RateCard contract (docs/RATE_CARD_EDITOR.md): the module
+       calls providerDispatch {op,...} through `callable`, and edits ONLY when the provider
+       session's P0-F decision is exactly editable === true — anything else (no answer yet,
+       false, malformed, a merchant session) mounts read-only with the decision's own reason. */
+    rates:      { global: 'SokoniMerchantRateCard',    ctx: function () {
+                    var E = S.editable, ok = S.session === 'provider' && !!E && E.editable === true;
+                    return {
+                    callable: _callable, uid: S.uid, session: S.session, filter: {},
+                    editable: ok, readOnly: !ok,
+                    reason: ok ? null : ((E && E.reason) || null),
+                    onToast: toast }; } },
     'kra-tax':  { global: 'SokoniMerchantTaxUI',       ctx: function () { return {
                     scope: _scope(), shopName: _shopName(), origin: location.origin,
                     callProfile: _callable('etimsGetProfile'), callRegister: _callable('etimsRegisterSeller'),
