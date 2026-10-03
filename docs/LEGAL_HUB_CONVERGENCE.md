@@ -156,7 +156,7 @@ There is ONE identity record (`legalProviders/{uid}`) and ONE review item (`appl
 | createPaymentIntent + IntaSend webhook for a Legal booking | **UNPROVEN** | `paid_held` fixture only |
 | All account-enabled IntaSend methods | **UNPROVEN / not built here** | owned by the IntaSend convergence (2f) |
 | Invoices / receipts for provider bookings | **NOT BUILT, platform-wide** | `financialDocuments` only written by the deleted Daraja callback |
-| Large-project milestones | **NOT BUILT** | no milestone billing authority exists; the leads/quotes → booking engine (Tech 4F) can carry one quoted engagement |
+| Large matters: quote → booking | **FIXED** (single payment) | capability line d377b28 (legal → QUOTE_REQUEST + DIRECT_BOOKING, A-8); storefront "Request a quote" + My quote requests (Q1). Multi-stage MILESTONES are still NOT BUILT |
 | Availability single write path | **NOT BUILT** | provider-dashboard writes `providerAvailability` from the client (rules allow non-healthcare) |
 | Firm team verification | **BLOCKED** (owner decision) | team kept private |
 | Reschedule / no-show / provider-cancel | **PRE-EXISTING gap** in the shared booking engine | — |
@@ -168,7 +168,7 @@ Every service of the six groups is the same row, because Legal providers and ser
 
 | Category | Public | Provider | Application | Booking | AdminOS | Super Admin |
 |---|---|---|---|---|---|---|
-| each of the 30 taxonomy services | ✔ group + area filters (W4) | ✔ rate-card `legalArea` (C10, PD1) | ✔ practice-area picker (R1) | ✔ via rate card → `bookingCreateService` | ✔ practice areas column (AO1) | ✗ no Legal view (gap G-7) |
+| each of the 30 taxonomy services | ✔ group + area filters (W4) | ✔ rate-card `legalArea` (C10, PD1) | ✔ practice-area picker (R1) | ✔ via rate card → `bookingCreateService` | ✔ practice areas column (AO1) | ✔ registry + per-service coverage, read-only (SA1) |
 
 ### Gaps and owners
 
@@ -176,12 +176,12 @@ Every service of the six groups is the same row, because Legal providers and ser
 |---|---|---|
 | G-1 | Invoices and receipts for provider-booking payments (platform-wide) | owner decision → 2f (financial documents) |
 | G-2 | Legal payment-intent + webhook proof; IntaSend method coverage | 2f (IntaSend convergence) |
-| G-3 | Free-plan service cap counts the auto consultation card | plan owner (no active owner; brief: designate before change) |
+| G-3 | Free-plan service cap counts the auto consultation card | OWNER decision, 2f recommends (a): exclude createdBy legal-verification from the count; 2f implements on commercial-fn if chosen |
 | G-4 | Criminal / immigration / tax in the taxonomy | owner |
 | G-5 | Firm team per-advocate LSK verification | owner |
 | G-6 | Availability: one server write path for provider-dashboard | 5b (provider shell) / b2 |
-| G-7 | Super Admin Legal view (read-only) | b2, next pass |
-| G-8 | Milestone billing for large legal projects | owner decision (new authority) |
+| G-7 | ~~Super Admin Legal view~~ **FIXED** (5966cd6, read-only) | b2 |
+| G-8 | Milestone billing for MULTI-STAGE legal projects (single quoted engagements work: d377b28 + a086a44) | owner decision (new authority) |
 | G-9 | Rules / emulator proof (`legalProviders` and `providerServices.legalArea`, which is server-written only) | f3 (combined rules) |
 
 ### Release order (when authorized)
