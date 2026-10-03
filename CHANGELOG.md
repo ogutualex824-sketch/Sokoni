@@ -1,3 +1,112 @@
+## [2026-10-03] - TAKEDOWN MEDIA HOLD: a taken-down product's photos are PRIVATE while the hold exists (server) — NOT deployed
+
+**NOT DEPLOYED — DEPLOYMENT QUEUED — MACHINE BELOW 512 MB MEMORY FLOOR.** Owner decision 2026-10-03. Facts agreed with
+sokoni-5b (checkout / till owner):
+1. Firebase download-token URLs BYPASS storage rules, so the token is the only lever for links that already exist.
+2. Orders, posTransactions, receipts and cart snapshots COPY a product's image URL at sale time. Rotating the token
+   would break those images permanently.
+3. The original token is a BEARER CREDENTIAL.
+
+### Design (functions/moderation-media.js, new; called from trust-safety.js)
+- **Take-down** (`tsReviewReport` approve + hideProduct, AFTER the transaction commits; also on `already_hidden`):
+  - It takes the listing's own image objects from `images[]`, `image`, `imageUrl`, `thumbnail`, `thumbnailUrl` and
+    `thumbUrl`, and only those under `product-images/{product.sellerUid}/` in `sokoni-aeb26.firebasestorage.app`.
+  - A URL into another seller's prefix is recorded `foreign` and never touched. A URL in another bucket is recorded
+    `unsupported_bucket`. At most 24 objects.
+  - It reads each object's metadata, then CREATES `moderationMediaVault/{productId}` with `tx.create()`:
+    `{productId, holdRef, correlationId, at, status, paths[], objects:[{path, bucket, tokens, generation, state}]}`.
+    The tokens are stored before any object is changed.
+  - It then patches each object: `firebaseStorageDownloadTokens` is removed and `moderationHold='1'` is set, with
+    `ifGenerationMatch` + `ifMetagenerationMatch`.
+  - **Retry:** a retry finds the vault, appends only new paths and never rewrites a stored token. A token read after a
+    strip is empty and must not overwrite the original.
+  - **Shared photo:** an object already flagged by another listing's hold is recorded `already_held`.
+- **Restore** (`tsReviewReport` restore, and dismiss + restoreListing, AFTER the hold is deleted):
+  - Each object gets back EXACTLY the vaulted value, including a comma-separated list or null. A new token is never
+    generated. The flag is removed.
+  - The vault doc is deleted, in a transaction that re-checks holdRef, only when every object reached a terminal state.
+  - The product doc is never written by the media step: its image URLs are unchanged, so every copied URL works again.
+  - **Shared photo:** the token is HANDED to the other listing's vault and the photo stays private.
+  - **Replaced object:** if the object was replaced since vaulting (generation changed), only the flag is lifted. The
+    stale token is never written onto new content.
+- **`tsRetryModerationMedia({reportId})`** (new callable, admin): re-runs the step for that report's hold (apply while
+  held by its holdRef, release once lifted). It refuses a report that took nothing down, or a listing held by another
+  report.
+- **Recording:**
+  - Never claimed: the response carries `mediaHold` `{op, status: held|partial|failed|none|released|skipped, objects,
+    stripped, released, failed, skipped, reason?}`.
+  - The report records `mediaHold` / `mediaRelease`.
+  - `trustSafetyAudit` gets `media_hold_applied` | `media_hold_incomplete` | `media_hold_released` |
+    `media_release_incomplete` | `media_hold_failed` rows. These carry only `{pathRef: sha16(path), state, reason}`,
+    never a token or a path.
+  - Logs carry error codes only.
+- **Fail-closed storage:** outside a Functions runtime (no K_SERVICE / FUNCTION_TARGET / emulator) the storage client is
+  never loaded; the step returns `failed` / `storage_unavailable`. Tests inject a fake through `_setStorage`.
+- **Never undoes the decision:** the take-down / restore stands whatever the media step does.
+
+### Files
+- **New:** `functions/moderation-media.js`, `scripts/test-moderation-media.js`.
+- **Changed:**
+  - `functions/trust-safety.js`: `_mediaStep`, `tsRetryModerationMedia`, and the transaction now returns `holdRef`.
+  - `functions/index.js`: re-exports `tsRetryModerationMedia`.
+  - `scripts/test-takedown-enforcement.js` and `scripts/test-moderation-queue.js`: their temp-copy closure now includes
+    the new module.
+
+### Database
+- **New collection** `moderationMediaVault/{productId}`. It is SERVER-ONLY: no client rule, and default deny was
+  verified on the served Firestore ruleset f259c0b5 and the takedown candidate (no rule names it, no top-level wildcard).
+- `reports` gains `mediaHold` and `mediaRelease`.
+- **Storage objects:** custom metadata `moderationHold='1'` while held; `firebaseStorageDownloadTokens` is absent while
+  held and then restored byte-equal.
+- **Indexes:** none. The `paths` array-contains query uses the automatic single-field index.
+
+### API
+- `tsReviewReport` responses gain `mediaHold`.
+- **New callable:** `tsRetryModerationMedia`.
+
+### Security
+- The token never leaves the vault.
+- Restore reinstates the original instead of minting a new one, so no copied URL is broken and no new bearer
+  credential is issued.
+- A seller cannot make another seller's photo private by referencing it.
+- **Storage rules candidate:** `rules/takedown-enforcement-on-served` `0c75d13`, built from the SERVED storage ruleset
+  182624f3, NOT released. It refuses path reads of a held object to non-admins and refuses updates while held. Without
+  that update refusal the seller could drop the flag.
+
+### Deploy list delta
+- **functions:** `tsReviewReport` (changed) and `tsRetryModerationMedia` (new). Both are in trust-safety.js, so the
+  package-level diff rule above still applies.
+- **storage rules:** the `storage` unit (`storage.rules.media-hold-candidate`). Release it AFTER the functions serve.
+- **IAM (UNVERIFIED):** the functions runtime service account needs `storage.objects.get` and `storage.objects.update` on
+  the bucket.
+
+### Tests
+- **test-moderation-media 18/0:** T1–T3, R1–R3, L1–L3, N1, P1 (two rows), P2, F1, S1, A1, V1, Z1. It uses a fake
+  Storage with generation preconditions and a token-URL check, and a fake Firestore with strict read order.
+- **`--failure-injection` 6/6 caught:**
+  - rotate-instead-of-reinstate → R2
+  - token-on-report → L3
+  - log-token → L1
+  - skip-flag → T1
+  - vault-overwritten-on-retry → T2
+  - strip-claimed-held → P1
+
+  The tree was unchanged afterwards.
+- **Regression:**
+  - takedown-enforcement 35/0, with injection 16/16
+  - moderation-queue 40/0, with injection 8/8
+  - hold-ref-privacy 9/0
+  - report-authority 16/0
+  - review-reports 26/0
+  - gateway-order-authority 17/0
+- **Gates:** require-closure PASS (on HEAD `0bca4dc`), predeploy-syntax PASS, commission single-source PASS,
+  guard-functions-safety PASS.
+- **UNPROVEN:**
+  - real GCS semantics: a null custom-metadata value deletes the key, and Firebase refuses a token URL once
+    `firebaseStorageDownloadTokens` is gone.
+  - the runtime service account's IAM.
+  - the storage-rules emulator rows (QUEUED).
+
 ## [2026-10-03] - Payments: Daraja removal PORTED from 093fd4f onto this (7091029 / feat/community-reports-fn) lineage — functions source, NOT deployed
 
 **NOT DEPLOYED.** This closes owner brief Gate 2 for this tree: copy the approved removal (093fd4f), do not merge it.
