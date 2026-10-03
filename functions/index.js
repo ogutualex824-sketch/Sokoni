@@ -11898,6 +11898,8 @@ exports.reviewCourse          = education.reviewCourse;
 exports.createCourse          = education.createCourse;
 exports.getMyEnrollments      = education.getMyEnrollments;
 exports.publishCourse         = education.publishCourse;
+/* Education learner profile + guardian links (owner 2026-10-03) — a learner is a profile, not an application. */
+exports.educationLearner      = require('./education-learner').educationLearner;
 
 /* ── QR Code System v1.0 ───────────────────────────────────────── */
 const qr = require('./qr');
