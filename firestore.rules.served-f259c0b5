@@ -77,25 +77,6 @@ service cloud.firestore {
   'role','approved','approvedAt','approvedBy',
   'commissionRate']);
   }
-  /* CAPABILITY CANDIDATE 1 (2026-09-30, from slice/c4-convergence ab3a891; served base f20be7d). An applicant may
-     create, amend or withdraw their own UNDECIDED application, but may never DECIDE it. Before this, the served rule
-     let an owner write status:'approved' + decidedBy on their own application — a forged self-approval.
-     priorDecisions is the immutable history of superseded decisions, appended only by applicationDecide (server). */
-  /* COMBINED with K13-C (sokoni-27, ad183b0 — ported from its 6c67a34d base onto the served f20be7d/b87c94e4):
-     appNoDecision() = no decision key touched and no decisive status written; appUndecided() = the stored
-     application is not decided, so a DECIDED application is frozen to its applicant (no edit, reopen or delete).
-     Decision keys = K13-C's seven + the capability line's agreement-verification pair and priorDecisions. */
-  function appNoDecision() {
-  let d = request.resource.data;
-  let dk = ['decidedBy','decidedAt','decisionAppliedFor','projectionStatus','blockedFor','statusCanonical','reviewReason',
-  'agreementVerifiedAt','agreementVerifiedVersion','priorDecisions'];
-  return (resource == null ? !d.keys().hasAny(dk) : !d.diff(resource.data).affectedKeys().hasAny(dk))
-  && (!d.keys().hasAny(['status']) || (d.status is string && !(d.status.lower() in ['approved','active','accepted','verified','rejected','declined','denied','suspended','revoked','banned','disabled'])));
-  }
-  function appUndecided() {
-  let s = resource.data.get('status', 'pending');
-  return !(s is string && s.lower() in ['approved','active','accepted','verified','rejected','declined','denied','suspended','revoked','banned','disabled']);
-  }
   function noSelfGrant() {
   return resource == null
   ? !request.resource.data.keys()
@@ -183,19 +164,10 @@ service cloud.firestore {
   'paymentVerified', 'paidAt', 'paidAmount', 'paidPhone', 'mpesaCode',
   'settlementStatus', 'escrow', 'escrowStatus', 'payoutStatus',
   'receiptGenerated', 'inventoryApplied', 'fulfilmentStatus',
-  // P0 2026-09-29: delivery proof is server-only — _completeDelivery writes these together with
-  // "delivered". A browser seeding them at create let a self-made order pass as proven.
   'deliveryAuthorizedBy', 'deliveryAuthorizedActor', 'deliveredAt'
   ])
-  // P0: a rider is assigned by the claim/dispatch authority, never named by the order creator.
   && (!request.resource.data.keys().hasAny(['assignedDriverUid']) || request.resource.data.assignedDriverUid == null)
-  && (!request.resource.data.keys().hasAny(['riderId']) || request.resource.data.riderId == null)
-  // 2026-10-03 (sokoni-b2, IntaSend brief Gate 5/13): a browser may not CREATE an order already marked paid.
-  // status 'paid' and paymentVerified were refused above; paymentStatus was not. Clients legitimately send
-  // pending / unpaid / idle / pending_payment (delivery-hub.js, sokoni-b2b.js, sokoni-redis.js); 'paid' only
-  // ever comes from the server's verified webhook.
-  && (!request.resource.data.keys().hasAny(['paymentStatus'])
-      || request.resource.data.paymentStatus in ['pending', 'unpaid', 'idle', 'pending_payment']);
+  && (!request.resource.data.keys().hasAny(['riderId']) || request.resource.data.riderId == null);
   }
   function validOrderStatus() {
   return !request.resource.data.keys().hasAny(['status'])
@@ -233,16 +205,10 @@ service cloud.firestore {
   allow read:  if isAdmin() || (isAuthed() && request.auth.uid == uid);
   }
   match /applications/{appId} {
-  /* 2026-10-03: a REVIEW is not an application. sokoni-property.js addReview filed property reviews here as
-     category:'reviews' (free-typed name, no moderation, junk in the applications queue). Reviews go to
-     submitReview (reviews/{uid_property_id}, pending → AdminOS). Refused here so the misfile cannot recur. */
-  allow create: if claimsOwner() && noAdminFields() && appNoDecision()
-  && request.resource.data.get('category', '') != 'reviews';
+  allow create: if claimsOwner() && noAdminFields();
   allow read:   if isAdmin() || isOwner();
-  /* priorDecisions: not even an administrator's raw client write may touch it (capability candidate 1). */
-  allow update: if (isAdmin() && !request.resource.data.diff(resource.data).affectedKeys().hasAny(['priorDecisions']))
-  || (isOwner() && claimsOwner() && noAdminFields() && appUndecided() && appNoDecision());
-  allow delete: if isAdmin() || (isOwner() && appUndecided());
+  allow update: if isAdmin() || (isOwner() && claimsOwner() && noAdminFields());
+  allow delete: if isAdmin() || isOwner();
   }
   match /invitations/{inviteId} {
   allow read:   if isAdmin();
@@ -250,20 +216,16 @@ service cloud.firestore {
   match /providers/{providerId} {
   allow read:   if resource.data.status == 'active' || resource.data.status == 'approved'
   || isAuthed();
-  /* CAPABILITY CANDIDATE 1 (c4 CHANGELOG 236): `business` — the ONE canonical category + commercial lane that
-     decides a provider's dashboard route — is server-written ONLY (applicationDecide at approval; bizAdminClassify
-     for audited correction). Not by the provider, and not by an admin's raw client write. */
   allow create: if isActive() && isAuthed() && request.resource.data.uid == request.auth.uid && noAdminFields()
   && (!request.resource.data.keys().hasAny(['status'])
-  || request.resource.data.status == 'pending')
-  && !request.resource.data.keys().hasAny(['business']);
-  allow update: if (isAdmin() && !request.resource.data.diff(resource.data).affectedKeys().hasAny(['business']))
+  || request.resource.data.status == 'pending');
+  allow update: if isAdmin()
   || (isAuthed()
   && resource.data.uid == request.auth.uid
   && uidUnchanged()
   && !request.resource.data.diff(resource.data)
   .affectedKeys()
-  .hasAny(['status', 'verified', 'suspended', 'approved', 'business']));
+  .hasAny(['status', 'verified', 'suspended', 'approved']));
   allow delete: if isAdmin();
   }
   match /bookings/{bookingId} {
@@ -413,21 +375,11 @@ service cloud.firestore {
   || resource.data.buyerUid == request.auth.uid))
   && uidUnchanged()
   && request.resource.data.status in ['cancelled']
-  /* sokoni-4d refund audit 2026-10-01: a buyer cancels only BEFORE payment settles. Without this a buyer flipped a
-     PAID / shipped / delivered order to cancelled with no refund flow (and fired the cancel triggers). A paid
-     cancellation is a server-side request (refund programme). No live client cancels a paid order (census). */
-  && resource.data.status in ['pending_payment','pending']
   && request.resource.data.diff(resource.data).affectedKeys()
   .hasOnly(['status','cancelReason','updatedAt','review']))
   || (isAuthed() && resource.data.sellerUid == request.auth.uid
   && uidUnchanged() && validOrderStatus()
-  // P0 2026-09-29: a seller never marks an order delivered/completed — that is delivery proof,
-  // produced only by completeDeliveryWithPin / buyerConfirmDelivery (rider payout fired on it).
   && !(request.resource.data.status in ['delivered','completed'])
-  /* sokoni-4d census 2026-10-01: nor any payment or dispatch state — those are written by the payment webhook /
-     orderAdvance / delivery authorities, never by a seller's raw client write. */
-  && !(request.resource.data.status in ['paid','refunded','confirmed','processing','pending_payment',
-  'awaiting_confirmation','rider_assigned','rider_en_route','picked_up','in_transit'])
   && request.resource.data.diff(resource.data).affectedKeys()
   .hasOnly(['status','sellerNote','readyAt','trackingNo','updatedAt']))
   || (isAuthed() && resource.data.assignedDriverUid == request.auth.uid
@@ -522,18 +474,12 @@ service cloud.firestore {
   allow update: if isAdmin();
   allow delete: if isAdmin();
   }
-  /* R0 (2026-09-30, owner): a browser could create a review with status "approved", any target, rating and
-     authorUid, and no order — public at once and counted by ratingsSummary (noAdminFields never blocked
-     `status`). submitReview / adminModerateReview (Admin SDK) are the only writers. Same containment as the
-     c4 line (slice/c4-convergence). */
   match /reviews/{reviewId} {
   allow read:   if resource.data.status == "approved"
   || (request.auth != null && (request.auth.uid == resource.data.authorUid || isAdmin()));
-  allow create: if false;
-  /* 2026-10-03 (sokoni-5b review authority 7ec04c5): moderation is adminModerateReview (Admin SDK) only —
-     no browser update/delete, admin included. No client in the tree writes reviews except three legacy
-     fsWrite('reviews') creates (bnb / property / sports), already refused by create:false. */
-  allow update, delete: if false;
+  allow create: if claimsOwner() && noAdminFields();
+  allow update: if isAdmin() || (isOwner() && uidUnchanged() && noAdminFields());
+  allow delete: if isAdmin() || isOwner();
   }
   match /etims_submissions/{docId} {
   allow create:               if claimsOwner();
@@ -692,10 +638,9 @@ service cloud.firestore {
   allow update: if isParticipant()
   && request.resource.data.diff(resource.data)
   .affectedKeys().hasOnly(['lastMessage','lastMessageAt','lastSenderId','unread']);
-  /* sokoni-4d census 2026-10-01: conversations are created ONLY by messagesDispatch{op:createConversation}
-     (Admin SDK; parties derived from the transaction). The client create let anyone open a thread with any
-     participant; its live callers are dead code (product.js:1480 overwritten, sokoni-inbox.js:86 uncalled). */
-  allow create: if false;
+  allow create: if isActive() && isAuthed()
+  && request.auth.uid in request.resource.data.participants
+  && request.resource.data.participants.size() <= 2;
   allow delete: if isAdmin();
   match /messages/{msgId} {
   function _conv() {
@@ -798,13 +743,14 @@ service cloud.firestore {
   allow delete: if isAdmin()
   || (isAuthed() && resource.data.uid == request.auth.uid);
   }
-  /* 2026-10-03: sports venue reviews are server-submitted — submitReview({targetType:'sports_venue'}) writes
-     reviews/{uid_sports_venue_id} PENDING for the AdminOS queue; eligibility = the caller's own
-     sportsVenueBookings for that venue (owner decision). This legacy store published on create with no
-     moderation (read:true), so no browser write may reach it any more. Read kept for existing docs. */
   match /sportsReviews/{reviewId} {
   allow read:   if true;
-  allow create, update: if false;
+  allow create: if claimsOwner()
+  && request.resource.data.keys().hasAll(
+  ['targetId','targetType','author','rating','body','uid','ts'])
+  && request.resource.data.rating >= 1
+  && request.resource.data.rating <= 5
+  && request.resource.data.body.size() <= 2000;
   allow delete: if isAdmin();
   }
   match /sportsPosts/{postId} {
@@ -829,8 +775,12 @@ service cloud.firestore {
   allow delete: if isAdmin();
   }
   match /fitness_bookings/{bookingId} {
-  allow read:   if isAdmin();
-  allow write:  if false;
+  allow read:   if isAdmin() || (isAuthed() && resource.data.uid == request.auth.uid);
+  allow create: if claimsOwner()
+  && request.resource.data.keys().hasAll(['type','provider','ref','uid','status','ts'])
+  && request.resource.data.status == 'confirmed';
+  allow update: if isAdmin();
+  allow delete: if isAdmin();
   }
   match /fitness_progress/{userId} {
   allow read:   if isAdmin() || (isAuthed() && request.auth.uid == userId);
@@ -839,72 +789,86 @@ service cloud.firestore {
   allow delete: if isAdmin();
   }
   match /fitness_gyms/{gymId} {
-  function noGymLockedFields() {
-  return resource == null
-  ? !request.resource.data.keys().hasAny(['rating','ratingCount','reviewCount','members','memberCount','verified','status','moderationHold','moderationStatus','moderationReleased','hidden','isVisible'])
-  : !request.resource.data.diff(resource.data).affectedKeys().hasAny(['rating','ratingCount','reviewCount','members','memberCount','verified','status','moderationHold','moderationStatus','moderationReleased','hidden','isVisible']);
-  }
   allow read:   if true;
-  allow create: if isAuthed() && request.auth.uid == gymId && noAdminFields() && noGymLockedFields();
-  allow update: if isAuthed() && request.auth.uid == gymId && uidUnchanged() && noAdminFields() && noGymLockedFields();
+  allow create: if isAuthed() && request.auth.uid == gymId && noAdminFields();
+  allow update: if isAuthed() && request.auth.uid == gymId && uidUnchanged() && noAdminFields();
   allow delete: if isAdmin();
   }
   match /fitness_classes/{classId} {
-  allow read:   if isAdmin();
-  allow write:  if false;
+  allow read:   if true;
+  allow create: if claimsOwner()
+  && noAdminFields()
+  && request.resource.data.keys().hasAll(['name','type','instructor','phone','uid','ts']);
+  allow update: if isAdmin()
+  || (isAuthed() && resource.data.uid == request.auth.uid
+  && request.resource.data.diff(resource.data)
+  .affectedKeys().hasOnly(['name','loc','time','fee','slots','desc','type','updatedAt'])
+  && uidUnchanged());
+  allow delete: if isAdmin() || (isAuthed() && resource.data.uid == request.auth.uid);
   }
   match /fitness_clubs/{clubId} {
-  allow read:   if isAdmin();
-  allow write:  if false;
+  allow read:   if true;
+  allow create: if claimsOwner()
+  && noAdminFields()
+  && request.resource.data.keys().hasAll(['name','type','uid','ts']);
+  allow update: if isAdmin()
+  || (isAuthed() && resource.data.uid == request.auth.uid
+  && request.resource.data.diff(resource.data)
+  .affectedKeys().hasOnly(['name','desc','meet','members','updatedAt'])
+  && uidUnchanged());
+  allow delete: if isAdmin() || (isAuthed() && resource.data.uid == request.auth.uid);
   }
   match /fitness_community_posts/{postId} {
-  allow read:   if isAdmin();
-  allow write:  if false;
+  allow read:   if true;
+  allow create: if claimsOwner()
+  && noAdminFields()
+  && request.resource.data.keys().hasAll(['uid','ts'])
+  && (request.resource.data.text == null || request.resource.data.text.size() <= 2000);
+  allow update: if isAdmin()
+  || (isAuthed() && resource.data.uid == request.auth.uid
+  && request.resource.data.diff(resource.data)
+  .affectedKeys().hasOnly(['text','likes','updatedAt'])
+  && uidUnchanged());
+  allow delete: if isAdmin() || (isAuthed() && resource.data.uid == request.auth.uid);
   }
   match /fitness_equipment/{itemId} {
-  allow read:   if isAdmin();
-  allow write:  if false;
+  allow read:   if true;
+  allow create: if claimsOwner()
+  && noAdminFields()
+  && request.resource.data.keys().hasAll(['uid','ts']);
+  allow update: if isAdmin()
+  || (isAuthed() && resource.data.uid == request.auth.uid
+  && request.resource.data.diff(resource.data)
+  .affectedKeys().hasOnly(['price','desc','sold','updatedAt'])
+  && uidUnchanged());
+  allow delete: if isAdmin() || (isAuthed() && resource.data.uid == request.auth.uid);
   }
   match /fitness_requests/{requestId} {
-  allow read:   if isAdmin();
-  allow write:  if false;
+  allow read:   if request.auth != null;
+  allow create: if claimsOwner()
+  && noAdminFields()
+  && request.resource.data.keys().hasAll(['text','uid','ts'])
+  && request.resource.data.text.size() <= 1000;
+  allow update: if isAdmin()
+  || (isAuthed() && resource.data.uid == request.auth.uid
+  && request.resource.data.diff(resource.data)
+  .affectedKeys().hasOnly(['text','phone','updatedAt'])
+  && uidUnchanged());
+  allow delete: if isAdmin() || (isAuthed() && resource.data.uid == request.auth.uid);
   }
   match /fitness_challenges/{entryId} {
-  allow read:   if isAdmin();
-  allow write:  if false;
+  allow read:   if true;
+  allow create: if isAuthed() && request.resource.data.uid == request.auth.uid && noAdminFields();
+  allow update: if isAuthed() && resource.data.uid == request.auth.uid && uidUnchanged();
+  allow delete: if isAdmin() || (isAuthed() && resource.data.uid == request.auth.uid);
   }
   match /fitness_checkins/{checkinId} {
-  allow read:   if isAdmin();
-  allow write:  if false;
-  }
-  match /providerMemberships/{membershipId} {
-  allow read:   if isAuthed()
-  && (resource.data.buyerUid == request.auth.uid
-  || resource.data.providerId == request.auth.uid
-  || isAdmin());
-  allow create, update, delete: if false;
-  match /attendance/{attendanceId} {
-  allow read:   if isAuthed()
-  && (get(/databases/$(database)/documents/providerMemberships/$(membershipId)).data.buyerUid == request.auth.uid
-  || get(/databases/$(database)/documents/providerMemberships/$(membershipId)).data.providerId == request.auth.uid
-  || isAdmin());
-  allow write:  if false;
-  }
-  match /events/{eventId} {
-  allow read:   if isAuthed()
-  && (get(/databases/$(database)/documents/providerMemberships/$(membershipId)).data.providerId == request.auth.uid
-  || isAdmin());
-  allow write:  if false;
-  }
-  match /releases/{releaseId} {
-  allow read:   if isAuthed()
-  && (get(/databases/$(database)/documents/providerMemberships/$(membershipId)).data.providerId == request.auth.uid
-  || isAdmin());
-  allow write:  if false;
-  }
-  }
-  match /fitnessMembershipClaims/{claimHash} {
-  allow read, write: if false;
+  allow read:   if isAdmin() || (isAuthed() && resource.data.gymUid == request.auth.uid);
+  allow create: if isAuthed()
+  && request.resource.data.gymUid == request.auth.uid
+  && request.resource.data.keys().hasAll(['memberName','gymUid','ts']);
+  allow update: if isAdmin();
+  allow delete: if isAdmin();
   }
   match /bnbListings/{listingId} {
   allow read:   if true;
@@ -1060,12 +1024,10 @@ service cloud.firestore {
   allow update: if isAdmin() || ownsByUid() || ownsByEmail();
   allow delete: if isAdmin() || ownsByUid() || ownsByEmail();
   }
-  /* 2026-10-03 (sokoni-b2): bookingFees had only BROWSER writers — sokoni-pay.js saveFee and sokoni-intasend.js
-     _recordCommission ("intasend_confirmed" decided in the page) — so any signed-in user could mint a fee or
-     commission record of any amount for themselves. No function writes it; admin.html only reads. Money records
-     are server-written or not written. */
   match /bookingFees/{feeId} {
-  allow create: if false;
+  allow create: if isAuthed()
+  && request.resource.data.keys().hasAll(['uid','amount','type'])
+  && request.resource.data.uid == request.auth.uid;
   allow read:   if isAdmin();
   allow update: if isAdmin();
   allow delete: if isAdmin();
@@ -1082,21 +1044,11 @@ service cloud.firestore {
   allow create, update: if isAdmin();
   allow read, delete:   if isAdmin();
   }
-  /* R0 (2026-09-30, owner): every unboxing post is approved in AdminOS (approve / decline / archive / delete)
-     before it is public, and every submission must REACH AdminOS. It used to be read:true with a client create
-     that set its own `verified` from a typed order id. Now:
-       - public read is approved-only; the author and admins read their own / all;
-       - a submission is born PENDING on the server (submitUnboxing), never by a browser write — superseded
-         2026-10-03, see below;
-       - every later change is an AdminOS action. */
-  /* 2026-10-03 (sokoni-5b review authority 7ec04c5): submitUnboxing / adminModerateReview (kind 'unboxing')
-     are the ONLY writers (Admin SDK). RELEASE PRECONDITION: 7ec04c5's functions AND the unboxing.html switch
-     from SokoniDB.saveUnboxingReview (direct setDoc, sokoni-db.js) to submitUnboxing must be live FIRST —
-     otherwise this denies every unboxing submission. */
   match /unboxingReviews/{reviewId} {
-  allow read:   if resource.data.status == "approved"
-  || (request.auth != null && (request.auth.uid == resource.data.uid || isAdmin()));
-  allow create, update, delete: if false;
+  allow read:   if true;
+  allow create: if claimsOwner();
+  allow update: if (isAdmin() || isOwner()) && uidUnchanged();
+  allow delete: if isAdmin() || isOwner();
   }
   match /shopEmployees/{empUid} {
   allow read:   if isAdmin()
@@ -1285,30 +1237,8 @@ service cloud.firestore {
   'startedAt','completedAt','driverLocation']));
   allow delete: if isAdmin();
   }
-  /* D-04 / D-09 (owner-authorized 2026-10-03). Census of every client writer (driver.html → sokoni-rider-hub.js,
-     delivery-tracking.html, seller.html, delivery-hub.js, checkout's sokoni-delivery.js):
-       create  — checkout only: status 'order_placed', parties/locations/items/pricing; never an assignment,
-                 PIN, proof or payout field.                                                    (D-09)
-       buyer   — 'buyer_confirmed', 'cancelled'
-       seller  — 'ready_for_pickup'
-       rider   — 'driver_accepted', 'driver_at_seller', 'in_transit'
-       'delivered' is written ONLY by the server (completeDeliveryWithPin / completeParcelWithPin, Admin SDK).
-     Before this, an assigned rider could write ANY status plus deliveredAt / payoutDue (a delivery "completed"
-     without the buyer's PIN), and a create could carry any field (a forged, pre-assigned or pre-paid job). The
-     only client that wrote 'delivered' (sokoni-delivery.js driverDelivered) has no caller.
-     NOT changed here (separate, ordered follow-up): the buyer branch still lists sellerPayoutReady, because live
-     sokoni-delivery.js writes it until the hosting release carrying 6f0a576 is out; removing it first would break
-     the buyer's confirm-receipt write. */
   match /packageRequests/{pkgId} {
-  allow create: if claimsOwner()
-  && (!request.resource.data.keys().hasAny(['status']) || request.resource.data.status == 'order_placed')
-  && (!request.resource.data.keys().hasAny(['buyerUid']) || request.resource.data.buyerUid == request.auth.uid)
-  && !request.resource.data.keys().hasAny([
-  'assignedDriverId','assignedDriverUid','assignedRiderId','riderId','driverId',
-  'deliveredAt','deliveryAuthorizedBy','deliveryAuthorizedActor',
-  'deliveryPinHash','deliveryPinIssued','deliveryPinIssuedAt',
-  'payoutDue','sellerPayoutReady','paymentVerified','buyerConfirmedAt',
-  'riderEarning','proofPhotoUrl','proofNote']);
+  allow create: if claimsOwner();
   allow read:   if isAdmin()
   || (isAuthed() && resource.data.uid              == request.auth.uid)
   || (isAuthed() && resource.data.buyerUid         == request.auth.uid)
@@ -1319,27 +1249,21 @@ service cloud.firestore {
   && request.resource.data.diff(resource.data)
   .affectedKeys().hasOnly(['status','cancelReason','confirmedAt',
   'buyerConfirmedAt','sellerPayoutReady',
-  'timeline','_lastTimelineEntry','updatedAt'])
-  && (request.resource.data.get('status', null) == resource.data.get('status', null)
-  || request.resource.data.status in ['buyer_confirmed','cancelled']))
+  'timeline','_lastTimelineEntry','updatedAt']))
   || (isAuthed() && resource.data.sellerUid == request.auth.uid
   && uidUnchanged()
   && request.resource.data.diff(resource.data)
   .affectedKeys().hasOnly(['status','sellerNote','readyAt',
-  'timeline','_lastTimelineEntry','updatedAt'])
-  && (request.resource.data.get('status', null) == resource.data.get('status', null)
-  || request.resource.data.status == 'ready_for_pickup'))
+  'timeline','_lastTimelineEntry','updatedAt']))
   || (isAuthed() && resource.data.assignedDriverId == request.auth.uid
   && uidUnchanged()
   && request.resource.data.diff(resource.data)
   .affectedKeys().hasOnly(['status','driverNote','updatedAt',
-  'pickedUpAt','arrivedAtSellerAt',
-  'acceptedAt','etaMin','proofNote',
+  'pickedUpAt','deliveredAt','arrivedAtSellerAt',
+  'acceptedAt','etaMin','payoutDue','proofNote',
   'driverLat','driverLng','driverSpeed',
   'driverLocUpdatedAt',
   'timeline','_lastTimelineEntry'])
-  && (request.resource.data.get('status', null) == resource.data.get('status', null)
-  || request.resource.data.status in ['driver_accepted','driver_at_seller','in_transit'])
   && (!request.resource.data.keys().hasAny(['driverLat','driverLng'])
   || _validGPS(request.resource.data.driverLat, request.resource.data.driverLng)));
   allow delete: if isAdmin();
@@ -1444,19 +1368,15 @@ service cloud.firestore {
   || _validGPS(request.resource.data.driverLat, request.resource.data.driverLng)));
   allow delete: if isAdmin();
   }
-  /* sokoni-4d census 2026-10-01: rider records (live location, phone) were readable by ANY signed-in user — only
-     the rider and admins now; buyer tracking reads deliveries / deliveryLocations. Reputation and earnings are
-     server-derived: the rider can no longer write their own rating, trip count or earnings. */
   match /deliveryRiders/{riderId} {
-  allow read:   if isAdmin() || (isAuthed() && request.auth.uid == riderId);
+  allow read:   if isAuthed();
   allow create: if isAuthed() && request.auth.uid == riderId
   && !request.resource.data.keys().hasAny(['approved','verified','suspended','banned','status','role','isAdmin']);
   allow update: if isAdmin()
   || (isAuthed() && request.auth.uid == riderId
   && !request.resource.data.diff(resource.data)
   .affectedKeys()
-  .hasAny(['approved','verified','suspended','banned','status','role','isAdmin',
-  'rating','ratingCount','tripsCompleted','earnings','todayEarnings','weekEarnings']));
+  .hasAny(['approved','verified','suspended','banned','status','role','isAdmin']));
   allow delete: if isAdmin();
   }
   match /userLocations/{uid}/places/{placeId} {
@@ -1630,10 +1550,6 @@ service cloud.firestore {
   && resource != null
   && request.resource.data.total <= resource.data.total);
   }
-  /* VERIFICATION BADGES — server-only writes (owner 2026-10-01, sokoni-4d fix 1). The served create let an owner
-     write verifications/{self} with facets.<type>.state:'approved' — a forged badge that the public /profile
-     projection would show. verificationSubmit / verificationDecide / verificationRevoke (Admin SDK) are the only
-     writers; no browser path writes here on any live or pending hosting lineage (census 2026-10-01). */
   match /verifications/{sellerUid} {
   allow read:   if isAdmin() || (isAuthed() && request.auth.uid == sellerUid);
   allow write:  if false;
@@ -1735,11 +1651,7 @@ service cloud.firestore {
   match /businesses/{bizId} {
   allow read:   if true;
   allow create: if false;
-  /* R1 (capability candidate 1): `capabilities` (the approved-capability stamp) and `business` (the C1 category stamp)
-     are SERVER-ONLY — not even an admin's RAW client write may touch them; the audited server paths are the only
-     writers. The owner branch below already cannot (its hasOnly allowlist excludes both). */
-  allow update: if (isAdmin()
-  && !request.resource.data.diff(resource.data).affectedKeys().hasAny(['capabilities', 'business']))
+  allow update: if isAdmin()
   || (isOwner() && uidUnchanged() && noAdminFields()
   && request.resource.data.diff(resource.data).affectedKeys()
   .hasOnly(['name','businessName','nameLower','tagline',
@@ -1787,18 +1699,11 @@ service cloud.firestore {
   allow delete: if isAdmin()
   || (isAuthed() && resource.data.ownerUid == request.auth.uid);
   }
-  /* Server-only writes (owner 2026-10-01): verification.html submits through verificationSubmit; AdminOS decides
-     through verificationDecide. Reads unchanged (the applicant tracks their own request). */
   match /verificationRequests/{reqId} {
   allow read:   if isAdmin()
   || (isAuthed() && resource.data.applicantUid == request.auth.uid);
   allow write:  if false;
   }
-  /* Completion-PIN programme (sokoni-70, 2026-10-01): server-written (Admin SDK) review / failure / security
-     records. Admins read them in AdminOS; NO client writes. deliveryPins deliberately has no rule (deny-all). */
-  match /bookingPaymentReviews/{ref} { allow read: if isAdmin(); allow write: if false; }
-  match /pinDeliveryFailures/{id}    { allow read: if isAdmin(); allow write: if false; }
-  match /pinSecurityEvents/{id}      { allow read: if isAdmin(); allow write: if false; }
   match /adminLog/{logId} {
   allow create: if isAdmin();
   allow read:   if isAdmin();
@@ -1826,14 +1731,10 @@ service cloud.firestore {
   allow read:   if isAdmin();
   allow update, delete: if isAdmin();
   }
-  /* 2026-10-03: a viewing is what makes a buyer eligible to review a listing (owner decision), so it must be
-     SERVER-recorded: servicesDispatch op scheduleViewing (Admin SDK) is the only writer. This browser create let
-     anyone forge {buyerUid:me, listingId:X} (extra fields were never restricted) and become review-eligible
-     (found by sokoni-5b). The only browser writer, property.html scheduleViewing, never satisfied it (no date/time
-     keys) — it was already refused on live — so closing it breaks nothing that worked. Reads unchanged; the
-     second propertyViewings block further down adds buyer/agent reads (duplicate blocks OR together). */
   match /propertyViewings/{docId} {
-  allow create: if false;
+  allow create: if isAuthed()
+  && request.resource.data.keys().hasAll(['propertyId','date','time','uid'])
+  && request.resource.data.uid == request.auth.uid;
   allow read:   if isAdmin()
   || (isAuthed() && resource.data.uid == request.auth.uid);
   allow update: if isAdmin();
@@ -1908,8 +1809,6 @@ service cloud.firestore {
   && request.resource.data.description is string
   && request.resource.data.description.size() <= 5000
   && request.resource.data.contactEmail is string
-  /* owner 2026-10-01 (sokoni-4d fix 2): parenthesised. Unwrapped, `A && … && !x || applicants == 0` let ANYONE —
-     signed out included — create a job by sending applicants: 0. */
   && (!('applicants' in request.resource.data) || request.resource.data.applicants == 0);
   allow update: if isAdmin()
   || (isAuthed() && resource.data.uid == request.auth.uid
@@ -3829,10 +3728,8 @@ service cloud.firestore {
   match /accountDrafts/{draftId} {
   allow read:  if isAuthed() && resource.data.accountId == request.auth.uid;
   }
-  /* sokoni-4d census 2026-10-01: accountProfiles carries rider date of birth / national ID and was world-readable.
-     Zero client readers on any ref; server-only writes; every doc carries accountId. */
   match /accountProfiles/{profileId} {
-  allow read:  if isAdmin() || (isAuthed() && resource.data.accountId == request.auth.uid);
+  allow read:  if true;
   }
   match /accountSubscriptions/{subId} {
   allow read:  if isAdmin() || (isAuthed() && resource.data.accountId == request.auth.uid);
@@ -4177,121 +4074,78 @@ service cloud.firestore {
   match /webhookLogs/{docId}     { allow read: if isAdmin(); allow write: if false; }
   match /fraudLog/{docId}        { allow read: if isAdmin(); allow write: if false; }
   match /fraudBlocklist/{docId}  { allow read: if isAdmin(); allow write: if false; }
-
-    /* -- SOKONI Connect -----------------------------------------------------
-       Added to the DEPLOYED ruleset (ad2033ad), not to a Git approximation of
-       it. A call SESSION is server-owned: connect-calls.js derives the
-       participants from a business anchor, and nothing in that file can stop a
-       browser writing connectSessions/{id} and adding itself — only this rule
-       can. "allow write: if false" leaves no writable field to guard.
-
-       Reads ARE permitted to participants, matched against resource.data, so
-       it is the SERVER'S participant list that decides — never one the
-       requester supplies. */
-    match /connectSessions/{sessionId} {
-      allow read: if isAdmin() || (isAuthed() && request.auth.uid in resource.data.participants);
-      allow write: if false;
-      match /signals/{signalId} {
-        allow read: if isAuthed() && request.auth.uid == resource.data.to;
-        allow write: if false;
-      }
-    }
-    match /connectVerifications/{verificationId} {
-      allow read: if isAdmin() || (isAuthed() && resource.data.subjectUid == request.auth.uid);
-      allow write: if false;
-    }
-    match /connectVideoGrants/{grantId} {
-      allow read: if isAdmin() || (isAuthed() &&
-                    (resource.data.ownerUid == request.auth.uid ||
-                     resource.data.memberUid == request.auth.uid));
-      allow write: if false;
-    }
-
-    /* -- Explicit server-only guards ----------------------------------------
-       Sixteen collections written exclusively by Cloud Functions through the
-       Admin SDK, which bypasses rules entirely. These blocks grant nothing;
-       they DENY, and the deployed ruleset reaches the same outcome through
-       Firestore's implicit default-deny.
-
-       GATE 2 PROVED THAT EQUIVALENCE rather than assuming it: 16 collections
-       x {get,list,create,update,delete} x {unauth,auth} = 160 cases, run
-       against both the explicit and the absent form, twice from clean
-       emulators. 160/160 DENIED in both, A == B throughout, with a
-       known-allowed control proving the harness could observe a difference.
-
-       They are carried for EXPLICIT INTENT: an "if false" states that a
-       collection is server-owned, where a default-deny merely happens to be
-       restrictive. Production does not depend on them for access control. */
-    match /_counters/{counterId} {
-      allow read, create, update, delete: if false;
-    }
-
-    match /productViewDedup/{dedupKey} {
-      allow read, write: if false;     
-    }
-
-    match /qrTokens/{tokenId} {
-      allow read, write: if false;
-    }
-
-    match /challenges/{challengeId} {
-        allow read:   if false; // CF-only
-        allow write:  if false;
-      }
-
-    match /_health/{docId} {
-      allow read:  if false;
-      allow write: if false;
-    }
-
-    match /eventOrderIdempotency/{key} {
-      allow read:  if false;
-      allow write: if false;
-    }
-
-    match /healthApptIdempotency/{key} {
-      allow read:  if false;
-      allow write: if false;
-    }
-
-    match /digitalPurchaseIdempotency/{key} {
-      allow read:  if false;
-      allow write: if false;
-    }
-
-    match /legalConsultIdempotency/{key} {
-      allow read:  if false;
-      allow write: if false;
-    }
-
-    match /versions/{version} {
-        allow read, write: if false; // CF-only — append-only version history
-      }
-
-    match /legalAcceptances/{acceptanceId} {
-      allow read, write: if false; // CF-only — signed acceptance records (evidence)
-    }
-
-    match /legalCertificates/{certificateId} {
-      allow read, write: if false; // CF-only — read via legalDispatch(legalGetCertificate)
-    }
-
-    match /legalConfig/{docId} {
-      allow read, write: if false; // CF-only — enforcement kill-switch. Client read would leak rollout state.
-    }
-
-    match /legalRegistry/{moduleId} {
-      allow read, write: if false; // CF-only — module agreement registry
-    }
-
-    match /entertainmentPurchaseIdempotency/{key} {
-      allow read:  if false;
-      allow write: if false;
-    }
-
-    match /_chaosCanary/{docId} {
-      allow read, write: if false; // CF-only — transient test documents
-    }
-
+  match /connectSessions/{sessionId} {
+  allow read: if isAdmin() || (isAuthed() && request.auth.uid in resource.data.participants);
+  allow write: if false;
+  match /signals/{signalId} {
+  allow read: if isAuthed() && request.auth.uid == resource.data.to;
+  allow write: if false;
+  }
+  }
+  match /connectVerifications/{verificationId} {
+  allow read: if isAdmin() || (isAuthed() && resource.data.subjectUid == request.auth.uid);
+  allow write: if false;
+  }
+  match /connectVideoGrants/{grantId} {
+  allow read: if isAdmin() || (isAuthed() &&
+  (resource.data.ownerUid == request.auth.uid ||
+  resource.data.memberUid == request.auth.uid));
+  allow write: if false;
+  }
+  match /_counters/{counterId} {
+  allow read, create, update, delete: if false;
+  }
+  match /productViewDedup/{dedupKey} {
+  allow read, write: if false;
+  }
+  match /qrTokens/{tokenId} {
+  allow read, write: if false;
+  }
+  match /challenges/{challengeId} {
+  allow read:   if false;
+  allow write:  if false;
+  }
+  match /_health/{docId} {
+  allow read:  if false;
+  allow write: if false;
+  }
+  match /eventOrderIdempotency/{key} {
+  allow read:  if false;
+  allow write: if false;
+  }
+  match /healthApptIdempotency/{key} {
+  allow read:  if false;
+  allow write: if false;
+  }
+  match /digitalPurchaseIdempotency/{key} {
+  allow read:  if false;
+  allow write: if false;
+  }
+  match /legalConsultIdempotency/{key} {
+  allow read:  if false;
+  allow write: if false;
+  }
+  match /versions/{version} {
+  allow read, write: if false;
+  }
+  match /legalAcceptances/{acceptanceId} {
+  allow read, write: if false;
+  }
+  match /legalCertificates/{certificateId} {
+  allow read, write: if false;
+  }
+  match /legalConfig/{docId} {
+  allow read, write: if false;
+  }
+  match /legalRegistry/{moduleId} {
+  allow read, write: if false;
+  }
+  match /entertainmentPurchaseIdempotency/{key} {
+  allow read:  if false;
+  allow write: if false;
+  }
+  match /_chaosCanary/{docId} {
+  allow read, write: if false;
+  }
   }
 }

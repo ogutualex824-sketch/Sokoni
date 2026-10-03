@@ -106,3 +106,32 @@ adds the storage quarantine (`unboxing-pending/{uid}/` owner-only, `unboxing/{ui
 - [ ] then `--only firestore:rules` → verify pointer → probes → live browser proof per surface; rollback `f259c0b5`
 
 **`b6f9cee` (2026-10-03):** `propertyViewings` browser create closed. Viewings make a buyer review-eligible, so `scheduleViewing` (server) is the only writer. sokoni-5b found the forgeable create; tests H-6/H-6b/H-6c. **Owner decision (2026-10-03):** keep `sportsVenueBookings` browser-created (claimsOwner). A booking request in your own name is enough to submit a venue review; AdminOS moderation is the filter. The rules do not change for bookings.
+
+## 2026-10-03: Fitness memberships + F0-R containment (sokoni-e3 `rules/fitness-memberships-on-served` @ `5ddf5d2`)
+
+Applied with e3's `scripts/build-fitness-rules-candidate.js --onto` to the **source** `firestore.rules`. The `.build` file was then regenerated with `scripts/build-firestore-rules.js`, and it is **byte-identical** to e3's direct application onto the previous `.build`.
+
+**Gate item 7, Fitness delta:** 10 hunks, every one inside a Fitness block:
+
+| Block | Change |
+|---|---|
+| `fitness_bookings`, `fitness_classes`, `fitness_clubs`, `fitness_community_posts`, `fitness_equipment`, `fitness_requests`, `fitness_challenges`, `fitness_checkins` | Read is admin-only; client write `false`. The legacy browser writers (D-3 self-confirmed bookings, D-5 unmoderated listings, D-14 exposed phones and forgeable points) are closed. |
+| `fitness_gyms` | Owners can no longer set rating, review/member counts, verified, status, moderation or visibility fields, on create or update. |
+| `providerMemberships` (+ `attendance` / `events` / `releases`), `fitnessMembershipClaims` | New and server-written only. Readable by the buyer, the gym (`providerId`) or an admin; attendance by the buyer, gym and admin; events and releases by the gym and admin. Claims deny all. |
+
+Duplicate check: each collection has exactly one match block. `.build` is 159840 B (65.5 % of 256 KiB, −1.2 KB).
+
+**e3's static test** (`RULES_FILE=firestore.rules.build node scripts/test-fitness-rules-static.js`): S1–S3, S5–S12 and S14 PASS; controls N1–N4, N6 and N7 are caught. Three failures are expected on this line only, because they compare against the served file and this line already differs from it:
+
+- **S4** counts hunks outside the Fitness blocks. Those are this line's earlier, already-recorded hunks.
+- **S13** expects the served `providers` block, which this line locks (`business` server-only).
+- **N5** mutates that same served `providers` text, which no longer exists here, so the control has nothing to bite on.
+
+None of them is a Fitness defect.
+
+**Not decided here:** the `providers.category` lock. It belongs to sokoni-5b's owner-given security slice (item 1, category immutability) and will land as 5b's own commit on this line.
+
+**Release precondition (Fitness), extending the list above:**
+- [ ] sokoni-e3 **F0 hosting** live first. Otherwise live `72dca56` fitness-hub.html listeners on classes, clubs and bookings get permission-denied.
+- [ ] Fitness functions live (the `providerMemberships` writers).
+- [ ] Emulator: `RULES_FILE=firestore.rules.build` `scripts/test-fitness-rules-emulator.js` under `emulators:exec`. QUEUED (memory). Its M16 (`providers.business`) passes only on this merged file.
