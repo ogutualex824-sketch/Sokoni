@@ -109,7 +109,11 @@ const read = (f) => fs.readFileSync(Path.join(ROOT, f), 'utf8');
   const aIdx = AL.indexOf('await ref.set({\n      status,', dIdx) >= 0 ? AL.indexOf('await ref.set({\n      status,', dIdx) : AL.indexOf('await ref.set({\r\n      status,', dIdx);
   ck('applicationDecide writes the decision record BEFORE the application (the trigger must find it)', dIdx > 0 && aIdx > dIdx);
   ck('the trigger passes the application id to decisionAuthority', /decisionAuthority\(after, appId\)/.test(AL));
-  ck('reconcile (single + sweep) refuses a status with no matching record', (AL.match(/await decisionAuthority\(app, (snap|d)\.id\)/g) || []).length === 2);
+  /* stage (c): reconcile uses the K13-A authority _authoritativeDecision (decider = a real admin, not the applicant) — RECORD-ONLY:
+     its body must never consult adminAudit again (b2 ruling 2026-10-04; behaviour: test-k13a B4). */
+  const _adBody = AL.slice(AL.indexOf('async function _authoritativeDecision('), AL.indexOf('\n}\n', AL.indexOf('async function _authoritativeDecision(')));
+  ck('reconcile (single + sweep) refuses a status with no matching record', (AL.match(/await _authoritativeDecision\(db, (snap|d)\.id, /g) || []).length === 2
+    && _adBody.length > 100 && /collection\('applicationDecisions'\)/.test(_adBody) && !/adminAudit/.test(_adBody) && /return \{ ok: false, reason: 'NO_DECISION_RECORD' \}/.test(_adBody));
 
   /* ═══ HUB PAGE ═══ */
   say('\n── entertainment.html: an entry point that owns nothing ──');

@@ -15,7 +15,7 @@
  *   B1  K13b: applicant writes status:'approved' → admin runs reconcile {all:true} → NOT projected, refused
  *   B2  applicant writes status:'approved' + decidedBy:<a real admin uid> → reconcile → NOT projected
  *   B3  a legitimate decision whose projection was lost is re-projected by reconcile, attributed to the real decider
- *   B4  a legacy decision backed by an adminAudit approve row (no decision record) IS reconcilable
+ *   B4  RECORD-ONLY (b2 ruling 2026-10-04): an adminAudit approve row WITHOUT a decision record is NOT reconcilable
  *   B5  an operator-label approval (decidedBy:"reindex", no record, no audit) stays NON-reconcilable
  *   B6  a legacy SELF-decided approval (audit performedBy == applicant) is NOT reconcilable
  *   B7  a decision record says rejected, the applicant rewrote status to approved → NOT reconcilable
@@ -131,7 +131,7 @@ const projected = (uid) => (data['providers/' + uid] || {}).status === 'active';
   mk('b4', 'u_b4', { status: 'approved', decidedBy: 'admin2' });
   await db.collection('adminAudit').add({ action: 'application_approve', applicationId: 'b4', targetUid: 'u_b4', performedBy: 'admin2' });
   await code(L.applicationReconcile(asAdmin('admin1', { applicationId: 'b4' })));
-  ck('B4  a legacy decision backed by an adminAudit approve row (no decision record) IS reconcilable', projected('u_b4'));
+  ck('B4  RECORD-ONLY: an adminAudit approve row by a real admin, with NO decision record, is NOT reconcilable (no legacy fallback)', !projected('u_b4'));
   mk('b5', 'u_b5', { status: 'approved', decidedBy: 'reindex' });
   await code(L.applicationReconcile(asAdmin('admin1', { applicationId: 'b5' })));
   ck('B5  an operator-label approval (decidedBy:"reindex", no record, no audit) stays NON-reconcilable', !projected('u_b5'));
