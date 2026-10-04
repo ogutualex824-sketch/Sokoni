@@ -432,6 +432,11 @@ exports.adminGetExecutiveDashboard = onCall({ region: 'us-central1', maxInstance
   todayStart.setHours(0, 0, 0, 0);
 
   const todayTs = Timestamp.fromDate(todayStart);
+  /* 2026-10-04: the ORDER counts the Orders/Overview pages read (ordersToday, activeOrders, activeDeliveries,
+     totalOrders) no longer turn a failed aggregate into 0 — they return null and errors[field] = reason, and the
+     page renders "—". activeOrders keeps its legacy definition (owner O-8); it is not an Orders-page figure. */
+  const errors = {};
+  const _nullCount = (field) => (e) => { errors[field] = 'UNREADABLE: ' + _aggReason(e); console.error('[adminGetExecutiveDashboard] count failed', field, _aggReason(e)); return { data: () => ({ count: null }) }; };
 
   /* count()-based aggregations — zero document fetches for counts.
      Only txToday fetches docs because revenue summation requires the amount field. */
@@ -443,14 +448,14 @@ exports.adminGetExecutiveDashboard = onCall({ region: 'us-central1', maxInstance
          activeUsersCount, merchantsCount, pendingVerifCount, pendingAppsCount, reviewsToModerateCount] = await Promise.all([
     db.collection('users').count().get().catch(() => ({ data: () => ({ count: 0 }) })),
     db.collection('users').where('createdAt', '>=', todayTs).count().get().catch(() => ({ data: () => ({ count: 0 }) })),
-    db.collection('orders').where('createdAt', '>=', todayTs).count().get().catch(() => ({ data: () => ({ count: 0 }) })),
-    db.collection('orders').where('status', 'in', ['pending', 'processing', 'confirmed']).count().get().catch(() => ({ data: () => ({ count: 0 }) })),
+    db.collection('orders').where('createdAt', '>=', todayTs).count().get().catch(_nullCount('ordersToday')),
+    db.collection('orders').where('status', 'in', ['pending', 'processing', 'confirmed']).count().get().catch(_nullCount('activeOrders')),
     db.collection('payments').where('createdAt', '>=', todayTs).limit(1000).get().catch(() => ({ docs: [] })),   /* canonical payment record (`transactions` was empty); status COMPLETE filtered in memory */
     db.collection('supportTickets').where('status', '==', 'open').count().get().catch(() => ({ data: () => ({ count: 0 }) })),
     db.collection('disputes').where('status', '==', 'open').count().get().catch(() => ({ data: () => ({ count: 0 }) })),
     db.collection('subscriptions').where('status', 'in', ['active', 'trialing']).count().get().catch(() => ({ data: () => ({ count: 0 }) })),
     db.collection('payoutRequests').where('status', '==', 'pending').count().get().catch(() => ({ data: () => ({ count: 0 }) })),   /* canonical payout source (matches super-admin queue) */
-    db.collection('orders').where('deliveryStatus', 'in', ['in_transit', 'picking_up']).count().get().catch(() => ({ data: () => ({ count: 0 }) })),
+    db.collection('orders').where('deliveryStatus', 'in', ['in_transit', 'picking_up']).count().get().catch(_nullCount('activeDeliveries')),
     /* Service bookings live in providerBookings — NEVER inferred from `orders` (canonical rule).
        Added as NEW fields so the admin.html rendering (other agent's) is never broken. */
     db.collection('providerBookings').where('createdAt', '>=', todayTs).count().get().catch(() => ({ data: () => ({ count: 0 }) })),
@@ -458,7 +463,7 @@ exports.adminGetExecutiveDashboard = onCall({ region: 'us-central1', maxInstance
     /* Canonical platform totals for the command-center overview. */
     db.collection('providers').count().get().catch(() => ({ data: () => ({ count: 0 }) })),
     db.collection('providers').where('status', 'in', ['active', 'approved']).count().get().catch(() => ({ data: () => ({ count: 0 }) })),
-    db.collection('orders').count().get().catch(() => ({ data: () => ({ count: 0 }) })),
+    db.collection('orders').count().get().catch(_nullCount('totalOrders')),
     db.collection('providerBookings').count().get().catch(() => ({ data: () => ({ count: 0 }) })),
     db.collection('payoutRequests').where('status', '==', 'pending').limit(200).get().catch(() => ({ docs: [] })),
     /* P1 command-center additions — all canonical counts, catch→0 (never fabricate). */
@@ -498,6 +503,7 @@ exports.adminGetExecutiveDashboard = onCall({ region: 'us-central1', maxInstance
     pendingProviderVerification: pendingVerifCount.data().count,
     pendingMerchantApprovals: pendingAppsCount.data().count,
     reviewsAwaitingModeration: reviewsToModerateCount.data().count,
+    errors,   /* field → reason, for every figure above that is null because its read failed */
   };
 });
 
@@ -612,13 +618,14 @@ exports.adminGetFinance = onCall({ region: 'us-central1', maxInstances: 10, enfo
   const start30 = Timestamp.fromMillis(start30ms);
 
   const CAP_TX = 3000, CAP_WALLET = 2000, CAP_REQ = 1000;
+  const finErrors = {};
   const [paysSnap, commSnap, settleSnap, reqSnap, walletsSnap, ordersSnap] = await Promise.all([
     db.collection('payments').where('createdAt', '>=', start30).limit(CAP_TX).get().catch(() => ({ docs: [] })),
     db.collection('commissionLedger').where('createdAt', '>=', start30).limit(CAP_TX).get().catch(() => ({ docs: [] })),
     db.collection('providerPayouts').where('createdAt', '>=', start30).limit(CAP_TX).get().catch(() => ({ docs: [] })),
     db.collection('payoutRequests').limit(CAP_REQ).get().catch(() => ({ docs: [] })),
     db.collection('wallets').limit(CAP_WALLET).get().catch(() => ({ docs: [] })),
-    db.collection('orders').where('createdAt', '>=', start30).limit(CAP_TX).get().catch(() => ({ docs: [] })),   /* product GMV */
+    db.collection('orders').where('createdAt', '>=', start30).limit(CAP_TX).get().catch((e) => { finErrors.orders = 'UNREADABLE: ' + _aggReason(e); console.error('[adminGetFinance] orders read failed', _aggReason(e)); return null; }),   /* product GMV — null on failure, never an empty list (2026-10-04) */
   ]);
 
   const round = (n) => Math.round((n || 0) * 100) / 100;
@@ -679,8 +686,8 @@ exports.adminGetFinance = onCall({ region: 'us-central1', maxInstances: 10, enfo
 
   /* Product GMV (30d) from `orders` — only realised (paid/completed/delivered). */
   const PAID_ORDER = new Set(['paid', 'completed', 'delivered', 'fulfilled']);
-  let productGMV = 0, refunds = 0;
-  for (const d of (ordersSnap.docs || [])) {
+  let productGMV = ordersSnap ? 0 : null, refunds = ordersSnap ? 0 : null;
+  for (const d of (ordersSnap ? ordersSnap.docs : [])) {
     const x = d.data(); const s = String(x.status || '').toLowerCase();
     const amt = Number(x.total != null ? x.total : x.amount) || 0;
     if (PAID_ORDER.has(s)) productGMV += amt;
@@ -693,22 +700,23 @@ exports.adminGetFinance = onCall({ region: 'us-central1', maxInstances: 10, enfo
   const b30 = B.last30d;
   const reconciliation = {
     window: '30d',
-    grossRevenue:         round(productGMV + b30.serviceRevenue),   /* product GMV + service GMV */
-    productRevenue:       round(productGMV),
+    grossRevenue:         productGMV === null ? null : round(productGMV + b30.serviceRevenue),   /* product GMV + service GMV */
+    productRevenue:       productGMV === null ? null : round(productGMV),
     serviceRevenue:       round(b30.serviceRevenue),
     commission:           round(b30.totalCommission),
     productCommission:    round(b30.productCommission),
     serviceCommission:    round(b30.serviceCommission),
     gatewayFees:          round(b30.gatewayFees),
-    refunds:              round(refunds),
+    refunds:              refunds === null ? null : round(refunds),
     walletFloat:          round(walletLiability),
     pendingWithdrawals:   round(pendingAmt),
     completedWithdrawals: round(paidAmt),
-    netPlatformRevenue:   round(b30.totalCommission - b30.gatewayFees - refunds),
+    netPlatformRevenue:   refunds === null ? null : round(b30.totalCommission - b30.gatewayFees - refunds),
   };
 
   return {
     reconciliation,   /* ← the canonical summary; UIs read THIS, not their own math */
+    errors: finErrors,   /* 2026-10-04: field source → reason; a null reconciliation figure is unknown, not 0 */
     currency: 'KES',
     generatedAt: new Date().toISOString(),
     buckets: B,
@@ -725,7 +733,7 @@ exports.adminGetFinance = onCall({ region: 'us-central1', maxInstances: 10, enfo
       providerPayouts: (settleSnap.docs || []).length >= CAP_TX,
       payoutRequests: (reqSnap.docs || []).length >= CAP_REQ,
       wallets: (walletsSnap.docs || []).length >= CAP_WALLET,
-      orders: (ordersSnap.docs || []).length >= CAP_TX,
+      orders: ordersSnap ? ordersSnap.docs.length >= CAP_TX : null,
     },
     sources: {
       revenue: 'commissionLedger.sokoniCut + providerPayouts.commission',
@@ -975,16 +983,269 @@ exports._h.adminGetReports  = exports._h.adminGetFinance;
 /* ─────────────────────────────────────────────────────────────────────────
    Orders
 ──────────────────────────────────────────────────────────────────────────── */
+/* ── ORDERS — canonical vocabulary + state semantics (2026-10-04) ────────────────────────────────────────────
+   Source: Orders census 2026-10-04 §A (dataset `orders/{id}` only; `paymentVerified === true` is the ONLY
+   server-only paid flag; `paidAmount` is the provider-confirmed KES amount; `total` on a browser pre-write is
+   BUYER-written) and the owner's accepted defaults O-1..O-13:
+     O-1 Total = every scoped doc, with a separate Awaiting-payment bucket; headline "placed" = PV.
+     O-2 scope = kind ∈ {undefined, null, 'product'}.          O-3 cancelled && PV = "refund due".
+     O-4 revenue = Σ paidAmount over PV (KES), server-written total only on server-created docs, unpriced shown.
+     O-5 refunded = a LABEL bucket, never netted.               O-6 status 'paid' && !PV = outstanding, flagged.
+     O-7 delivered = accepted/processing; completed alone = completed.
+     O-13 adminUpdateOrderStatus validates against THIS list.
+   Owner/coordinator mapping of the five live statuses (prod read-only counts 2026-10-04):
+     pending_payment → awaitingPayment ⊂ outstanding; paid / confirmed / in_transit / delivered → acceptedProcessing.
+   One list, used by the summary, the list filter and the status update — never three copies. */
+const _ORDER_STATUS = Object.freeze({
+  awaiting:   Object.freeze(['pending_payment', 'pending', 'draft', 'awaiting_payment_attestation', 'payment_failed']),
+  paid:       Object.freeze(['paid', 'awaiting_confirmation']),
+  processing: Object.freeze(['confirmed', 'processing', 'accepted', 'preparing', 'ready', 'packing', 'ready_for_pickup',
+    'awaiting_rider', 'rider_assigned', 'driver_assigned', 'assigned', 'rider_en_route', 'picked_up', 'in_transit',
+    'shipped', 'out_for_delivery', 'delivered', 'fulfilled']),
+  completed:  Object.freeze(['completed']),
+  cancelled:  Object.freeze(['cancelled', 'canceled']),
+  refunded:   Object.freeze(['refunded']),
+});
+const ORDER_STATUSES = Object.freeze([].concat(..._ORDER_STATUS.awaiting, _ORDER_STATUS.paid, _ORDER_STATUS.processing,
+  _ORDER_STATUS.completed, _ORDER_STATUS.cancelled, _ORDER_STATUS.refunded));
+exports.ORDER_STATUSES = ORDER_STATUSES;
+exports._ORDER_STATUS = _ORDER_STATUS;
+
+/* The order ops answer authorization failures as permission-denied (an HttpsError), BEFORE any read. Same
+   predicate as _requireAdmin (admin || superAdmin); App Check is enforced by adminOsDispatch. */
+function _requireAdminCallable(req) {
+  if (!req || !req.auth || !req.auth.token || (!req.auth.token.admin && !req.auth.token.superAdmin)) {
+    throw new HttpsError('permission-denied', 'Administrator access is required.');
+  }
+}
+const _GRPC = { 1: 'CANCELLED', 2: 'UNKNOWN', 3: 'INVALID_ARGUMENT', 4: 'DEADLINE_EXCEEDED', 5: 'NOT_FOUND', 7: 'PERMISSION_DENIED',
+  8: 'RESOURCE_EXHAUSTED', 9: 'FAILED_PRECONDITION', 10: 'ABORTED', 13: 'INTERNAL', 14: 'UNAVAILABLE', 16: 'UNAUTHENTICATED' };
+/* A reason an administrator can act on, without internals: the gRPC status NAME only (no message, no stack). */
+function _aggReason(e) {
+  const c = e && e.code;
+  return (typeof c === 'number' && _GRPC[c]) || (typeof c === 'string' && /^[A-Za-z_-]{1,40}$/.test(c) ? c.toUpperCase() : 'ERROR');
+}
+
+/* ── adminOrdersSummary (dispatcher op only — NOT a standalone function) ───────────────────────────────────────
+   Every bucket is a number derived ONLY from successful Firestore aggregates, or null with errors[bucket] = reason.
+   A failed aggregate is NEVER 0 (no allSettled→0, no catch→0). A real 0 from a successful aggregate is returned.
+   Equality-only filters: no new composite index. Status sets are counted one status value at a time and added.
+   COST per call: 1 total + 1 PV aggregate (count+sum+average) + 3 scope counts + 9 status counts + 29 status&&PV
+   counts = 43 aggregation queries (each billed ≥1 read, +1 read per 1,000 index entries matched) + the bounded
+   server-created fallback read (≤ _SUMMARY_FALLBACK_CAP docs). No order document is read for the counts. */
+const _SUMMARY_FALLBACK_CAP = 500;
+async function _ordersSummary(db) {
+  const { AggregateField } = require('firebase-admin/firestore');
+  const col = db.collection('orders');
+  const PVq = () => col.where('paymentVerified', '==', true);
+  /* bags of successful counts; each bag has its own failure map and a label prefix for reasons */
+  const S = {}, SP = {}, inputs = {}, P = {};
+  const ERRS = new Map([[S, {}], [SP, {}], [inputs, {}], [P, {}]]);
+  const LABEL = new Map([[S, 'status=='], [SP, 'paymentVerified&&status=='], [inputs, ''], [P, '']]);
+  const tasks = [];
+  const fail = (bag, key, e) => { ERRS.get(bag)[key] = _aggReason(e); console.error('[adminOrdersSummary] aggregate failed', LABEL.get(bag) + key, _aggReason(e)); };
+  const cnt = (bag, key, q) => tasks.push(Promise.resolve().then(() => q.count().get()).then(
+    (s) => { const n = s.data().count; if (typeof n !== 'number' || !Number.isFinite(n)) throw Object.assign(new Error('bad count'), { code: 13 }); bag[key] = n; }).catch((e) => fail(bag, key, e)));
+  cnt(inputs, 'total', col);
+  /* scope (O-2): docs carrying ANY kind = orderBy('kind') count; minus kind=='product', minus kind==null. */
+  cnt(inputs, 'kindAny', col.orderBy('kind'));
+  cnt(inputs, 'kindProduct', col.where('kind', '==', 'product'));
+  cnt(inputs, 'kindNull', col.where('kind', '==', null));
+  for (const v of [..._ORDER_STATUS.awaiting, 'paid', ..._ORDER_STATUS.cancelled, ..._ORDER_STATUS.refunded]) cnt(S, v, col.where('status', '==', v));
+  for (const v of ORDER_STATUSES) cnt(SP, v, PVq().where('status', '==', v));
+  /* placed (PV) + revenue in ONE aggregate: count, Σ paidAmount, average paidAmount. */
+  let pv = null;
+  tasks.push(Promise.resolve().then(() => PVq().aggregate({ n: AggregateField.count(), s: AggregateField.sum('paidAmount'), a: AggregateField.average('paidAmount') }).get()).then(
+    (snap) => { const d = snap.data(); if (typeof d.n !== 'number' || !Number.isFinite(d.n) || typeof d.s !== 'number' || !Number.isFinite(d.s)) throw Object.assign(new Error('bad aggregate'), { code: 13 }); pv = d; P.placed = d.n; }).catch((e) => fail(P, 'placed', e)));
+  /* O-4 fallback: PV docs with no numeric paidAmount whose `total` is SERVER-written. Per census A1/A4 the only
+     such live writer is verifyIntasendPayment (VIP), which stamps a non-empty `sessionId`; the browser pre-write
+     never writes sessionId, and any PV pre-write carries paidAmount (webhook paidFields) so it is excluded below.
+     Bounded read; over the cap the fallback is withheld (null + reason), never truncated into a total. */
+  let fb = null, fbErr = null;
+  tasks.push(Promise.resolve().then(() => col.where('sessionId', '>', '').limit(_SUMMARY_FALLBACK_CAP + 1).get()).then(
+    (snap) => {
+      if (snap.docs.length > _SUMMARY_FALLBACK_CAP) { fbErr = 'FALLBACK_CAPPED: more than ' + _SUMMARY_FALLBACK_CAP + ' server-created (sessionId) orders'; return; }
+      let kes = 0, n = 0;
+      for (const d of snap.docs) {
+        const x = d.data() || {};
+        if (x.paymentVerified !== true) continue;
+        if (typeof x.paidAmount === 'number' && Number.isFinite(x.paidAmount)) continue;      /* priced by Σ paidAmount */
+        if (x.kind != null && x.kind !== 'product') continue;
+        if (typeof x.total !== 'number' || !Number.isFinite(x.total) || x.total < 0) continue;  /* stays unpriced */
+        kes += x.total; n++;
+      }
+      fb = { kes, n };
+    }).catch((e) => { fbErr = _aggReason(e); console.error('[adminOrdersSummary] fallback read failed', _aggReason(e)); }));
+  await Promise.all(tasks);
+
+  const buckets = {}, errors = {};
+  const has = (bag, k) => typeof bag[k] === 'number';
+  const why = (pairs) => pairs.filter(([bag, k]) => !has(bag, k)).map(([bag, k]) => LABEL.get(bag) + k + ':' + (ERRS.get(bag)[k] || 'MISSING')).join(', ');
+  /* derive(name, [[bag,key]...], fn): null + reason unless every input aggregate succeeded and the result is sane. */
+  const derive = (name, pairs, fn) => {
+    const miss = why(pairs);
+    if (miss) { buckets[name] = null; errors[name] = 'UNREADABLE: ' + miss; return; }
+    const v = fn();
+    if (!Number.isFinite(v) || v < 0) { buckets[name] = null; errors[name] = 'INCONSISTENT_SNAPSHOT: counts changed between aggregates; retry'; return; }
+    buckets[name] = v;
+  };
+  const sum = (bag, list) => list.reduce((a, v) => a + bag[v], 0);
+  const pairsOf = (bag, list) => list.map((v) => [bag, v]);
+  const PAIDISH = [..._ORDER_STATUS.paid, ..._ORDER_STATUS.processing];
+  const MAPPED_PV = [...PAIDISH, ..._ORDER_STATUS.completed, ..._ORDER_STATUS.cancelled, ..._ORDER_STATUS.refunded];
+
+  /* scope gate (O-2): the bucket queries cannot exclude foreign kinds without composite indexes, so if ANY doc
+     carries a kind outside {null, 'product'} (or the scope cannot be read) every figure is withheld. */
+  const scope = { collection: 'orders', kind: 'product', rule: "kind ∈ {undefined, null, 'product'}", foreignKindCount: null };
+  const scopeMiss = why([[inputs, 'kindAny'], [inputs, 'kindProduct'], [inputs, 'kindNull']]);
+  let scopeBlock = null;
+  if (scopeMiss) scopeBlock = 'SCOPE_UNREADABLE: ' + scopeMiss;
+  else {
+    scope.foreignKindCount = inputs.kindAny - inputs.kindProduct - inputs.kindNull;
+    if (scope.foreignKindCount < 0) { scope.foreignKindCount = null; scopeBlock = 'INCONSISTENT_SNAPSHOT: counts changed between aggregates; retry'; }
+    else if (scope.foreignKindCount > 0) scopeBlock = 'SCOPE_FOREIGN_KIND: ' + scope.foreignKindCount + " order(s) carry a kind other than 'product'; per-bucket exclusion needs composite indexes (not deployed)";
+  }
+
+  derive('total', [[inputs, 'total']], () => inputs.total);
+  derive('placed', [[P, 'placed']], () => P.placed);
+  derive('awaitingPayment', [...pairsOf(S, _ORDER_STATUS.awaiting), ...pairsOf(SP, _ORDER_STATUS.awaiting)],
+    () => _ORDER_STATUS.awaiting.reduce((a, v) => a + (S[v] - SP[v]), 0));
+  derive('paidStatusUnverified', [[S, 'paid'], [SP, 'paid']], () => S.paid - SP.paid);
+  /* outstanding = every scoped doc WITHOUT PV that is not cancelled/refunded (includes paidStatusUnverified, O-6) */
+  derive('outstanding', [[inputs, 'total'], [P, 'placed'], ...pairsOf(S, _ORDER_STATUS.cancelled), ...pairsOf(SP, _ORDER_STATUS.cancelled),
+    ...pairsOf(S, _ORDER_STATUS.refunded), ...pairsOf(SP, _ORDER_STATUS.refunded)],
+    () => (inputs.total - P.placed) - (sum(S, _ORDER_STATUS.cancelled) - sum(SP, _ORDER_STATUS.cancelled)) - (sum(S, _ORDER_STATUS.refunded) - sum(SP, _ORDER_STATUS.refunded)));
+  derive('acceptedProcessing', pairsOf(SP, PAIDISH), () => sum(SP, PAIDISH));
+  derive('paidNotYetAccepted', pairsOf(SP, _ORDER_STATUS.paid), () => sum(SP, _ORDER_STATUS.paid));   /* ⊂ acceptedProcessing */
+  derive('completed', pairsOf(SP, _ORDER_STATUS.completed), () => sum(SP, _ORDER_STATUS.completed));
+  derive('cancelled', pairsOf(S, _ORDER_STATUS.cancelled), () => sum(S, _ORDER_STATUS.cancelled));
+  derive('cancelledRefundDue', pairsOf(SP, _ORDER_STATUS.cancelled), () => sum(SP, _ORDER_STATUS.cancelled));
+  derive('refundedLabelled', pairsOf(S, _ORDER_STATUS.refunded), () => sum(S, _ORDER_STATUS.refunded));
+  /* other = PV docs whose status maps to no bucket (unknown text, or a PV doc carrying an unpaid status) */
+  derive('other', [[P, 'placed'], ...pairsOf(SP, MAPPED_PV)], () => P.placed - sum(SP, MAPPED_PV));
+
+  /* revenue (O-4), KES. kes covers pricedCount docs exactly; the rest are unpricedCount (rendered "—"). */
+  const revenue = { kes: null, pricedCount: null, unpricedCount: null,
+    basis: 'Σ paidAmount over paymentVerified==true (provider-confirmed, KES) + server-written total on server-created (sessionId) orders without paidAmount. All statuses, refunds not netted (O-5). Buyer-written totals never counted.' };
+  if (!pv) errors.revenue = 'UNREADABLE: placed:' + (ERRS.get(P).placed || 'MISSING');
+  else {
+    let paidPriced = null;
+    if (pv.a === null || pv.a === undefined) paidPriced = pv.s === 0 ? 0 : null;
+    else if (pv.a !== 0 && Number.isFinite(pv.a)) { const n = pv.s / pv.a, r = Math.round(n); if (Math.abs(n - r) <= 1e-6 * Math.max(1, r)) paidPriced = r; }
+    let kes = pv.s, priced = paidPriced;
+    if (fb) { kes += fb.kes; if (priced !== null) priced += fb.n; }
+    else errors.revenueFallback = 'UNREADABLE: ' + (fbErr || 'MISSING') + ' — server-created orders without paidAmount are counted as unpriced';
+    revenue.kes = Math.round(kes * 100) / 100;
+    if (priced === null) errors.revenuePricedCount = 'INDETERMINATE: the number of orders carrying a numeric paidAmount cannot be derived from the aggregate';
+    else if (priced > pv.n) errors.revenuePricedCount = 'INCONSISTENT_SNAPSHOT: counts changed between aggregates; retry';
+    else { revenue.pricedCount = priced; revenue.unpricedCount = pv.n - priced; }
+  }
+
+  if (scopeBlock) {
+    for (const k of Object.keys(buckets)) { buckets[k] = null; errors[k] = scopeBlock; }
+    revenue.kes = null; revenue.pricedCount = null; revenue.unpricedCount = null; errors.revenue = scopeBlock;
+  }
+  return {
+    asOf: new Date().toISOString(),
+    currency: 'KES',
+    buckets,
+    revenue,
+    scope,
+    mapping: {
+      awaitingPayment: ['!paymentVerified && status ∈', ..._ORDER_STATUS.awaiting],
+      paidStatusUnverified: ["!paymentVerified && status == 'paid'"],
+      outstanding: ['!paymentVerified && status ∉ cancelled/refunded (⊇ awaitingPayment, paidStatusUnverified)'],
+      acceptedProcessing: ['paymentVerified && status ∈', ...PAIDISH],
+      completed: ['paymentVerified && status ∈', ..._ORDER_STATUS.completed],
+      cancelled: ['status ∈', ..._ORDER_STATUS.cancelled],
+      cancelledRefundDue: ['paymentVerified && status ∈', ..._ORDER_STATUS.cancelled],
+      refundedLabelled: ['status ∈', ..._ORDER_STATUS.refunded, '(label only, not netted)'],
+      other: ['paymentVerified && status not mapped above'],
+    },
+    errors,
+  };
+}
+exports._h.adminOrdersSummary = async (req) => {
+  _requireAdminCallable(req);                       /* before ANY read */
+  const data = req.data == null ? {} : req.data;
+  if (typeof data !== 'object' || Array.isArray(data)) throw new HttpsError('invalid-argument', 'Request must be an object.');
+  const extra = Object.keys(data).filter((k) => k !== 'op');
+  if (extra.length) throw new HttpsError('invalid-argument', 'adminOrdersSummary takes no parameters (got: ' + extra.slice(0, 5).map((k) => String(k).slice(0, 32)).join(', ') + ').');
+  return _ordersSummary(getFirestore());
+};
+
+/* ── adminGetOrders — cursor pagination over the SAME dataset (2026-10-04) ──────────────────────────────────────
+   in  { status?, limit? (1..200, default 50), cursor? }     out { orders, nextCursor, scope }
+   Back-compat: callers without a cursor get the first page and still read `orders`.
+   Order: createdAt DESC, document id DESC (startAfter the cursor document's own snapshot — full timestamp precision).
+   status filter: needs the composite index orders(status ASC, createdAt DESC) — confirmed MISSING in production on
+   2026-10-04; until it is deployed the call answers FAILED_PRECONDITION with that index named (not `internal`).
+   hubType: REMOVED. It was applied in memory AFTER the limit (a partial page shown as complete), and no live writer
+   sets `hubType` on orders. A caller that sends it is refused rather than given an unfiltered page. */
+function _encodeOrdersCursor(id) { return Buffer.from(JSON.stringify({ v: 1, id })).toString('base64url'); }
+function _decodeOrdersCursor(c) {
+  if (typeof c !== 'string' || !c || c.length > 512) return null;
+  try {
+    const o = JSON.parse(Buffer.from(c, 'base64url').toString('utf8'));
+    if (!o || o.v !== 1 || typeof o.id !== 'string' || !o.id || o.id.length > 700 || o.id.includes('/')) return null;
+    return o.id;
+  } catch (_) { return null; }
+}
 exports.adminGetOrders = onCall({ region: 'us-central1', maxInstances: 10, enforceAppCheck: true }, exports._h.adminGetOrders = async (req) => {
-  _requireAdmin(req);
-  const { status, hubType, limit: lim } = req.data;
+  _requireAdminCallable(req);                       /* before ANY read */
+  const data = req.data == null ? {} : req.data;
+  if (typeof data !== 'object' || Array.isArray(data)) throw new HttpsError('invalid-argument', 'Request must be an object.');
+  const { status, hubType, limit: lim, cursor } = data;
+  if (hubType != null && hubType !== '') {
+    throw new HttpsError('invalid-argument', 'hubType filtering is not supported: it was applied after the page limit, so pages were incomplete.');
+  }
+  const st = status == null || status === '' ? null : status;
+  if (st !== null && (typeof st !== 'string' || !ORDER_STATUSES.includes(st))) {
+    throw new HttpsError('invalid-argument', 'Unknown order status. Allowed: ' + ORDER_STATUSES.join(', '), { allowed: ORDER_STATUSES });
+  }
+  let n = 50;
+  if (lim != null) {
+    n = Number(lim);
+    if (typeof lim === 'boolean' || !Number.isFinite(n) || n < 1) throw new HttpsError('invalid-argument', 'limit must be a number from 1 to 200.');
+    n = Math.min(Math.floor(n), 200);
+  }
+  let cursorId = null;
+  if (cursor != null && cursor !== '') {
+    cursorId = _decodeOrdersCursor(cursor);
+    if (!cursorId) throw new HttpsError('invalid-argument', 'Malformed cursor.');
+  }
+  const { FieldPath } = require('firebase-admin/firestore');
   const db = getFirestore();
-  let q = db.collection('orders').orderBy('createdAt', 'desc').limit(Math.min(lim || 50, 200));
-  if (status) q = q.where('status', '==', status);
-  const snap = await q.get();
-  let orders = snap.docs.map(d => ({ id: d.id, ...d.data(), createdAt: d.data().createdAt?.toDate?.()?.toISOString() || null }));
-  if (hubType) orders = orders.filter(o => o.hubType === hubType || o.type === hubType);
-  return { orders };
+  const col = db.collection('orders');
+  let q = st ? col.where('status', '==', st) : col;
+  q = q.orderBy('createdAt', 'desc').orderBy(FieldPath.documentId(), 'desc');
+  if (cursorId) {
+    const cs = await col.doc(cursorId).get();
+    if (!cs.exists) throw new HttpsError('failed-precondition', 'The page cursor points at an order that no longer exists. Reload from the first page.', { reason: 'CURSOR_STALE' });
+    try { q = q.startAfter(cs); } catch (_) {
+      throw new HttpsError('failed-precondition', 'The page cursor can no longer be used. Reload from the first page.', { reason: 'CURSOR_STALE' });
+    }
+  }
+  let snap;
+  try { snap = await q.limit(n + 1).get(); } catch (e) {
+    const code = _aggReason(e);
+    console.error('[adminGetOrders] query failed', code, st ? 'status-filtered' : 'unfiltered');
+    if (code === 'FAILED_PRECONDITION' && st) {
+      throw new HttpsError('failed-precondition',
+        'Filtering orders by status needs the Firestore index orders (status ASC, createdAt DESC), which is not deployed yet. The unfiltered list still works.',
+        { reason: 'INDEX_REQUIRED', index: { collectionGroup: 'orders', fields: ['status ASC', 'createdAt DESC'] } });
+    }
+    throw new HttpsError('unavailable', 'The orders list could not be read. Try again.', { reason: code });
+  }
+  const docs = snap.docs.slice(0, n);
+  const orders = docs.map((d) => { const x = d.data() || {}; return { id: d.id, ...x, createdAt: x.createdAt?.toDate?.()?.toISOString() || null }; });
+  const nextCursor = snap.docs.length > n && docs.length ? _encodeOrdersCursor(docs[docs.length - 1].id) : null;
+  return {
+    orders,
+    nextCursor,
+    scope: { collection: 'orders', status: st, orderBy: 'createdAt desc, id desc', pageSize: n,
+      kindFiltered: false, excludes: 'orders without createdAt are not listed (they are counted by adminOrdersSummary)' },
+  };
 });
 
 /* ── SECURITY CONVERGENCE (2026-10-03): an admin status change is a TRANSITION, not a free string ─────────────
@@ -1003,9 +1264,14 @@ exports.adminGetOrders = onCall({ region: 'us-central1', maxInstances: 10, enfor
    Pure and exported for the certification suite. */
 const _ADMIN_FULFIL = ['confirmed', 'processing', 'accepted', 'packing', 'ready_for_pickup', 'awaiting_rider', 'rider_assigned',
   'driver_assigned', 'assigned', 'rider_en_route', 'picked_up', 'shipped', 'out_for_delivery', 'in_transit'];
+/* 2026-10-04 (Orders census §A3, owner O-6): paid = paymentVerified === true ONLY. `paymentStatus` is buyer-writable
+   at create and `paid` has no server writer, so neither may unlock fulfilment, completion (settleOrder) or block a cancel. */
 function _orderPaid(o) {
-  return !!o && (o.paymentVerified === true || o.paid === true || ['paid', 'completed', 'success'].includes(String(o.paymentStatus || '').toLowerCase()));
+  return !!o && o.paymentVerified === true;
 }
+/* What an administrator may ASK for. Everything else in ORDER_STATUSES belongs to another authority. */
+const ADMIN_SETTABLE_ORDER_STATUSES = Object.freeze(['cancelled', 'delivered', 'completed', ..._ADMIN_FULFIL]);
+exports.ADMIN_SETTABLE_ORDER_STATUSES = ADMIN_SETTABLE_ORDER_STATUSES;
 function adminOrderTransition(order, toRaw) {
   const FL = require('./fulfilment-lifecycle');
   const o = order || {};
@@ -1018,10 +1284,9 @@ function adminOrderTransition(order, toRaw) {
   if (fromN === 'delivered' && to !== 'completed' && to !== 'refunded') return { ok: false, reason: 'TERMINAL', from };
   if (to === 'paid') return { ok: false, reason: 'PAYMENT_AUTHORITY_ONLY' };
   if (to === 'delivered') return o.deliveredAt ? { ok: true } : { ok: false, reason: 'DELIVERY_EVIDENCE_REQUIRED' };
-  if (to === 'refunded') {
-    const st = String(o.settlementStatus || '').toUpperCase();
-    return (st === 'REFUNDED' || st === 'REVERSED' || String(o.refundStatus || '').toLowerCase() === 'completed') ? { ok: true } : { ok: false, reason: 'REFUND_EVIDENCE_REQUIRED' };
-  }
+  /* 2026-10-04: refunded is written only by the refund authority (request → approve), never by this op — even with
+     evidence present, a label write here is a second author of a money state (census O-5, owner gate "paid protection"). */
+  if (to === 'refunded') return { ok: false, reason: 'REFUND_AUTHORITY_ONLY' };
   if (to === 'completed') {
     if (fromN !== 'delivered') return { ok: false, reason: 'NOT_DELIVERED', from };
     if (!_orderPaid(o)) return { ok: false, reason: 'NOT_PAID' };
@@ -1034,15 +1299,26 @@ function adminOrderTransition(order, toRaw) {
     if (!FL.canAdvance(from || 'pending', to)) return { ok: false, reason: 'BACKWARDS', from };
     return { ok: true };
   }
-  return { ok: false, reason: 'UNKNOWN_STATUS' };
+  return { ok: false, reason: 'NOT_ADMIN_SETTABLE' };   /* in the vocabulary, but another authority writes it */
 }
 exports._adminOrderTransition = adminOrderTransition;
 
 exports.adminUpdateOrderStatus = onCall({ region: 'us-central1', maxInstances: 10, enforceAppCheck: true }, exports._h.adminUpdateOrderStatus = async (req) => {
-  _requireAdmin(req);
-  const { orderId, status, note } = req.data;
-  if (!orderId || !status) throw new Error('orderId and status required');
+  _requireAdminCallable(req);                       /* before ANY read */
+  const data = req.data == null ? {} : req.data;
+  if (typeof data !== 'object' || Array.isArray(data)) throw new HttpsError('invalid-argument', 'Request must be an object.');
+  const { orderId, status, note } = data;
+  if (typeof orderId !== 'string' || !orderId || orderId.length > 700 || orderId.includes('/') || typeof status !== 'string' || !status.trim()) {
+    throw new HttpsError('invalid-argument', 'orderId and status are required strings.');
+  }
+  if (note != null && (typeof note !== 'string' || note.length > 1000)) throw new HttpsError('invalid-argument', 'note must be a string of at most 1000 characters.');
   const db = getFirestore();
+  /* O-13: the canonical vocabulary first — an unknown string is refused before the order is read (audited). */
+  const _to = status.trim().toLowerCase();
+  if (!ORDER_STATUSES.includes(_to)) {
+    await db.collection('adminAudit').add({ action: 'order_status_refused', orderId, status: _to.slice(0, 64), reason: 'UNKNOWN_STATUS', performedBy: req.auth.uid, createdAt: FieldValue.serverTimestamp() }).catch(() => {});
+    throw new HttpsError('invalid-argument', 'Unknown order status. An administrator may set: ' + ADMIN_SETTABLE_ORDER_STATUSES.join(', ') + '.', { reason: 'UNKNOWN_STATUS', allowed: ADMIN_SETTABLE_ORDER_STATUSES });
+  }
   const _ref = db.collection('orders').doc(String(orderId));
   /* read + decide + write in ONE transaction, so the evidence checked is the evidence that holds when written */
   const _verdict = await db.runTransaction(async (t) => {

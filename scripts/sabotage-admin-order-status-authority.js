@@ -7,7 +7,8 @@ process.on('exit', () => fs.writeFileSync(F, O));
 const M = [
   ['paid allowed', "  if (to === 'paid') return { ok: false, reason: 'PAYMENT_AUTHORITY_ONLY' };", "", 'A-1'],
   ['delivered without evidence', "  if (to === 'delivered') return o.deliveredAt ? { ok: true } : { ok: false, reason: 'DELIVERY_EVIDENCE_REQUIRED' };", "  if (to === 'delivered') return { ok: true };", 'A-2'],
-  ['refunded without evidence', "    return (st === 'REFUNDED' || st === 'REVERSED' || String(o.refundStatus || '').toLowerCase() === 'completed') ? { ok: true } : { ok: false, reason: 'REFUND_EVIDENCE_REQUIRED' };", "    return { ok: true };", 'A-3'],
+  ['refunded allowed', "  if (to === 'refunded') return { ok: false, reason: 'REFUND_AUTHORITY_ONLY' };", "  if (to === 'refunded') return { ok: true };", 'A-16'],
+  ['paymentStatus counts as paid', "  return !!o && o.paymentVerified === true;", "  return !!o && (o.paymentVerified === true || o.paid === true || String(o.paymentStatus || '') === 'paid');", 'A-20'],
   ['complete undelivered', "    if (fromN !== 'delivered') return { ok: false, reason: 'NOT_DELIVERED', from };", "", 'A-4'],
   ['complete during dispute', "    if (o.disputeOpen === true || o.hasDispute === true) return { ok: false, reason: 'DISPUTE_OPEN' };", "", 'A-6'],
   ['cancel paid', "  if (to === 'cancelled') return _orderPaid(o) ? { ok: false, reason: 'PAID_CANCEL_IS_A_REFUND' } : { ok: true };", "  if (to === 'cancelled') return { ok: true };", 'A-7'],

@@ -1,3 +1,51 @@
+## [2026-10-04] — feat(adminos): server Orders summary + paginated list + status vocabulary + no fail-to-0 (BUILT / NOT DEPLOYED)
+
+Built on `18cfe7f`, the exact live `adminOsDispatch` lineage. Its functions/ tree is byte-identical to the serving
+archive of 00025-muh (321/321 files). The branch carries `2de50e0` (adminUpdateOrderStatus transition authority,
+10-03, not deployed), which is reused here. Semantics follow the Orders census 2026-10-04 §A and owner defaults O-1 to O-13.
+See `docs/ADMINOS_ORDERS_SERVER_CONTRACT.md`.
+
+- **New op `adminOrdersSummary`** (dispatcher only; admin||superAdmin checked before any read; App Check via the dispatcher).
+  - **Buckets:** total, placed (PV), awaitingPayment, paidStatusUnverified, outstanding, acceptedProcessing, paidNotYetAccepted,
+    completed, cancelled, cancelledRefundDue, refundedLabelled, other.
+  - **Revenue:** Σ paidAmount over PV, plus the server total of VIP (sessionId) orders, in KES, with pricedCount and unpricedCount.
+  - Every figure comes from a successful count()/sum()/average(). Otherwise it is null with `errors[...]`. A failed read is never 0.
+  - Equality-only filters, so no new index. Each call runs 43 aggregations.
+- **`adminGetOrders`**:
+  - Cursor pagination (`createdAt desc, id desc`, startAfter the cursor doc), returning `{orders, nextCursor, scope}`.
+  - Callers without a cursor still work as before.
+  - The status filter is validated. A missing index now returns FAILED_PRECONDITION `INDEX_REQUIRED` instead of `internal`.
+  - **hubType removed:** it was a partial in-memory filter applied after the limit. It is now refused with invalid-argument.
+- **`adminUpdateOrderStatus`**:
+  - Canonical vocabulary (O-13). An unknown value returns invalid-argument with the allowed list, and the refusal is audited.
+  - `refunded` is now refused outright (REFUND_AUTHORITY_ONLY).
+  - Paid = paymentVerified only (paymentStatus/paid are buyer-writable).
+- **No fail-to-0**: the exec dashboard's ordersToday/activeOrders/activeDeliveries/totalOrders and the finance orders read
+  (productRevenue/grossRevenue/refunds/netPlatformRevenue) return null plus `errors`.
+- **Files:**
+  - `functions/admin-os.js`
+  - `firestore.indexes.json` (adds orders status ASC/createdAt DESC)
+  - `scripts/test-admin-orders-summary.js` and `scripts/sabotage-admin-orders-summary.js`
+  - `scripts/lib/aos-harness.js` (new)
+  - `scripts/lib/fake-firestore.js` (operators/orderBy/cursor/count/sum/avg/failure injection; backward compatible)
+  - `scripts/test-admin-order-status-authority.js` and its sabotage (ported to the hermetic harness; A-16 inverted, A-20 added)
+  - `docs/ADMINOS_ORDERS_SERVER_CONTRACT.md` (new)
+- **Database:** no schema change.
+- **Index prerequisite:** `orders (status ASC, createdAt DESC)`, which is MISSING in prod. Deploy that single index on its own,
+  never with `firebase deploy --only firestore:indexes` from this tree.
+- **API:** additive (`adminOrdersSummary`, `nextCursor`, `scope`, `errors`).
+- **Breaking:**
+  - hubType is refused.
+  - Admin status `refunded` is refused.
+  - Transitions that relied on paymentStatus as proof of payment are refused.
+  - Exec and finance order fields can now be `null`, so the hosting callers listed in the doc must render "—".
+- **Security:** admin status writes can no longer set a payment or refund state; only the payment and refund authorities do. A non-admin gets permission-denied before any read.
+- **Tests:**
+  - Summary suite 63/0; its sabotage 9/9.
+  - Status authority 21/0; its sabotage 10/10.
+  - Against the live base, the summary suite fails 46 rows and then crashes (no verdict). The status suite fails 16.
+- **Deploy (owner):** index first, then `--only functions:adminOsDispatch` from this branch, then the hosting callers.
+
 ## [2026-09-01] — fix(adminos): admin-os.js lineage convergence to production 252ff65 + pilot (UNMERGED / UNDEPLOYED)
 
 Reconciles `functions/admin-os.js` on main (`9d42fa9`) back to the **proven deployed source** of the

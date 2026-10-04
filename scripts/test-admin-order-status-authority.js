@@ -14,15 +14,13 @@ const ck = (id, ok, m, got) => { console.log('  ' + (ok ? 'PASS' : 'FAIL') + ' '
 console.log('\nadminUpdateOrderStatus authority   ' + (process.env.BASE ? 'BASE=' + process.env.BASE : 'this tree') + '\n');
 let MOD = path.join(FN, 'admin-os.js');
 if (process.env.BASE) { MOD = path.join(FN, '.aosbase-' + process.pid + '.js'); fs.writeFileSync(MOD, execSync('git show ' + process.env.BASE + ':functions/admin-os.js', { cwd: ROOT, maxBuffer: 64 << 20 })); process.on('exit', () => { try { fs.unlinkSync(MOD); } catch (_) {} }); }
+/* 2026-10-04: loaded through scripts/lib/aos-harness.js (hermetic; works under block-admin.js — the real admin SDK
+   is never loaded). The fake supplies FieldValue sentinels that fake-firestore interprets. */
+const { loadAdminOs } = require('./lib/aos-harness');
+const HN = loadAdminOs({ modulePath: MOD });
 let DB = fakeDb({});
-const realFS = require(require.resolve('firebase-admin/firestore', { paths: [FN] }));
-const fsPath = require.resolve('firebase-admin/firestore', { paths: [FN] });
-require.cache[fsPath] = { id: fsPath, filename: fsPath, loaded: true, exports: Object.assign({}, realFS, { getFirestore: () => DB }) };
-const adminPath = require.resolve('firebase-admin', { paths: [FN] });
-const fsFn = () => DB; fsFn.FieldValue = realFS.FieldValue;
-require.cache[adminPath] = { id: adminPath, filename: adminPath, loaded: true, exports: { firestore: fsFn, apps: [1], initializeApp() {}, auth: () => ({ getUser: async () => ({}) }) } };
-const AOS = require(MOD);
-const H = AOS._h.adminUpdateOrderStatus;
+const AOS = HN.aos;
+const H = (req) => { HN.setDb(DB); return AOS._h.adminUpdateOrderStatus(req); };
 const set = async (order, status) => {
   DB = fakeDb({ orders: { O: order } });
   let r; try { r = await H({ auth: { uid: 'ops', token: { admin: true } }, data: { orderId: 'O', status } }); } catch (e) { r = { err: e.code || 'error', reason: (e.details && e.details.reason) || e.message }; }
@@ -44,11 +42,13 @@ const PAID = { paymentVerified: true, paymentStatus: 'paid' };
     ['A-10', Object.assign({ status: 'completed' }, PAID), 'in_transit', false, 'a TERMINAL order cannot be reopened'],
     ['A-10b', Object.assign({ status: 'completed', deliveredAt: 1 }, PAID), 'delivered', false, 'a COMPLETED order cannot be stepped back to delivered even with delivery evidence (the terminal guard on its own)', 'TERMINAL'],
     ['A-11', Object.assign({ status: 'cancelled' }), 'paid', false, 'a cancelled order cannot be revived as paid'],
-    ['A-12', Object.assign({ status: 'confirmed' }, PAID), 'banana', false, 'an unknown status string is refused'],
+    ['A-12', Object.assign({ status: 'confirmed' }, PAID), 'banana', false, 'an unknown status string is refused (2026-10-04: invalid-argument, before the read)', 'UNKNOWN_STATUS'],
     ['A-13', Object.assign({ status: 'confirmed' }, PAID), 'shipped', true, 'CONTROL: a paid order moves forward (confirmed → shipped)'],
     ['A-14', Object.assign({ status: 'delivered', deliveredAt: 1 }, PAID), 'completed', true, 'CONTROL: a paid, delivered, undisputed order completes'],
     ['A-15', { status: 'pending_payment' }, 'cancelled', true, 'CONTROL: an unpaid order can be cancelled'],
-    ['A-16', Object.assign({ status: 'delivered', deliveredAt: 1, settlementStatus: 'REFUNDED' }, PAID), 'refunded', true, 'CONTROL: refunded is allowed WITH refund evidence'],
+    /* 2026-10-04 (owner gate "paid protection"; census O-5): refunded is the refund authority's write only. Was a CONTROL. */
+    ['A-16', Object.assign({ status: 'delivered', deliveredAt: 1, settlementStatus: 'REFUNDED' }, PAID), 'refunded', false, 'refunded is refused even WITH refund evidence (refund authority only)', 'REFUND_AUTHORITY_ONLY'],
+    ['A-20', { status: 'pending_payment', paymentStatus: 'paid', paid: true }, 'confirmed', false, 'buyer-writable paymentStatus/paid without paymentVerified is NOT paid (census A3)', 'NOT_PAID'],
     ['A-17', Object.assign({ status: 'in_transit', deliveredAt: 5 }, PAID), 'delivered', true, 'CONTROL: delivered is allowed WITH delivery evidence'],
   ];
   for (const [id, order, to, allow, msg, wantReason] of rows) {
