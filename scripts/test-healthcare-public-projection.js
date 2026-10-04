@@ -8,7 +8,8 @@
  *   - getHealthProviders and searchHealthProviders return the SAME whitelist (one projection, not three)
  *   - an unapproved (pending) provider is not found; malformed ids (empty, path, object, over-long, number) are
  *     refused before Firestore
- *   - the projection claims only what the server knows (sokoniApproved), never a council verification
+ *   - the projection claims only what the server knows, never a council verification (ADR-014: the canonical directory card)
+ *   - a LEGACY healthProviders record without canonical approval is not found, listed or searchable
  *
  *   node scripts/test-healthcare-public-projection.js
  */
@@ -35,13 +36,19 @@ async function code(p) { try { await p; return null; } catch (e) { return e.code
 
 const PRIVATE = { licenseNumber: 'KMPDC-A1234', phone: '0722111222', address: '14 Private Lane, Karen', reviewedBy: 'adm1', reviewNotes: 'licence copy on file',
   email: 'dr@x.co', uid: 'docB', totalAppointments: 12, completedAppointments: 9, createdAt: 1, updatedAt: 2, internalNote: 'x', idNumber: '12345678' };
-const WHITELIST = ['providerId', 'name', 'specialization', 'clinic', 'city', 'county', 'bio', 'qualifications', 'consultationFee', 'currency', 'rating', 'ratingCount', 'isOnline', 'isAvailable', 'languages', 'insuranceAccepted', 'sokoniApproved'];
+/* ADR-014 (owner 2026-10-04): ONE public shape — the canonical healthcare directory card (healthcare-directory.publicCard) */
+const WHITELIST = ['providerId', 'name', 'category', 'categoryLabel', 'description', 'city', 'area', 'rating', 'reviewCount', 'acceptsBookings'];
 const leak = (o) => Object.keys(o).filter((k) => !WHITELIST.includes(k));
 const secretIn = (o) => /KMPDC-A1234|0722111222|Private Lane|licence copy|12345678|dr@x\.co/.test(JSON.stringify(o));
 
 (async () => {
-  await db.doc('healthProviders/docB').set(Object.assign({ providerId: 'docB', name: 'Dr Wanjiru', specialization: 'pediatrics', clinic: 'Kilimani Clinic', city: 'Nairobi', county: 'Nairobi', bio: 'Child health', qualifications: 'MBChB', consultationFee: 2500, currency: 'KES', rating: 4.5, ratingCount: 2, isOnline: true, isAvailable: true, languages: ['English'], insuranceAccepted: ['NHIF'], status: 'active' }, PRIVATE));
-  await db.doc('healthProviders/docP').set({ providerId: 'docP', name: 'Dr Pending', specialization: 'dermatology', status: 'pending', licenseNumber: 'KMPDC-P' });
+  /* the canonical provider an AdminOS approval projects (ADR-014), with private fields that must never leak */
+  await db.doc('providers/docB').set(Object.assign({ uid: 'docB', providerId: 'docB', name: 'Dr Wanjiru', businessName: 'Dr Wanjiru', description: 'Child health', city: 'Nairobi', area: 'Kilimani',
+    status: 'active', healthcare: { category: 'clinician', source: 'application' } }, PRIVATE));
+  await db.doc('providers/docP').set({ uid: 'docP', name: 'Dr Pending', status: 'pending', licenseNumber: 'KMPDC-P', healthcare: { category: 'clinician', source: 'application' } });
+  await db.doc('providers/docU').set({ uid: 'docU', name: 'Unclassified Clinic', status: 'active', healthcare: { category: null, source: 'application' } });
+  /* DIRECTION 2: a LEGACY healthProviders record — active there — with NO canonical approval */
+  await db.doc('healthProviders/docL').set({ providerId: 'docL', name: 'Dr Legacy', specialization: 'pediatrics', status: 'active', city: 'Nairobi' });
 
   say('\n── getHealthProvider — one public projection for every caller ──');
   const callers = { 'logged out': [null, {}], 'a patient': ['pat1', {}], 'the provider themselves': ['docB', {}], 'an admin': ['adm1', { admin: true }], 'a malicious provider': ['docX', { role: 4 }] };
@@ -51,8 +58,8 @@ const secretIn = (o) => /KMPDC-A1234|0722111222|Private Lane|licence copy|123456
     ck(`${label}: no licence number / phone / address / reviewer / notes / id number anywhere`, !secretIn(r));
   }
   const one = await run(HC.getHealthProvider)(req(null, { providerId: 'docB' }));
-  ck('the public fields that ARE intended are present (name, specialization, clinic, fee, rating, languages)', one.name === 'Dr Wanjiru' && one.specialization === 'pediatrics' && one.clinic === 'Kilimani Clinic' && one.consultationFee === 2500 && one.rating === 4.5 && one.languages.length === 1);
-  ck('verification state claims only what the server knows (sokoniApproved) — no council verification field', one.sokoniApproved === true && one.verified === undefined && one.kmpdcVerified === undefined);
+  ck('the public fields that ARE intended are present (canonical card: name, healthcare category + label, description, city, area)', one.name === 'Dr Wanjiru' && one.category === 'clinician' && !!one.categoryLabel && one.description === 'Child health' && one.city === 'Nairobi' && one.area === 'Kilimani', one);
+  ck('the card claims no verification it does not hold — no council (KMPDC/PPB) or "verified" field; rating only from the review authority (none yet → null)', one.verified === undefined && one.kmpdcVerified === undefined && one.rating === null && one.reviewCount === 0, one);
   ck('the whitelist the code exports is exactly the documented one', JSON.stringify(HC.PUBLIC_PROVIDER_FIELDS) === JSON.stringify(WHITELIST), HC.PUBLIC_PROVIDER_FIELDS);
 
   say('\n── list + search use the same projection ──');
@@ -64,6 +71,13 @@ const secretIn = (o) => /KMPDC-A1234|0722111222|Private Lane|licence copy|123456
 
   say('\n── refusals ──');
   ck('an unapproved (pending) provider is not found', await code(run(HC.getHealthProvider)(req(null, { providerId: 'docP' }))) === 'not-found');
+  ck('LEGACY: an active healthProviders record WITHOUT canonical approval is not found (the old activation path is dead)', await code(run(HC.getHealthProvider)(req(null, { providerId: 'docL' }))) === 'not-found');
+  ck('LEGACY: …nor listed, nor searchable', !(await run(HC.getHealthProviders)(req(null, {}))).providers.some((p) => p.providerId === 'docL') && (await run(HC.searchHealthProviders)(req(null, { query: 'legacy' }))).results.length === 0);
+  ck('an approved but UNCLASSIFIED clinic is not yet discoverable (classification → evaluator → discoverable)', await code(run(HC.getHealthProvider)(req(null, { providerId: 'docU' }))) === 'not-found');
+  ck('a retired registry write path answers plainly and writes nothing (registerHealthProvider / rateHealthProvider)',
+    await code(run(HC.registerHealthProvider)(req('docZ', { name: 'X', specialization: 'pediatrics', licenseNumber: 'L' }))) === 'failed-precondition'
+    && await code(run(HC.rateHealthProvider)(req('pat1', { appointmentId: 'a1', rating: 5 }))) === 'failed-precondition'
+    && !(await db.doc('healthProviders/docZ').get()).exists);
   ck('an unknown provider is not found', await code(run(HC.getHealthProvider)(req(null, { providerId: 'nobody' }))) === 'not-found');
   for (const [label, v] of [['empty', ''], ['a path', 'healthProviders/docB'], ['a traversal', '../docB'], ['an object', { id: 'docB' }], ['a number', 42], ['over-long', 'x'.repeat(300)], ['missing', undefined]]) {
     ck(`malformed providerId (${label}) refused before Firestore`, await code(run(HC.getHealthProvider)(req(null, { providerId: v }))) === 'invalid-argument');

@@ -259,17 +259,8 @@ const SPECS = [
        profile is provider-profile.html, which reads ?uid=. */
     link: (d, id) => 'provider-profile.html?uid=' + encodeURIComponent(d.uid || id),
   },
-  {
-    col: 'healthProviders', tab: 'professionals', icon: '🏥', scan: 150,
-    guard: w => [w('status', '==', 'active')],
-    fields: ['name', 'title', 'specialty', 'category', 'description', 'location', 'city'],
-    title: d => d.name || d.title || '',
-    subtitle: d => d.specialty || d.category || 'Healthcare',
-    location: d => d.location || d.city || '',
-    price: d => kes(d.consultationFee),
-    thumb: d => d.photo || d.image || null,
-    link: (d, id) => 'healthcare.html?provider=' + encodeURIComponent(id),
-  },
+  /* healthProviders — REMOVED (ADR-014, owner 2026-10-04). The retired registry: a clinic is found through the canonical
+     'providers' entry above (approved, active, server-classified healthcare providers), never a legacy record. */
   {
     col: 'lawyers', tab: 'professionals', icon: '⚖️', scan: 150,
     fields: ['name', 'specialty', 'practice', 'firm', 'description', 'location', 'city'],

@@ -16,6 +16,11 @@ const FieldValue = admin.firestore.FieldValue;
    `customClaims.role >= 4` this module used is minted by NOTHING (event-hub.js:210), so every admin
    branch here was dead — and a numeric claim must never be invented to revive it. */
 const ADMIN = require('./admin-claim');
+/* ADR-014 (owner 2026-10-04): the ONE healthcare identity is the canonical providers/{uid} an AdminOS approval projects;
+   healthcare-directory is the ONE reader of it (discovery: isDiscoverable · clinical identity: canOperate · public
+   shape: publicCard). healthProviders is the RETIRED registry — nothing in this module reads or writes it, so a legacy
+   healthProviders record can make no clinic active, listed, searchable, viewable, clinical or rated. */
+const HD = require('./healthcare-directory');
 exports._h = {};
 
 function requireAuth(req) {
@@ -32,44 +37,13 @@ const SPECIALIZATIONS = [
 
 /* â”€â”€ 1. registerHealthProvider â”€â”€ */
 exports.registerHealthProvider = onCall(CF_OPTS, exports._h.registerHealthProvider = async (req) => {
-  const uid = requireAuth(req);
-  const { name, specialization, bio, qualifications, licenseNumber, clinic,
-          address, city, county, phone, consultationFee, currency,
-          languages, insuranceAccepted, isOnline } = req.data;
-
-  if (!name || !specialization || !licenseNumber) {
-    throw new HttpsError('invalid-argument', 'name, specialization, licenseNumber required');
-  }
-  if (!SPECIALIZATIONS.includes(specialization)) {
-    throw new HttpsError('invalid-argument', 'Invalid specialization');
-  }
-
-  const existing = await db().collection('healthProviders')
-    .where('uid', '==', uid).limit(1).get();
-  if (!existing.empty) throw new HttpsError('already-exists', 'Provider profile already exists');
-
-  const ref = db().collection('healthProviders').doc(uid);
-  await ref.set({
-    providerId: uid, uid,
-    name: san(name, 120), specialization,
-    bio: san(bio, 2000), qualifications: san(qualifications, 500),
-    licenseNumber: san(licenseNumber, 60),
-    clinic: san(clinic, 120), address: san(address, 300),
-    city: san(city, 80), county: san(county, 80), country: 'Kenya',
-    phone: san(phone, 20),
-    consultationFee: parseFloat(consultationFee) || 0,
-    currency: currency === 'USD' ? 'USD' : 'KES',
-    languages: Array.isArray(languages) ? languages.slice(0, 5).map(l => san(l, 30)) : ['English', 'Swahili'],
-    insuranceAccepted: Array.isArray(insuranceAccepted) ? insuranceAccepted.slice(0, 10).map(i => san(i, 50)) : [],
-    isOnline: Boolean(isOnline),
-    status: 'pending',
-    rating: 0, ratingCount: 0,
-    totalAppointments: 0, completedAppointments: 0,
-    isAvailable: true,
-    createdAt: FieldValue.serverTimestamp(),
-    updatedAt: FieldValue.serverTimestamp(),
-  });
-  return { providerId: uid, status: 'pending' };
+  /* RETIRED (ADR-014, owner 2026-10-04). It wrote the retired healthProviders registry — a second intake beside the ONE
+     application flow (Application → AdminOS approval → providers/{uid} → healthcare classification → discoverable).
+     The export stays so a deployed caller gets a plain answer; it reads and writes nothing. */
+  requireAuth(req);
+  throw new HttpsError('failed-precondition',
+    'Healthcare providers apply through SOKONI Applications; an administrator approves the application. Nothing was saved.',
+    { code: 'HEALTH_REGISTRATION_MOVED' });
 });
 
 /* â”€â”€ 2. approveHealthProvider â”€â”€ */
@@ -94,52 +68,17 @@ exports.approveHealthProvider = onCall(CF_OPTS, exports._h.approveHealthProvider
    platform-wide public-handle work is tracked separately and is not a Healthcare exception.
    `sokoniApproved` is only what the server knows (an active, admin-approved record); it never claims a
    professional-council (KMPDC / PPB) verification that SOKONI has not performed. */
-function _publicHealthProvider(p) {
-  return {
-    providerId: p.providerId, name: p.name || '', specialization: p.specialization || null,
-    clinic: p.clinic || null, city: p.city || null, county: p.county || null,
-    bio: p.bio || '', qualifications: p.qualifications || '',
-    consultationFee: p.consultationFee == null ? null : p.consultationFee, currency: p.currency || 'KES',
-    rating: p.rating == null ? null : p.rating, ratingCount: p.ratingCount || 0,
-    isOnline: p.isOnline === true, isAvailable: p.isAvailable === true,
-    languages: Array.isArray(p.languages) ? p.languages : [],
-    insuranceAccepted: Array.isArray(p.insuranceAccepted) ? p.insuranceAccepted : [],
-    sokoniApproved: p.status === 'active',
-  };
-}
-const PUBLIC_PROVIDER_FIELDS = Object.keys(_publicHealthProvider({}));
+/* ADR-014: the public shape is the canonical directory card (healthcare-directory.publicCard) — ONE whitelist. */
+const PUBLIC_PROVIDER_FIELDS = HD.PUBLIC_FIELDS;
 
 /* â”€â”€ 3. getHealthProviders â”€â”€ */
 exports.getHealthProviders = onCall(CF_OPTS, exports._h.getHealthProviders = async (req) => {
-  const { specialization, city, isOnline, limit = 24, cursor } = req.data;
-
-  let q = db().collection('healthProviders')
-    .where('status', '==', 'active')
-    .orderBy('rating', 'desc')
-    .limit(Math.min(50, parseInt(limit) || 24));
-
-  if (specialization && SPECIALIZATIONS.includes(specialization)) {
-    q = db().collection('healthProviders')
-      .where('status', '==', 'active')
-      .where('specialization', '==', specialization)
-      .orderBy('rating', 'desc')
-      .limit(Math.min(50, parseInt(limit) || 24));
-  }
-
-  if (cursor) {
-    const c = await db().collection('healthProviders').doc(cursor).get();
-    if (c.exists) q = q.startAfter(c);
-  }
-
-  const snap = await q.get();
-  let providers = snap.docs.map(d => _publicHealthProvider(d.data()));
-
-  if (city) providers = providers.filter(p => (p.city || '').toLowerCase().includes(city.toLowerCase()));
-  if (isOnline) providers = providers.filter(p => p.isOnline);
-
-  const nextCursor = snap.docs.length === Math.min(50, parseInt(limit) || 24)
-    ? snap.docs[snap.docs.length - 1].id : null;
-  return { providers, nextCursor };
+  /* ADR-014: the canonical directory (healthcare-directory.listDirectory — approved, active, public, classified). */
+  const { specialization, city, limit = 24 } = req.data || {};
+  const category = specialization && require('./healthcare-category').isCategory(specialization) ? specialization : '';
+  let providers = await HD.listDirectory(db(), { category, limit: Math.min(50, parseInt(limit) || 24) });
+  if (city) providers = providers.filter(p => (p.city || '').toLowerCase().includes(String(city).toLowerCase()));
+  return { providers, nextCursor: null };
 });
 
 /* â”€â”€ 4. getHealthProvider â”€â”€ */
@@ -149,10 +88,11 @@ exports.getHealthProvider = onCall(CF_OPTS, exports._h.getHealthProvider = async
   if (typeof providerId !== 'string' || !/^[A-Za-z0-9_-]{1,128}$/.test(providerId)) {
     throw new HttpsError('invalid-argument', 'providerId required');
   }
-  const snap = await db().collection('healthProviders').doc(providerId).get();
-  if (!snap.exists || snap.data().status !== 'active') throw new HttpsError('not-found', 'Provider not found');
+  /* ADR-014: the canonical provider, shown only while the ONE discovery predicate admits it */
+  const p = await HD.readProvider(db(), providerId);
+  if (!HD.isDiscoverable(p)) throw new HttpsError('not-found', 'Provider not found');
   /* the same public projection for every caller — signed out, patient, the provider, an admin */
-  return _publicHealthProvider(snap.data());
+  return HD.publicCard(providerId, p);
 });
 
 /* â”€â”€ 5. bookAppointment â”€â”€ */
@@ -244,12 +184,8 @@ exports.updateAppointmentStatus = onCall(CF_OPTS, exports._h.updateAppointmentSt
 
     t.update(ref, updates);
 
-    if (status === 'completed') {
-      t.update(db().collection('healthProviders').doc(appt.providerId), {
-        completedAppointments: FieldValue.increment(1),
-        updatedAt: FieldValue.serverTimestamp(),
-      });
-    }
+    /* ADR-014: the completedAppointments counter on the retired healthProviders registry is gone — nothing read it.
+       Completion is recorded on the appointment; reputation is the review authority's (reputation.js). */
 
     // Release slot lock when appointment ends so the slot is bookable again
     if ((status === 'cancelled' || status === 'completed') && appt.slotKey) {
@@ -277,10 +213,9 @@ exports.updateAppointmentStatus = onCall(CF_OPTS, exports._h.updateAppointmentSt
    No healthcare booking engine is activated or added for this: healthAppointments (the hub's parallel
    engine, which ADR-015 retires) is deliberately NOT an authorization basis.
 
-   The provider IDENTITY gate is unchanged (healthProviders/{uid}.status == 'active'). Which identity
-   clinical writes require is ADR-014's decision (not authorized) — until then both must hold, so
-   clinical writes stay unreachable in production; the relationship boundary is correct before anyone
-   can reach it.
+   The provider IDENTITY gate is the canonical providers/{uid} (ADR-014, owner 2026-10-04 —
+   healthcare-directory.canOperate): an approved, active, unsuspended healthcare provider. Both the identity
+   and the relationship must hold.
 
    Every write appends a content-free audit row (healthClinicalAudit: actor · patient · provider · action ·
    record ref · booking = authorization basis · time — never the diagnosis or medicines), in the SAME
@@ -294,18 +229,19 @@ const _reqId = (v) => { const r = String(v || '').trim(); if (!/^[A-Za-z0-9_-]{8
 async function _clinicalBasis(t, uid, bookingId) {
   const bid = String(bookingId || '').trim();
   if (!bid || /[\/]/.test(bid)) throw new HttpsError('invalid-argument', 'bookingId of the consultation is required.');
-  const [bSnap, pSnap] = await Promise.all([
+  /* ADR-014: the clinical IDENTITY is the canonical providers/{uid} (healthcare-directory.canOperate) — never healthProviders */
+  const [bSnap, prov] = await Promise.all([
     t.get(db().collection('providerBookings').doc(bid)),
-    t.get(db().collection('healthProviders').doc(uid)),
+    HD.readProvider(db(), uid, t),
   ]);
-  if (!pSnap.exists || pSnap.data().status !== 'active') throw new HttpsError('permission-denied', 'Active provider account required');
+  if (!HD.canOperate(prov)) throw new HttpsError('permission-denied', 'Active provider account required');
   const b = bSnap.exists ? bSnap.data() : null;
   /* one message for every failure: the caller learns nothing about bookings that are not theirs */
   const deny = () => new HttpsError('permission-denied', 'No confirmed, paid healthcare consultation between you and this patient.', { code: 'NO_CLINICAL_RELATIONSHIP' });
   if (!b || b.providerId !== uid || !b.customerUid || b.customerUid === uid) throw deny();
   if (b.commissionHub !== 'healthcare') throw deny();
   if (!CLINICAL_STATUSES.includes(b.status) || !CLINICAL_PAID.includes(b.paymentStatus)) throw deny();
-  return { booking: b, bookingId: bid, patientUid: b.customerUid, provider: pSnap.data() };
+  return { booking: b, bookingId: bid, patientUid: b.customerUid, provider: prov };
 }
 
 function _audit(t, row) {
@@ -407,50 +343,29 @@ exports.getPrescriptions = onCall(CF_OPTS, exports._h.getPrescriptions = async (
 
 /* â”€â”€ 13. searchHealthProviders â”€â”€ */
 exports.searchHealthProviders = onCall(CF_OPTS, exports._h.searchHealthProviders = async (req) => {
-  const { query, limit = 20 } = req.data;
+  const { query, limit = 20 } = req.data || {};
   if (!query) throw new HttpsError('invalid-argument', 'query required');
-  const q = query.toLowerCase();
-  const snap = await db().collection('healthProviders')
-    .where('status', '==', 'active').orderBy('rating', 'desc').limit(200).get();
-  const results = snap.docs.map(d => d.data())
-    .filter(p =>
-      p.name.toLowerCase().includes(q) ||
-      p.specialization.includes(q) ||
-      (p.clinic || '').toLowerCase().includes(q) ||
-      (p.city || '').toLowerCase().includes(q)
-    )
-    .slice(0, Math.min(40, parseInt(limit) || 20))
-    .map(_publicHealthProvider);
+  const q = String(query).toLowerCase();
+  /* ADR-014: search the canonical directory — the same predicate and projection as the listing */
+  const rows = await HD.listDirectory(db(), { limit: 60 });
+  const results = rows.filter(p =>
+    (p.name || '').toLowerCase().includes(q) ||
+    (p.category || '').includes(q) || (p.categoryLabel || '').toLowerCase().includes(q) ||
+    (p.description || '').toLowerCase().includes(q) ||
+    (p.city || '').toLowerCase().includes(q)
+  ).slice(0, Math.min(40, parseInt(limit) || 20));
   return { results };
 });
 
 /* â”€â”€ 14. rateHealthProvider â”€â”€ */
 exports.rateHealthProvider = onCall(CF_OPTS, exports._h.rateHealthProvider = async (req) => {
-  /* ONE rating per COMPLETED appointment of the CALLER's (CHANGELOG 213). The provider rated is the
-     appointment's — a providerId sent by the client is not trusted (one completed appointment could rate
-     ANY provider); the rating is an integer 1–5; "already rated" is read inside the transaction. */
-  const uid = requireAuth(req);
-  const { appointmentId, rating: rawRating, review } = req.data || {};
-  if (!appointmentId || typeof appointmentId !== 'string') throw new HttpsError('invalid-argument', 'appointmentId required');
-  const { intRating, addRating } = require('./shared/hub-rating');
-  const rating = intRating(rawRating);
-  const apptRef = db().collection('healthAppointments').doc(appointmentId);
-  await db().runTransaction(async t => {
-    const apptSnap = await t.get(apptRef);
-    if (!apptSnap.exists) throw new HttpsError('not-found', 'Appointment not found');
-    const appt = apptSnap.data();
-    if (appt.patientUid !== uid) throw new HttpsError('permission-denied', 'Not your appointment');
-    if (appt.status !== 'completed') throw new HttpsError('failed-precondition', 'Can only rate completed appointments');
-    if (appt.rated) throw new HttpsError('already-exists', 'Already rated');
-    if (req.data.providerId && req.data.providerId !== appt.providerId) throw new HttpsError('permission-denied', 'This appointment was with a different provider.');
-    if (appt.providerId === uid) throw new HttpsError('permission-denied', 'You cannot rate yourself.');
-    const ref = db().collection('healthProviders').doc(String(appt.providerId));
-    const provSnap = await t.get(ref);
-    if (!provSnap.exists) throw new HttpsError('not-found', 'Provider not found');
-    t.update(ref, { ...addRating(provSnap.data(), rating), updatedAt: FieldValue.serverTimestamp() });
-    t.update(apptRef, { rated: true, rating, review: san(review, 500), ratedAt: FieldValue.serverTimestamp() });
-  });
-  return { ok: true };
+  /* RETIRED (ADR-014, owner 2026-10-04). It rated against the retired healthAppointments engine and wrote the retired
+     healthProviders registry. A clinic is rated through the ONE review authority (reputation.js submitReview) on the
+     COMPLETED consultation booking (providerBookings) — which aggregates onto the canonical providers/{uid}. The export
+     stays so a deployed caller gets a plain answer; it reads and writes nothing. */
+  requireAuth(req);
+  throw new HttpsError('failed-precondition', 'Rate your consultation from your bookings on SOKONI. Nothing was saved.',
+    { code: 'HEALTH_RATING_MOVED' });
 });
 
 /* â”€â”€ 15. getHealthDashboard (admin) â”€â”€ */

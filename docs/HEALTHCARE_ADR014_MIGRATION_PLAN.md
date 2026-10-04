@@ -26,6 +26,23 @@ Related: [[Healthcare]] · [[Authentication]] · [[Applications]] · `docs/RELEA
 | `OTHER_STATUS` | suspended / rejected / other | carried as-is; never activated |
 | `NO_UID` | no account named | manual review |
 
+### 2a. Census RESULT — production, 2026-10-04 (owner-approved one-time read; nothing written)
+
+Command (from the `5b/r2-lifecycle` tree): `node scripts/infra/health-adr014-census.js --project sokoni-aeb26 --json`
+Evidence: `docs/evidence/health-adr014-census-2026-10-04.json` (state classes and role/type/hub labels only — no personal data).
+
+| Read | Result |
+|---|---|
+| `healthProviders` documents | **0** |
+| `applications` with `role == 'health'` | **0** |
+| applications whose role / type / hub look like healthcare (health, clinic, hospital, pharm, medic, doctor) | **none** |
+| **Positive control** (same credentials): `providers` count / `applications` count | **11 / 13** — the reads work; the zeros are real |
+| Reconcile dry-run proposals | **0** |
+
+Application population by role|type|hub (labels only): provider|business|fashion 1 · provider|business|b2b 2 · driver|driver|delivery 3 · provider|voiceover|entertainment 1 · seller|business|- 1 · provider|Cleaning Company / Housekeeper|service 1 · provider|provider|service 2 · provider|business|home-services 2.
+
+**Consequence:** there is NO production healthcare data to migrate — the ADR-014 risk is entirely in CODE: every reader of `healthProviders` (section 3) must be repointed to the canonical `providers/{uid}` before the lifecycle deploys, or the first approved clinic is invisible and cannot prescribe. Note: the census script's first draft treated "both reads ran" as its control; that was too weak (an empty-and-empty result proves nothing about the credentials) and was replaced by the populated-collection counts above before this result was accepted.
+
 ## 3. Live readers of `healthProviders` — repointed or kept
 
 | Reader | Today | Plan |

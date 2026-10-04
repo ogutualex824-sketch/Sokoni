@@ -33,6 +33,25 @@ function isDiscoverable(p) {
   return elig.eligible && HCAT.isCategory(elig.category) && elig.category === HCAT.categoryOf(p);
 }
 
+/** May this account act CLINICALLY (consult, chart, prescribe) — ADR-014, owner 2026-10-04.
+ *  The ONE healthcare identity is the canonical providers/{uid} projected by an AdminOS approval: a server-written
+ *  healthcare record (source application | admin) on an active, unsuspended provider. Classification is NOT required
+ *  (the healthcare exception: an unmapped clinic is approved and classified afterwards); public DISCOVERY is
+ *  isDiscoverable's job. healthProviders is never read — a legacy record activates nothing. */
+function canOperate(p) {
+  if (!p || !p.healthcare || !['application', 'admin'].includes(p.healthcare.source)) return false;
+  if (!['active', 'approved'].includes(String(p.status || ''))) return false;
+  return p.suspended !== true && p.deactivated !== true && p.banned !== true;
+}
+/** One canonical healthcare provider by account id — the record, or null. Reads providers/{uid} only. */
+async function readProvider(db, uid, t) {
+  const id = String(uid || '');
+  if (!/^[A-Za-z0-9_-]{1,128}$/.test(id)) return null;
+  const ref = db.collection('providers').doc(id);
+  const snap = t ? await t.get(ref) : await ref.get();
+  return snap.exists ? (snap.data() || {}) : null;
+}
+
 /** The public projection — a WHITELIST. */
 function publicCard(uid, p) {
   const category = HCAT.categoryOf(p);
@@ -74,4 +93,4 @@ exports.healthcareDirectory = onCall(CF_OPTS, async (req) => {
   return { category: category || null, providers, categories: HCAT.CATEGORIES.map((c) => ({ id: c, label: HCAT.LABELS[c] })) };
 });
 
-module.exports = { healthcareDirectory: exports.healthcareDirectory, listDirectory, isDiscoverable, publicCard, PUBLIC_FIELDS };
+module.exports = { healthcareDirectory: exports.healthcareDirectory, listDirectory, isDiscoverable, canOperate, readProvider, publicCard, PUBLIC_FIELDS };
