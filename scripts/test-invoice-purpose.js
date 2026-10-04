@@ -9,7 +9,7 @@ require('./lib/net-firewall').install();   /* money suite: FAIL CLOSED on any ca
      I4  source gate: only 'manual' — order / booking / quote / commission / subscription invoices are refused
      I5  payer: clientUid set → only that customer; the issuing merchant (shop owner or createdBy) can never pay its own invoice
      I6  payee = shops/{shopId}.ownerId, else shopId; business wallet; commission snapshot on the balance
-     I7  NO RATE CONFIGURED for merchant_invoice (the real engine) → refused BEFORE any intent (category_unpriced) — never a default
+     I7  the REAL engine prices merchant_invoice from its explicit 15% row (owner 2026-10-04); without the row it refuses (mutant)
      I8  ONE open intent per balance: same payer replays the ref; another payer refused while open; expired / cancelled /
          stale-created attempts stepped past (-r1); a paid intent at this balance → "just received"
      I9  invoice is SELF-SETTLING (no generic payment-time credit)
@@ -75,7 +75,9 @@ function reset (over, shop) { DOCS = { 'invoices/INV00001': INV(over) }; if (sho
     && y.ok && y.r.metadata.sellerUid === 'shop1' && cs && cs.commissionRate === 5 && cs.capturedOnCents === 1250000 && cs.commissionBase === 'invoice_balance' && cs.category === 'merchant_invoice', { meta: x.ok && x.r.metadata });
 
   RATE = null; reset(); const u = await price('buyer1', { invoiceId: 'INV00001' }); RATE = 5;
-  ck('I7 REAL engine: no merchant_invoice rate configured → refused before any intent (category_unpriced), never a default rate', !u.ok && u.code === 'failed-precondition' && u.dcode === 'category_unpriced', u);
+  const us = u.ok && u.r.metadata.commissionSnapshot;
+  ck('I7 REAL engine: explicit merchant_invoice row = 15% (owner 2026-10-04) captured in the snapshot at payment start — 1,875.00 on 12,500.00',
+    u.ok && us && us.commissionRate === 15 && us.category === 'merchant_invoice' && us.commissionCentsAtCapture === 187500 && /^merchant_invoice@/.test(us.commissionRuleId), u.ok ? us : u);
 
   reset(); const base = 'INV-INV00001-1250000';
   DOCS['paymentIntents/' + base] = { uid: 'buyer1', status: 'created', expiresAt: { toMillis: () => Date.now() + 600000 } };

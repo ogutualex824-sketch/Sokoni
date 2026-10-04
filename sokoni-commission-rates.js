@@ -111,6 +111,10 @@
       "pct": 10,
       "fixedKES": 0
     },
+    "merchant_invoice": {
+      "pct": 15,
+      "fixedKES": 0
+    },
     "construction_featured": {
       "pct": null,
       "fixedKES": null,

@@ -112,6 +112,10 @@ const RATES = {
        UNPRICED_CATEGORIES and the engine REFUSES to price them (never a silent 0% and never the 5% default). */
   construction_service:          { pct: 0, fixedKES: 0, _was: 'new 2026-10-03 — owner: subscription + per-lead fee, no % of contract value' },
   construction_equipment_rental: { pct: 10, fixedKES: 0, _was: 'owner 2026-10-03 (Super Admin update via f3): 10% — was unpriced/refused' },
+  /* CANONICAL INVOICE payments (owner 2026-10-04, direct via f3): a merchant's MANUAL invoice paid online through the `invoice`
+     purpose — 15%, the same as marketplace; settled IMMEDIATELY to the merchant's business wallet (amount − 15%) via the
+     settlement authority with the intent's commissionSnapshot. An explicit row — never a default. */
+  merchant_invoice:              { pct: 15, fixedKES: 0, _was: 'new 2026-10-04 — owner: invoice payments 15% (same as marketplace), immediate settlement' },
   /* OFF items — owner representation rule 2026-10-03 (via f3): an OFF item is stored CONFIGURED BUT DISABLED
      ({configured:true, enabled:false, effectiveFrom:null} + its real amount/rate), NEVER as a zero value, so no reader can mistake
      a stored number for an active charge. enabled:false puts the row in UNPRICED_CATEGORIES → the engine refuses it. */
