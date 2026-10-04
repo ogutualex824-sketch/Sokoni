@@ -1,3 +1,11 @@
+## 2026-10-04 — Account reactivation re-runs the ONE shop discovery evaluator (NOT deployed)
+
+- **Owner (direct):** freeze / suspend → shop HELD → account reactivated → evaluator → shop released ONLY if every condition passes. Reactivation never sets a shop public itself.
+- **Change:** functions/account-status.js converged onto the lifecycle line = the hardened account fix e528bb5 (server-taken stash, accountFreezes, ADMIN_FROZEN / NOT_SELF_DEACTIVATED / ACCOUNT_SUSPENDED refusals, in-app /support routing) + r2's OB-5 providerProfiles hide/restore + `evaluateShopDiscovery` after every hide (self freeze, admin freeze) and every restore (self reactivation, admin restore). A pre-hold (legacy) shop keeps the compatibility round trip and is never given discovery fields.
+- **Tests:** NEW test-account-shop-discovery 16/0 — round trip; reactivation cannot bypass a revoked / missing / non-admin decision, a removed category, an inactive seller, a missing business, an owner mismatch, or a pre-freeze moderation hide; admin freeze cannot be self-lifted; an active freeze alone re-holds; legacy compatibility; static: account-status writes no discovery field. NEW sabotage-account-shop-discovery 10/10. e528bb5's test-account-reactivate-authority carried: 17/0.
+- **Deploy note:** e528bb5 (the queued account fix, on the LIVE lineage) is unchanged and still valid there — live shops have no discovery field. This converged version supersedes it when the lifecycle line ships; deploy accountDeactivate / accountReactivate / adminSetAccountActive with shop-discovery-release.
+- **Files:** functions/account-status.js, scripts/test-account-shop-discovery.js (new), scripts/sabotage-account-shop-discovery.js (new), scripts/test-account-reactivate-authority.js (carried from e528bb5).
+
 ## 2026-10-04 — Healthcare: every consumer reads the canonical provider (ADR-014 reader repoint; NOT deployed)
 
 - **Owner (direct):** ONE source — approval → canonical providers/{uid} → directory / search / profile / consultation / prescription / rating. No compatibility layer, no healthProviders fallback anywhere. **Census (965000b):** production holds 0 healthProviders and 0 health applications (positive control 11 providers / 13 applications) — nothing to migrate; the risk was code only.
