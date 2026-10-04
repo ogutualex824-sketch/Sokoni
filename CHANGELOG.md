@@ -1,3 +1,18 @@
+## 2026-10-04 — merchant_invoice platform fee = 15% (owner decision, direct via f3) — invoice payments enabled in code (NOT deployed)
+
+- **Owner decisions (2026-10-04, direct, relayed by f3):**
+  1. `merchant_invoice` = 15% (same as marketplace), as an EXPLICIT commission-config row; captured in the intent's commissionSnapshot at payment start.
+  2. Payer rule approved as built: any signed-in payer except the issuing merchant; only the linked customer when clientUid is set.
+  3. Settlement IMMEDIATE: on the verified payment the merchant's BUSINESS wallet is credited (amount − 15%) via the settlement authority with the snapshot. That is 5b's wiring.
+  Source scope stays manual-only. Receipt id invoice_<paymentRef> (per payment) is accepted.
+- **Change:** commission-config.js gains the `merchant_invoice` row (pct 15). sokoni-commission-rates.js is regenerated (build-commission-snapshot.js; diff = that one row).
+- **Files:** functions/commission-config.js, sokoni-commission-rates.js, scripts/test-invoice-purpose.js (I7 now asserts the real engine at 15%: 1,875.00 on 12,500.00).
+- **Tests:**
+  - test-invoice-purpose 11/0; mutants 11/11 (V11: row removed → I7 FAILS).
+  - commission suites: schedule 34/0, categories-owner 8/0, settlement-authority 53/0, commission-invoice 52/0, lane-separation 22/0 (2 UNPROVEN, pre-existing).
+  - verify-commission-single-source PASS.
+- **API:** none new. **DB:** none. **Security:** the rate is server-side only; the client snapshot file is display-only.
+
 ## 2026-10-04 — `invoice` payment purpose + invoice receipts for the canonical invoice (H15; for sokoni-f3 / sokoni-5b) (NOT deployed)
 
 - **What:**
