@@ -13,6 +13,12 @@
        → one refund per refundId (allocations/{paymentId}/refunds/{refundId} via create()); recomputes the invoice.
    Refused (never partially applied): unknown / non-canonical invoice, draft or void invoice, currency mismatch,
    non-integer or non-positive amounts, a refund larger than what that payment still holds.
+
+   OVERPAYMENT (owner 2026-10-04): the verified amount RECEIVED is split into the amount APPLIED to the invoice
+   (≤ its balance) and an EXCESS that is HELD separately (invoiceExcessHolds/{paymentId}, status 'held') and flagged for
+   review — never credited to the merchant. The receipt payload carries receivedCents / appliedCents / excessHeldCents so
+   no receipt represents more money than was resolved. Settlement (commission + wallet) is on appliedCents only.
+   An admin resolves a hold (refund or an approved alternative) — auditable and idempotent, outside this module.
    ════════════════════════════════════════════════════════════════════════════════════════════════════════ */
 'use strict';
 
@@ -40,16 +46,26 @@ async function applyVerifiedPayment(db, p) {
     const totalCents = Number.isInteger(x.totalCents) ? x.totalCents : M.toCents(x.total);
     if (!Number.isInteger(totalCents)) bad('invalid_invoice', 'invoice total unreadable');
     const prevPaid = Number.isInteger(x.paidCents) ? x.paidCents : 0;
-    const totals = M.totalsOf(totalCents, [{ status: 'succeeded', amountCents: prevPaid }, { status: 'succeeded', amountCents }]);
+    const balanceBefore = Math.max(0, totalCents - prevPaid);
+    const appliedCents = Math.min(amountCents, balanceBefore);
+    const excessCents = amountCents - appliedCents;
+    const totals = M.totalsOf(totalCents, [{ status: 'succeeded', amountCents: prevPaid + appliedCents }]);
     const status = M.statusOf(x.status, totals);
-    t.create(allocRef, { paymentId: String(paymentId), status: 'succeeded', amountCents, refundedCents: 0, currency: x.currency || currency || 'KES',
-      provider: provider || 'intasend', providerRef: providerRef || null, verified: true, createdAt: FieldValue.serverTimestamp() });
-    t.update(invRef, { totalCents, paidCents: totals.paidCents, balanceCents: totals.balanceCents, overpaidCents: totals.overpaidCents,
+    const cur = x.currency || currency || 'KES';
+    t.create(allocRef, { paymentId: String(paymentId), status: 'succeeded', receivedCents: amountCents, amountCents: appliedCents, excessHeldCents: excessCents,
+      refundedCents: 0, currency: cur, provider: provider || 'intasend', providerRef: providerRef || null, verified: true, createdAt: FieldValue.serverTimestamp() });
+    if (excessCents > 0) {
+      t.create(db.collection('invoiceExcessHolds').doc(String(paymentId)), { paymentId: String(paymentId), invoiceId: String(invoiceId), excessCents, currency: cur,
+        status: 'held', reason: 'overpayment', provider: provider || 'intasend', providerRef: providerRef || null, createdAt: FieldValue.serverTimestamp() });
+    }
+    t.update(invRef, { totalCents, paidCents: totals.paidCents, balanceCents: totals.balanceCents, overpaidCents: 0,
       status, paymentStatus: 'succeeded', lastVerifiedPaymentAt: FieldValue.serverTimestamp(), allocationCount: FieldValue.increment(1),
-      ...(status === 'paid' && x.status !== 'paid' ? { paidAt: FieldValue.serverTimestamp() } : {}),
-      ...(totals.overpaidCents > 0 ? { reviewFlag: 'overpaid' } : {}), updatedAt: FieldValue.serverTimestamp() });
+      ...(excessCents > 0 ? { excessHeldCents: FieldValue.increment(excessCents), reviewFlag: 'overpaid' } : {}),
+      ...(status === 'paid' && x.status !== 'paid' ? { paidAt: FieldValue.serverTimestamp() } : {}), updatedAt: FieldValue.serverTimestamp() });
     return { ok: true, replay: false, invoiceId, paymentId, status, paidCents: totals.paidCents, balanceCents: totals.balanceCents,
-      receipt: { kind: 'invoice_payment', invoiceId, paymentId, amountCents, currency: x.currency || 'KES', invoiceNumber: x.invoiceNumber || null } };
+      receivedCents: amountCents, appliedCents, excessHeldCents: excessCents,
+      /* settle (commission + wallet) on appliedCents ONLY; the excess stays held */
+      receipt: { kind: 'invoice_payment', invoiceId, paymentId, receivedCents: amountCents, appliedCents, excessHeldCents: excessCents, currency: cur, invoiceNumber: x.invoiceNumber || null } };
   });
 }
 

@@ -112,7 +112,7 @@ const reset = () => { for (const k of Object.keys(store)) delete store[k]; };
   reset();
   store['invoices/c1'] = { modelVersion: 1, source: 'order', status: 'issued', currency: 'KES', totalCents: 100000, paidCents: 0, balanceCents: 100000, invoiceNumber: 'INV-C1' };
   let r = await ALLOC.applyVerifiedPayment(db, { invoiceId: 'c1', paymentId: 'pay1', amountCents: 40000, currency: 'KES', provider: 'intasend', providerRef: 'ISL1', FieldValue: FV });
-  ck('A1', r.ok && store['invoices/c1'].status === 'partially_paid' && store['invoices/c1'].paidCents === 40000 && store['invoices/c1'].balanceCents === 60000 && r.receipt && r.receipt.amountCents === 40000, 'a verified payment of 400 on 1,000 → partially_paid, balance 600, a receipt payload returned', store['invoices/c1']);
+  ck('A1', r.ok && store['invoices/c1'].status === 'partially_paid' && store['invoices/c1'].paidCents === 40000 && store['invoices/c1'].balanceCents === 60000 && r.receipt && r.receipt.receivedCents === 40000 && r.receipt.appliedCents === 40000 && r.receipt.excessHeldCents === 0, 'a verified payment of 400 on 1,000 → partially_paid, balance 600, a receipt payload returned', store['invoices/c1']);
   r = await ALLOC.applyVerifiedPayment(db, { invoiceId: 'c1', paymentId: 'pay1', amountCents: 40000, FieldValue: FV });
   ck('A2', r.replay === true && store['invoices/c1'].paidCents === 40000 && Object.keys(store).filter((p) => p.startsWith('invoices/c1/allocations/')).length === 1, 'a DUPLICATE / replayed webhook → one payment, one allocation, no second transition');
   r = await ALLOC.applyVerifiedPayment(db, { invoiceId: 'c1', paymentId: 'pay2', amountCents: 60000, FieldValue: FV });
@@ -133,8 +133,15 @@ const reset = () => { for (const k of Object.keys(store)) delete store[k]; };
   }
   ck('A7', JSON.stringify(refusals) === JSON.stringify(['not_canonical', 'not_payable', 'not_payable', 'currency', 'invalid', 'not_found']), 'refused: non-canonical, draft, void, other currency, non-positive, unknown invoice', refusals);
   store['invoices/o1'] = { modelVersion: 1, source: 'order', status: 'issued', currency: 'KES', totalCents: 1000, paidCents: 0 };
-  await ALLOC.applyVerifiedPayment(db, { invoiceId: 'o1', paymentId: 'big', amountCents: 1500, FieldValue: FV });
-  ck('A8', store['invoices/o1'].status === 'paid' && store['invoices/o1'].overpaidCents === 500 && store['invoices/o1'].reviewFlag === 'overpaid', 'an overpayment is paid + flagged for review (500 over)', store['invoices/o1']);
+  const ov = await ALLOC.applyVerifiedPayment(db, { invoiceId: 'o1', paymentId: 'big', amountCents: 1500, FieldValue: FV });
+  const hold = store['invoiceExcessHolds/big'] || {};
+  ck('A8', store['invoices/o1'].status === 'paid' && store['invoices/o1'].paidCents === 1000 && store['invoices/o1'].excessHeldCents === 500 && store['invoices/o1'].reviewFlag === 'overpaid' && hold.status === 'held' && hold.excessCents === 500, 'OVERPAY 1,500 on 1,000: APPLIED 1,000 (paid), EXCESS 500 HELD separately + flagged — never credited', { inv: store['invoices/o1'], hold });
+  ck('A9', ov.receivedCents === 1500 && ov.appliedCents === 1000 && ov.excessHeldCents === 500 && ov.receipt.receivedCents === 1500 && ov.receipt.appliedCents === 1000 && ov.receipt.excessHeldCents === 500, 'the receipt distinguishes RECEIVED 1,500 / APPLIED 1,000 / EXCESS HELD 500 (never more than resolved)', ov.receipt);
+  const ov2 = await ALLOC.applyVerifiedPayment(db, { invoiceId: 'o1', paymentId: 'big', amountCents: 1500, FieldValue: FV });
+  ck('A10', ov2.replay === true && store['invoices/o1'].excessHeldCents === 500 && Object.keys(store).filter((p) => p.startsWith('invoiceExcessHolds/')).length === 1, 'a DUPLICATE overpaying webhook → one allocation, ONE hold, excess not doubled', store['invoices/o1']);
+  store['invoices/u1'] = { modelVersion: 1, source: 'manual', status: 'issued', currency: 'KES', totalCents: 1000, paidCents: 0 };
+  const un = await ALLOC.applyVerifiedPayment(db, { invoiceId: 'u1', paymentId: 'small', amountCents: 300, FieldValue: FV });
+  ck('A11', un.appliedCents === 300 && un.excessHeldCents === 0 && store['invoices/u1'].status === 'partially_paid' && store['invoices/u1'].balanceCents === 700 && !store['invoiceExcessHolds/small'], 'UNDERPAY 300 on 1,000: applied 300, invoice stays outstanding (700), no hold', store['invoices/u1']);
 
   /* ── G migration ── */
   reset();

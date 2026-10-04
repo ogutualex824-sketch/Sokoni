@@ -1,3 +1,9 @@
+## [2026-10-04] — Invoice allocation: received vs applied vs excess HELD (owner overpayment rule)
+
+**Owner (2026-10-04):** exact or under-payment settles the amount received (−15%) and the invoice stays outstanding for any balance. An overpayment settles only what clears the invoice; the EXCESS is held separately and flagged, never credited to the merchant. The receipt must not represent more money than was resolved, and a duplicate webhook must not double-credit or duplicate a receipt.
+**What:** `applyVerifiedPayment` splits the verified amount into `appliedCents` (≤ balance; this is the only part that counts as paid or is settled) and `excessHeldCents`. The excess is written to `invoiceExcessHolds/{paymentId}` (create(), status held) plus `invoices.excessHeldCents` and reviewFlag 'overpaid'. The allocation records receivedCents / amountCents(applied) / excessHeldCents, and the receipt payload carries receivedCents / appliedCents / excessHeldCents. Refunds act on the applied amount; an excess is released only by an admin's audited hold resolution.
+**Tests:** test-admin-invoices 34/0. A8 overpay applied 1,000 + 500 held; A9 receipt distinguishes the three; A10 duplicate overpaying webhook = one hold; A11 underpay leaves 700 outstanding. Mutation: the excess credited as paid → A8/A9/A10 fail.
+
 ## [2026-10-04] — THE canonical invoice: model, verified-payment allocation, legacy migration, admin read + audited export
 
 **Owner decisions (2026-10-04):** `invoices`, restructured, is the ONE canonical invoice. Payment truth comes only from a verified payment event, and merchant / admin references are claims. Admin totals come from canonical records only, and export is a server-side, audited query.
