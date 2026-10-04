@@ -56,7 +56,7 @@ const COLLECTIONS = [
   { col: 'businesses',       index: 'sokoni_shops',      global: true },
   { col: 'restaurants',      index: 'sokoni_shops',      global: true },
   { col: 'mechanics',        index: 'sokoni_services',   global: true },
-  { col: 'healthProviders',  index: 'sokoni_services',   global: true },
+  /* healthProviders — REMOVED (ADR-014, owner 2026-10-04): the retired registry; clinics are canonical providers. */
   { col: 'lawyers',          index: 'sokoni_services',   global: true },
   { col: 'entEvents',        index: 'sokoni_events',     global: true },
   { col: 'entVenues',        index: 'sokoni_events',     global: true },
@@ -338,7 +338,11 @@ async function main() {
   let totalIndexed = 0;
   let totalSkipped = 0;
 
+  /* The live pipeline admits a document only through discovery-eligibility.prepareForIndex; this operator backfill must
+     never index what that gate DEINDEXES (legacy registries: mechanics, lawyers, healthProviders, stores, …). */
+  const DEINDEXED = require('../discovery-eligibility').DEINDEXED;
   for (const entry of COLLECTIONS) {
+    if (DEINDEXED.includes(entry.col)) { console.log(`  – ${entry.col}: skipped (deindexed by the discovery gate)`); continue; }
     try {
       const { indexed, skipped } = await backfillCollection(entry);
       totalIndexed += indexed;

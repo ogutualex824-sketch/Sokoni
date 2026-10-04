@@ -9,7 +9,7 @@
  *               appointments, not another party's appointment, not another patient's records
  *   canonical   a real admin (admin-claim) reads another provider's appointments and updates an appointment
  *   forged      a forged admin identity (string "true", isAdmin:'yes', role 'Admin') is not an admin
- *   self        registerHealthProvider ignores injected status / verified / approved; a client-written
+ *   self        registerHealthProvider is retired (ADR-014) and writes nothing; a client-written
  *               "approved" health application grants nothing; an applicant cannot decide their own application
  *   preserved   a real AdminOS approval of a health application still lands the provider in providers/{uid}
  *   static      no getRole / numeric role gate remains in healthcare-hub.js
@@ -92,9 +92,11 @@ const snapshotOf = async () => JSON.stringify((await db.collection('healthProvid
   ck('…but no admin reads a patient\'s clinical records through this path (decided in slice 3)', admRec.records.length === 0);
 
   say('\n── self-approval ──');
-  await run(HC.registerHealthProvider)(req('docC', { name: 'Dr C', specialization: 'dermatology', licenseNumber: 'KMPDC-1', status: 'active', verified: true, approved: true, reviewedBy: 'adm1' }));
-  const c = await get('healthProviders/docC');
-  ck('registerHealthProvider ignores injected status / verified / approved / reviewedBy', c.status === 'pending' && c.verified === undefined && c.approved === undefined && c.reviewedBy === undefined, c.status);
+  /* ADR-014 (owner 2026-10-04): self-registration into the retired healthProviders registry is GONE — the ONE intake is
+     the application, the ONE activation the AdminOS approval. An injected status / verified / approved activates nothing. */
+  const regCode = await code(run(HC.registerHealthProvider)(req('docC', { name: 'Dr C', specialization: 'dermatology', licenseNumber: 'KMPDC-1', status: 'active', verified: true, approved: true, reviewedBy: 'adm1' })));
+  ck('registerHealthProvider is retired: refused, and writes NOTHING (no healthProviders, no providers record) even with injected status / verified / approved',
+    regCode === 'HEALTH_REGISTRATION_MOVED' && !(await get('healthProviders/docC')) && !(await get('providers/docC')), regCode);
   await db.doc('applications/hc_self').set({ uid: 'docD', role: 'health', name: 'Dr D', status: 'approved', decidedBy: 'adm1', createdAt: 1 });
   for (let i = 0; i < 4; i++) { const s = await db.doc('applications/hc_self').get(); await run(LC.applicationLifecycle)({ data: { before: null, after: s }, params: { appId: 'hc_self' } }); }
   const selfApp = await get('applications/hc_self');

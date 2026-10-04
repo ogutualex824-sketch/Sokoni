@@ -5,7 +5,8 @@
  * PROVES — for createHealthRecord AND createPrescription
  *   allowed    ONLY: caller is the booking's provider · the patient is the booking's customer (derived) ·
  *              commissionHub 'healthcare' · status confirmed|completed · paymentStatus paid_held|settled ·
- *              the provider identity gate unchanged (healthProviders active)
+ *              the provider identity = the CANONICAL providers/{uid} (ADR-014: healthcare-directory.canOperate) —
+ *              a LEGACY healthProviders record, even 'active', grants nothing (the old activation path is dead)
  *   refused    arbitrary patientUid (ignored — the record lands on the booking's patient) · forged provider
  *              (another provider's booking) · forged / missing booking id · a non-healthcare booking ·
  *              pending / cancelled / declined / no-show · unpaid-but-confirmed · refunded · a provider
@@ -51,11 +52,19 @@ let n = 0; const rid = () => 'req_' + String(++n).padStart(6, '0');
 const BK = (id, over) => db.doc('providerBookings/' + id).set(Object.assign({ providerId: 'docB', customerUid: 'pat1', commissionHub: 'healthcare', status: 'confirmed', paymentStatus: 'paid_held' }, over || {}));
 
 (async () => {
-  await db.doc('healthProviders/docB').set({ uid: 'docB', name: 'Dr B', status: 'active', specialization: 'pediatrics' });
-  await db.doc('healthProviders/docX').set({ uid: 'docX', name: 'Dr X', status: 'active', specialization: 'dermatology' });
-  await db.doc('healthProviders/docP').set({ uid: 'docP', name: 'Dr P', status: 'pending' });
+  /* ADR-014 (owner 2026-10-04): the clinical identity is the canonical provider an AdminOS approval projects */
+  const HCREC = (category) => ({ healthcare: { category, source: 'application' } });
+  await db.doc('providers/docB').set(Object.assign({ uid: 'docB', name: 'Dr B', status: 'active' }, HCREC('clinician')));
+  await db.doc('providers/docX').set(Object.assign({ uid: 'docX', name: 'Dr X', status: 'active' }, HCREC('clinician')));
+  await db.doc('providers/docP').set(Object.assign({ uid: 'docP', name: 'Dr P', status: 'pending' }, HCREC('clinician')));
+  await db.doc('providers/docU').set(Object.assign({ uid: 'docU', name: 'Unclassified Clinic', status: 'active' }, HCREC(null)));   /* approved, not yet classified */
+  await db.doc('providers/docS').set(Object.assign({ uid: 'docS', name: 'Dr S', status: 'active', suspended: true }, HCREC('clinician')));
+  await db.doc('providers/docN').set({ uid: 'docN', name: 'Plumber N', status: 'active', business: { category: 'trades', source: 'application' } });   /* not healthcare */
+  /* DIRECTION 2: a LEGACY healthProviders record — even 'active' — with NO canonical approval */
+  await db.doc('healthProviders/docL').set({ uid: 'docL', name: 'Dr Legacy', status: 'active', specialization: 'pediatrics' });
   await BK('ok1'); await BK('ok2', { status: 'completed', paymentStatus: 'settled' });
   await BK('okP', { providerId: 'docP' });
+  await BK('okL', { providerId: 'docL' }); await BK('okU', { providerId: 'docU' }); await BK('okS', { providerId: 'docS' }); await BK('okN', { providerId: 'docN' });
   await BK('nonHealth', { commissionHub: 'provider' });
   await BK('pending', { status: 'pending', paymentStatus: 'pending' });
   await BK('unpaid', { status: 'confirmed', paymentStatus: 'pending' });
@@ -97,10 +106,17 @@ const BK = (id, over) => db.doc('providerBookings/' + id).set(Object.assign({ pr
       'a declined booking': ['docB', { bookingId: 'declined' }],
       'a no-show booking': ['docB', { bookingId: 'noshow' }],
       'the provider as their own patient': ['docB', { bookingId: 'self' }],
-      'an unapproved provider identity (healthProviders pending)': ['docP', { bookingId: 'okP' }],
+      'an unapproved provider identity (canonical provider pending)': ['docP', { bookingId: 'okP' }],
+      'a LEGACY healthProviders identity (active there, no canonical approval)': ['docL', { bookingId: 'okL' }],
+      'a SUSPENDED canonical provider': ['docS', { bookingId: 'okS' }],
+      'a canonical provider that is not healthcare': ['docN', { bookingId: 'okN' }],
       'an unregistered provider': ['stranger', { bookingId: 'ok1' }],
       'the patient themselves': ['pat1', { bookingId: 'ok1' }],
     };
+    /* HEALTHCARE EXCEPTION (owner 2026-10-04): an approved clinic acts clinically BEFORE classification — the category
+       gates public discovery, never the approved clinic's own consultations. */
+    let wu = null; try { wu = await run(cf)(req('docU', body({ bookingId: 'okU' }))); } catch (e) { wu = { err: e.code || e.message }; }
+    ck(`${label}: an APPROVED but UNCLASSIFIED clinic (canonical record, no category yet) may act clinically`, !!wu && !wu.err && !!(wu.recordId || wu.prescriptionId), wu);
     const cBefore = (await all(col)).length; const aB2 = (await all('healthClinicalAudit')).length;
     for (const [k, [who, o]] of Object.entries(REFUSE)) {
       const c = await code(run(cf)(req(who, body(o))));
