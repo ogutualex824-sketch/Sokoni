@@ -1,0 +1,25 @@
+{
+ "project": "sokoni-aeb26",
+ "read": {
+  "healthProviders": 0,
+  "healthApplications": 0
+ },
+ "positiveControl": {
+  "providers": 11,
+  "applications": 13
+ },
+ "applicationRoleTypeHub": {
+  "provider|business|fashion": 1,
+  "provider|business|b2b": 2,
+  "driver|driver|delivery": 3,
+  "provider|voiceover|entertainment": 1,
+  "seller|business|-": 1,
+  "provider|Cleaning Company / Housekeeper|service": 1,
+  "provider|provider|service": 2,
+  "provider|business|home-services": 2
+ },
+ "healthLikeApplicationKeys": [],
+ "counts": {},
+ "rows": [],
+ "dryRun": []
+}

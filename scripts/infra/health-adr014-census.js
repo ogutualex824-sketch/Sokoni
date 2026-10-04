@@ -33,10 +33,18 @@ admin.initializeApp({ projectId: proj });
 const db = admin.firestore();
 
 (async () => {
-  const [hp, apps] = await Promise.all([
+  const [hp, apps, provCount, appCount, allApps] = await Promise.all([
     db.collection('healthProviders').get(),
     db.collection('applications').where('role', '==', 'health').get(),
+    db.collection('providers').count().get(),
+    db.collection('applications').count().get(),
+    db.collection('applications').select('role', 'type', 'hub').get(),
   ]);
+  /* POSITIVE CONTROL (an empty health result is only "empty" if the same credentials read known-populated collections). */
+  const control = { providers: provCount.data().count, applications: appCount.data().count };
+  const dist = {};
+  allApps.docs.forEach((d) => { const a = d.data() || {}; const k = [a.role || '-', a.type || '-', a.hub || '-'].join('|'); dist[k] = (dist[k] || 0) + 1; });
+  const healthLike = Object.keys(dist).filter((k) => /health|clinic|hospital|pharm|medic|doctor/i.test(k));
   const appsByUid = {};
   apps.docs.forEach((d) => { const a = d.data() || {}; if (a.uid) (appsByUid[a.uid] = appsByUid[a.uid] || []).push(d.id); });
 
@@ -65,10 +73,13 @@ const db = admin.firestore();
     rows.push({ id: d.id, uid, status, cls, ...detail });
   }
   const counts = rows.reduce((a, r) => { a[r.cls] = (a[r.cls] || 0) + 1; return a; }, {});
-  const out = { project: proj, read: { healthProviders: hp.size, healthApplications: apps.size }, counts, rows,
+  if (!(control.providers > 0 && control.applications > 0)) { console.error('UNREADABLE: positive control failed ' + JSON.stringify(control)); process.exit(2); }
+  const out = { project: proj, read: { healthProviders: hp.size, healthApplications: apps.size }, positiveControl: control,
+    applicationRoleTypeHub: dist, healthLikeApplicationKeys: healthLike, counts, rows,
     dryRun: rows.filter((r) => r.cls === 'ACTIVE_DECIDED').map((r) => ({ action: 'applicationReconcile', applicationId: r.applicationId, uid: r.uid })) };
   if (JSON_OUT) { console.log(JSON.stringify(out, null, 1)); return; }
-  console.log(`healthProviders read: ${hp.size} · health applications read: ${apps.size}  (positive control: both reads ran)`);
+  console.log(`healthProviders read: ${hp.size} · health applications read: ${apps.size} · positive control providers=${control.providers} applications=${control.applications}`);
+  console.log('health-like application role|type|hub keys: ' + (healthLike.join(', ') || 'none'));
   Object.keys(counts).sort().forEach((k) => console.log('  ' + k.padEnd(18) + counts[k]));
   console.log(`DRY-RUN: ${out.dryRun.length} reconcile(s) would be proposed; ${counts.ACTIVE_UNDECIDED || 0} active record(s) need an AdminOS decision first. Nothing was written.`);
 })().catch((e) => { console.error('UNREADABLE: ' + (e && e.message)); process.exit(2); });
