@@ -29,7 +29,7 @@ for (const [name, m] of Object.entries(M)) {
   fs.unlinkSync(path.resolve(__dirname, '..', tmp));
   const out = (r.stdout || '') + (r.stderr || '');
   if (/HARNESS ERROR/.test(out)) { console.log('  ' + name + ' HARNESS ERROR — no verdict'); bad++; continue; }
-  const missed = m.must.filter((id) => !new RegExp('FAIL\s+' + id.replace('-', '\-') + '\b').test(out));
+  const missed = m.must.filter((id) => !new RegExp('FAIL\\s+' + id.replace('-', '\\-') + '(?![\\w-])').test(out));
   console.log('  ' + name + (missed.length ? ' NOT CAUGHT by ' + missed.join(', ') : ' caught by ' + m.must.join(', ')));
   if (missed.length) bad++;
 }
