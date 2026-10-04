@@ -233,34 +233,31 @@ const wrote   = (c) => ENV.log.filter(e => e.coll === c || (e.path || '').starts
   ENV = seedCompliant(); r = await decide(SUPER, { superAdmin: true }, 'approve');
   ck('B5  a SuperAdmin is equally authoritative (existing AdminOS authority model)', r.ok, r.code);
 
-  /* ═══ C — approval is DELEGATED (production behaviour) ═══
-     Ruling b2 2026-10-04 (owner: keep production): health stays DELEGATED to its own onboarding (healthProviders). The
-     lifecycle grants the role and records the delegation; it writes NO providers/{uid} and NO healthProviders document.
-     ADR-014's providers/{uid} projection is NOT shipping — it gets its own rows in the future healthcare release. */
-  console.log('\nC. approval grants the role and DELEGATES the registry (production)');
+  /* ═══ C — approval reaches providers/{uid} through HC-23 ═══ */
+  console.log('\nC. approval provisions the canonical registry (HC-23 path)');
   ENV = seedCompliant();
   await decide(ADMIN, { admin: true }, 'approve');
   await fireTrigger();
-  const appC = ENV.data[`applications/${APP_ID}`] || {};
-  const receiptC = Array.isArray(appC.projectionReceipt) ? appC.projectionReceipt : [];
-  ck('C1  the lifecycle writes NO providers/{uid} for a health approval (delegated)', !ENV.data[`providers/${APPLICANT}`] && wrote('providers').length === 0, wrote('providers').length);
-  ck('C2  ...the projection receipt records the delegation to healthProviders',
-    receiptC.some((w) => w && w.collection === 'healthProviders' && w.action === 'delegated'), JSON.stringify(receiptC).slice(0, 120));
-  ck('C3  ...and the projection is applied (not failed, not blocked)', appC.projectionStatus === 'applied', appC.projectionStatus);
+  const prov = ENV.data[`providers/${APPLICANT}`];
+  ck('C1  providers/{uid} is provisioned', !!prov);
+  ck('C2  ...active and discoverable', !!prov && prov.status === 'active' && prov.searchable === true);
+  ck('C3  ...carrying the applicant identity', !!prov && prov.name === 'Westlands Family Clinic');
   ck('C4  the provider claim is minted', minted().some(m => m.uid === APPLICANT && m.claims.provider === true));
-  ck('C5  users.roles gains the canonical health role, and the health claim is minted (Roles Phase 2)',
+  /* Roles Phase 2 (stage (c)): a clinic's canonical role key is 'health'; the legacy provider CLAIM is still minted (C4) */
+  ck('C5  users.roles gains the canonical health role (Phase 2), and the health claim is minted',
     JSON.stringify((ENV.data[`users/${APPLICANT}`] || {}).roles || '').includes('health') && minted().some(m => m.uid === APPLICANT && m.claims.health === true));
   ck('C6  ZERO writes to healthProviders', wrote('healthProviders').length === 0, wrote('healthProviders').length);
 
   /* ═══ D — idempotency ═══ */
   console.log('\nD. a repeated approval is idempotent');
+  const pid = prov.providerId;
+  ENV.data[`providers/${APPLICANT}`] = { ...prov, rating: 4.8, reviewCount: 17 };
   await decide(ADMIN, { admin: true }, 'approve');
   await fireTrigger();
-  const appD = ENV.data[`applications/${APP_ID}`] || {};
-  ck('D1  still no providers/{uid} after a repeated approval', !ENV.data[`providers/${APPLICANT}`] && wrote('providers').length === 0);
-  ck('D2  one decision record for the application (the current decision, overwritten in place)',
-    Object.keys(ENV.data).filter((k) => k.startsWith('applicationDecisions/')).length === 1);
-  ck('D3  still approved and applied', appD.status === 'approved' && appD.projectionStatus === 'applied', [appD.status, appD.projectionStatus]);
+  const prov2 = ENV.data[`providers/${APPLICANT}`];
+  ck('D1  same providerId', prov2.providerId === pid, prov2.providerId);
+  ck('D2  rating and history not reset', prov2.rating === 4.8 && prov2.reviewCount === 17);
+  ck('D3  still active', prov2.status === 'active');
   ck('D4  still zero healthProviders writes', wrote('healthProviders').length === 0);
 
   /* ═══ E — rejection ═══ */

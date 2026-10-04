@@ -966,7 +966,9 @@ async function projectDriver(db, app, uid, approved, opts) {
    `legal` GRADUATED out of this map in Roles Phase 2: "delegated" meant nobody
    wrote the document, so approving an advocate produced no profile and no search
    presence. It now runs projectLegal above. */
-const DELEGATED_ROLES = { health: 'healthProviders', event_organizer: 'events' };   /* health = production (owner 2026-10-04); events = r2 */
+/* ADR-014 SHIPS (owner, direct, 2026-10-04): a health approval projects into providers/{uid} (projectProvider stamps
+   providers.healthcare) — the ONE healthcare activation path; healthcare-hub approveHealthProvider stays retired. */
+const DELEGATED_ROLES = { event_organizer: 'events' };
 
 /* ── SELLER PROVISIONING (Food Hub Gate 1, 2026-10-03) ──────────────────────────────────────────────────────────
    `seller` GRADUATED out of DELEGATED_ROLES. "Delegated to its own onboarding" meant nobody wrote anything: the only
@@ -2034,7 +2036,10 @@ exports.applicationDecide = onCall(
     let _bizCat = null;
     if (decision === 'approve') {
       const _role = _decidedRoleOf(cur);
-      if (_projectsToProviders(cur, _role)) {
+      /* ADR-014 (owner 2026-10-04): health is categorised by its OWN authority — projectProvider stamps
+         providers.healthcare from healthcare-category, and an unmapped clinic lands UNCLASSIFIED for AdminOS
+         healthAdminClassify (the certified healthcare model). H1's refusal therefore applies to the business lane only. */
+      if (_role !== 'health' && _projectsToProviders(cur, _role)) {
         const BCAT = require('./business-category');
         _bizCat = BCAT.categoryFromApplication(cur, _role).category;
         if (!BCAT.isCategory(_bizCat)) {

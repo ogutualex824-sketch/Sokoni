@@ -1,3 +1,11 @@
+## 2026-10-04 — Healthcare ADR-014 ships on the lifecycle line (NOT deployed; migration plan = deploy gate)
+
+- **Owner (direct, 2026-10-04):** SHIP ADR-014 — a health approval projects into providers/{uid} (providers.healthcare from healthcare-category); approveHealthProvider stays retired (ONE activation path). Supersedes the relayed 'keep delegated'. DELEGATED_ROLES = { event_organizer }.
+- **H1 scope:** the CATEGORY_UNRESOLVED refusal applies to the business lane; health is categorised by its own authority (unmapped → UNCLASSIFIED for AdminOS healthAdminClassify, the certified healthcare model).
+- **Deploy gate:** docs/HEALTHCARE_ADR014_MIGRATION_PLAN.md + read-only scripts/infra/health-adr014-census.js (no --apply; needs owner approval to read prod). The healthcare-hub readers of healthProviders MUST be repointed before this lifecycle deploys.
+- **Tests:** healthcare-admin-approval 64/0 (r2 rows restored; C5 = canonical health role), -authority 26/0, -category 34/0, -provisioning 29/1 (base 19/11; decision-record fixture + fake transaction; E2 = rules regex vs r2 firestore.rules, pre-existing). Sweep otherwise unchanged.
+- **Files:** functions/application-lifecycle.js, scripts/test-healthcare-admin-approval.js, scripts/test-healthcare-provisioning.js, docs/HEALTHCARE_ADR014_MIGRATION_PLAN.md, scripts/infra/health-adr014-census.js.
+
 ## 2026-10-04 — Stage (c) rulings: record-only reconcile, discovery HELD, health delegated (NOT deployed)
 
 - **Reconcile is RECORD-ONLY** (b2 ruling; owner "ONE approval authority, NO legacy fallback"): `_authoritativeDecision` no longer accepts an adminAudit row as a decision — a status with no `applicationDecisions` record is refused (`NO_DECISION_RECORD`). P0-H already migrated the 5 legacy approvals. K13-A B4 now asserts the refusal; a mutant re-adding the fallback turns B4 and the entertainment-readiness reconcile row red (verified).
