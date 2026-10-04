@@ -104,6 +104,7 @@ tr:hover td{background:#1f1f35}
 <main>
   <!-- Tab 0: Dashboard -->
   <div class="panel active" id="panel-0">
+    <div id="dash-state" class="empty" data-dash-state="idle" aria-live="polite" style="padding:8px 0"></div>
     <div class="kpi-grid">
       <div class="kpi"><div class="label">Open POs</div><div class="value" id="kpi-open">—</div></div>
       <div class="kpi"><div class="label">Pending Approval</div><div class="value orange" id="kpi-approval">—</div></div>
@@ -135,16 +136,19 @@ tr:hover td{background:#1f1f35}
         <select class="filter-select" id="po-filter" onchange="ProcurementPortal.loadPOs(ProcurementPortal.mid,this.value)">
           <option value="All">All</option>
           <option value="draft">Draft</option>
-          <option value="pending_approval">Pending Approval</option>
+          <option value="pending_approval">Awaiting approval</option>
           <option value="approved">Approved</option>
           <option value="sent">Sent</option>
-          <option value="received">Received</option>
-          <option value="paid">Paid (verified)</option>
+          <option value="partially_received">Partly received</option>
+          <option value="received">Awaiting invoice (received)</option>
+          <option value="invoiced">Invoiced</option>
+          <option value="paid">Recorded – unverified (status “paid”)</option>
+          <option value="cancelled">Cancelled</option>
         </select>
       </div>
       <div class="table-wrap"><table>
         <thead><tr><th>PO#</th><th>Supplier</th><th>Date</th><th>Items</th><th>Total (KES)</th><th>Status</th><th>Actions</th></tr></thead>
-        <tbody id="po-tbody"><tr><td colspan="7" class="empty">No purchase orders</td></tr></tbody>
+        <tbody id="po-tbody" aria-live="polite"><tr><td colspan="7" class="empty">Load a merchant to view purchase orders</td></tr></tbody>
       </table></div>
     </div>
   </div>
@@ -339,6 +343,30 @@ const ProcurementPortal = (() => {
       try { await approveInvoice(btn.getAttribute('data-approve-invoice')); }
       finally { btn.disabled = false; }
     });
+    /* Purchase-order actions, likewise delegated: a PO id is DATA (a data attribute read back
+       with getAttribute), never spliced into an inline handler where an HTML-decoded quote
+       could end the string. */
+    const dashBox = _q('dash-state');
+    if (dashBox) dashBox.addEventListener('click', async e => {
+      const btn = e.target && e.target.closest && e.target.closest('[data-dash-retry]');
+      if (!btn || btn.disabled || !mid) return;
+      btn.disabled = true;
+      try { await loadDashboard(mid); } finally { btn.disabled = false; }
+    });
+    const poBody = _q('po-tbody');
+    if (poBody) poBody.addEventListener('click', async e => {
+      const t = e.target && e.target.closest ? e.target : null;
+      if (!t) return;
+      const btn = t.closest('[data-approve-po],[data-receive-po],[data-po-retry],[data-po-more]');
+      if (!btn || btn.disabled) return;
+      if (btn.hasAttribute('data-receive-po')) { openGRN(btn.getAttribute('data-receive-po')); return; }
+      btn.disabled = true;
+      try {
+        if (btn.hasAttribute('data-approve-po'))  await approvePO(btn.getAttribute('data-approve-po'), true);
+        else if (btn.hasAttribute('data-po-more')) await loadMorePOs();
+        else                                       await loadPOs(mid, _q('po-filter')?.value || 'All');
+      } finally { btn.disabled = false; }
+    });
   };
 
   /* ── Tab switching ── */
@@ -366,10 +394,29 @@ const ProcurementPortal = (() => {
   };
 
   /* ── Dashboard ── */
+  /* Dashboard state. A failed read (e.g. FAILED_PRECONDITION while the engine's index is
+     missing) is an ERROR with Retry: every tile and table returns to '—' / an error row, so
+     a previous merchant's figures or a zero can never stand in for the server's answer. */
+  const KPI_IDS = ['kpi-open', 'kpi-approval', 'kpi-grn', 'kpi-invoices', 'kpi-claimed'];
+  let dashSeq = 0;
+  const _dashState = (state, html) => {
+    const el = _q('dash-state');
+    if (!el) return;
+    el.setAttribute('data-dash-state', state);
+    el.innerHTML = html || '';
+  };
+  const _dashBlank = () => KPI_IDS.forEach(id => { const el = _q(id); if (el) el.textContent = '—'; });
   const loadDashboard = async m => {
+    if (!m) return;
+    const seq = ++dashSeq;
+    _dashBlank();
+    _dashState('loading', 'Loading procurement figures…');
     try {
       const res = await _call('getProcurementDashboard')({merchantId: m});
-      const d = res.data;
+      if (seq !== dashSeq) return;
+      const d = res && res.data;
+      if (!d || typeof d !== 'object') throw new Error('Unexpected response from the server.');
+      _dashState('data', '');
       /* The engine returns {count,...} objects and per-bucket totalValue (null when any
          invoice total is unknown). Absent → '—', never a fabricated 0. */
       _q('kpi-open').textContent     = _num(d.openPOs && d.openPOs.count);
@@ -403,35 +450,195 @@ const ProcurementPortal = (() => {
             '<td class="stars">' + (typeof s.rating === 'number' ? _stars(s.rating) : '—') + '</td>' +
           '</tr>').join('')
         : '<tr><td colspan="4" class="empty">No supplier data</td></tr>';
-    } catch (e) { _toast('Dashboard error: ' + e.message); }
+    } catch (e) {
+      if (seq !== dashSeq) return;
+      _dashBlank();
+      const msg = _esc(_errText(e));
+      _dashState('error', 'Could not load procurement figures: ' + msg +
+        ' <button type="button" class="btn btn-outline btn-sm" data-dash-retry="1">Retry</button>');
+      _q('reorder-tbody').innerHTML = '<tr><td colspan="6" class="empty" data-dash-state="error">Not loaded — ' + msg + '</td></tr>';
+      _q('top-suppliers-tbody').innerHTML = '<tr><td colspan="4" class="empty" data-dash-state="error">Not loaded — ' + msg + '</td></tr>';
+    }
   };
 
-  /* ── Purchase Orders ── */
+  /* ── Purchase Orders ──
+     The canonical read is listPurchaseOrders (LIVE 00001-zik, source 49e81a1 "Slice M";
+     de9fb9d is the same contract plus vatRate/vatBasis/deliveryFee). This tab used to ask
+     getProcurementDashboard for {listPOs:true}, which no server version reads, so it was
+     always empty.
+       in : { merchantId, status?, supplierId?, limit (1..200, default 50), cursor? }
+       out: { merchantId, items:[{ poId, poNumber, status, supplierId, supplierName,
+              supplierBusinessId, buyerBusinessId, itemCount, subtotal, vatAmount, total,
+              expectedDelivery, approvedAt, sentAt, delivery, createdAt }],
+              count (of THIS page only), nextCursor (doc id | null) }
+     Authority is the server's: the merchant scope is whatever _assertMerchantAuthority
+     returns, never the merchantId sent here. Pages are ordered by document id, not by date.
+     A page count is not a total, so this tab says "N listed", never "N purchase orders". */
+  const PO_PAGE = 50;
+  /* Owner decisions O-9..O-12 (2026-10-04). 'received' means goods are in and the order is
+     waiting for the supplier's invoice. A PO status of 'paid' was written by the old
+     typed-reference payer and proves no money moved: it is "Recorded – unverified" unless
+     the server itself reports a verified payment on the row. */
+  const PO_LABEL = {
+    draft:'Draft', pending_approval:'Awaiting approval', approved:'Approved', sent:'Sent',
+    partially_received:'Partly received', received:'Awaiting invoice', invoiced:'Invoiced',
+    paid:'Recorded – unverified', cancelled:'Cancelled'
+  };
+  const PO_TONE = {
+    draft:'gray', pending_approval:'orange', approved:'green', sent:'blue',
+    partially_received:'teal', received:'teal', invoiced:'blue', paid:'orange', cancelled:'red'
+  };
+  const PO_APPROVABLE  = ['draft', 'pending_approval'];   /* server: approvePurchaseOrder */
+  const PO_RECEIVABLE  = ['sent', 'partially_received'];  /* server: receiveGoods */
+  const _has = (o, k) => Object.prototype.hasOwnProperty.call(o, k);
+  const _poVerifiedPaid = r => r.status === 'paid' && r.paymentStatus === 'verified_paid' && r.paymentVerified === true;
+  const _poBadge = r => {
+    const s = r.status;
+    if (s == null || s === '') return '—';
+    const verified = _poVerifiedPaid(r);
+    const label = verified ? 'Paid — verified' : (_has(PO_LABEL, s) ? PO_LABEL[s] : String(s));
+    const tone  = verified ? 'green' : (_has(PO_TONE, s) ? PO_TONE[s] : 'gray');
+    return '<span class="badge badge-' + tone + '" data-po-status="' + _esc(s) + '">' + _esc(label) + '</span>';
+  };
+  /* createdAt arrives as a serialized Timestamp ({_seconds}), a Timestamp, or an ISO string. */
+  const _poDate = v => {
+    if (v == null || v === '') return '';
+    if (typeof v === 'string') return /^\d{4}-\d{2}-\d{2}/.test(v) ? v.substring(0, 10) : '';
+    if (typeof v.toDate === 'function') { const d = v.toDate(); return isFinite(d) ? d.toISOString().substring(0, 10) : ''; }
+    const sec = typeof v._seconds === 'number' ? v._seconds : (typeof v.seconds === 'number' ? v.seconds : null);
+    return sec == null ? '' : new Date(sec * 1000).toISOString().substring(0, 10);
+  };
+  /* The server's total, as stated. VAT is never inferred here: a null vatAmount means the
+     engine did not know the supplier's VAT status, so the total excludes VAT. */
+  const _poTotal = r => {
+    const v = _money(r.total);
+    if (v === '—') return v;
+    let note = '';
+    if (r.vatAmount === null || r.vatAmount === undefined) note = 'VAT per supplier’s tax invoice';
+    else if (r.vatBasis === 'supplier_exempt') note = 'VAT-exempt supply';
+    else if (r.vatBasis === 'supplier_zero_rated') note = 'Zero-rated supply';
+    return v + (note ? '<br><small class="po-vat" style="color:#94a3b8">' + _esc(note) + '</small>' : '');
+  };
+  /* Response → rows. A response that is not the documented shape is an ERROR, never an
+     empty list: rendering a malformed reply as "no purchase orders" would be a false fact. */
+  const _poPage = res => {
+    const d = res && res.data;
+    if (!d || typeof d !== 'object' || !Array.isArray(d.items)) {
+      throw new Error('Unexpected response from the server (no purchase-order list).');
+    }
+    if (!(d.nextCursor == null || typeof d.nextCursor === 'string')) {
+      throw new Error('Unexpected response from the server (invalid page cursor).');
+    }
+    d.items.forEach(it => {
+      if (!it || typeof it !== 'object' || typeof it.poId !== 'string' || !it.poId) {
+        throw new Error('Unexpected response from the server (a purchase order without an id).');
+      }
+    });
+    return { items: d.items.map(_poRow), nextCursor: d.nextCursor || null };
+  };
+  const _poRow = po => ({
+    id:              po.poId,
+    poNumber:        po.poNumber ?? null,
+    supplierName:    po.supplierName ?? null,
+    date:            _poDate(po.createdAt),
+    itemCount:       po.itemCount,
+    total:           po.total,
+    vatAmount:       po.vatAmount,
+    vatBasis:        po.vatBasis ?? null,
+    status:          po.status ?? null,
+    paymentStatus:   po.paymentStatus,
+    paymentVerified: po.paymentVerified
+  });
+  const _errText = e => (e && typeof e.message === 'string' && e.message) ? e.message : 'The server did not complete the request.';
+
+  let poView = { seq: 0, filter: 'All', items: [], nextCursor: null, error: null, moreError: null, loading: false, more: false };
+
+  const _poStateRow = (state, html) =>
+    '<tr><td colspan="7" class="empty" data-po-state="' + state + '">' + html + '</td></tr>';
+
+  const _renderPOs = () => {
+    const tb = _q('po-tbody');
+    if (!tb) return;
+    const v = poView;
+    if (v.loading) { tb.innerHTML = _poStateRow('loading', 'Loading purchase orders…'); return; }
+    if (v.error != null) {
+      tb.innerHTML = _poStateRow('error',
+        'Could not load purchase orders: ' + _esc(v.error) +
+        ' <button type="button" class="btn btn-outline btn-sm" data-po-retry="1">Retry</button>');
+      return;
+    }
+    if (!v.items.length) {
+      tb.innerHTML = _poStateRow('empty', v.filter === 'All'
+        ? 'No purchase orders yet'
+        : 'No purchase orders with status “' + _esc(_has(PO_LABEL, v.filter) ? PO_LABEL[v.filter] : v.filter) + '”');
+      return;
+    }
+    const rows = v.items.map(r => {
+      const actions =
+        (PO_APPROVABLE.includes(r.status)
+          ? '<button type="button" class="btn btn-success btn-sm" data-approve-po="' + _esc(r.id) + '">Approve</button>' : '') +
+        (PO_RECEIVABLE.includes(r.status)
+          ? '<button type="button" class="btn btn-outline btn-sm" data-receive-po="' + _esc(r.id) + '">Receive</button>' : '');
+      return '<tr data-po-row="' + _esc(r.id) + '">' +
+        '<td><strong>' + _esc(r.poNumber || '—') + '</strong></td>' +
+        '<td>' + _esc(r.supplierName || '—') + '</td>' +
+        '<td>' + _esc(r.date || '—') + '</td>' +
+        '<td>' + _num(r.itemCount) + '</td>' +
+        '<td>' + _poTotal(r) + '</td>' +
+        '<td>' + _poBadge(r) + '</td>' +
+        '<td><div class="action-btns">' + (actions || '—') + '</div></td>' +
+      '</tr>';
+    }).join('');
+    /* Listed rows are a page, not a total. */
+    const foot = v.items.length + ' listed' +
+      (v.nextCursor
+        ? ' · more exist <button type="button" class="btn btn-outline btn-sm" data-po-more="1"' + (v.more ? ' disabled' : '') + '>' +
+            (v.more ? 'Loading…' : 'Load more') + '</button>'
+        : ' · end of list') +
+      (v.moreError != null ? ' · Could not load more: ' + _esc(v.moreError) : '');
+    tb.innerHTML = rows + '<tr><td colspan="7" class="empty" data-po-state="footer">' + foot + '</td></tr>';
+  };
+
   const loadPOs = async (m, filter) => {
     if (!m) return;
-    filter = filter || 'All';
+    const seq = poView.seq + 1;
+    poView = { seq, filter: filter || 'All', items: [], nextCursor: null, error: null, moreError: null, loading: true, more: false };
+    _renderPOs();
+    const payload = { merchantId: m, limit: PO_PAGE };
+    if (poView.filter !== 'All') payload.status = poView.filter;
     try {
-      const res = await _call('getProcurementDashboard')({merchantId: m, listPOs: true, statusFilter: filter});
-      const rows = Array.isArray(res.data.purchaseOrders) ? res.data.purchaseOrders : [];
-      _q('po-tbody').innerHTML = rows.length
-        ? rows.map(po => '<tr>' +
-            '<td><strong>' + _esc(po.poNumber) + '</strong></td>' +
-            '<td>' + _esc(po.supplierName) + '</td>' +
-            '<td>' + (po.date || '').substring(0, 10) + '</td>' +
-            '<td>' + (po.itemCount ?? 0) + '</td>' +
-            '<td>' + _fmt(po.total) + '</td>' +
-            '<td>' + _badge(po.status) + '</td>' +
-            '<td><div class="action-btns">' +
-              (po.status === 'pending_approval'
-                ? '<button class="btn btn-success btn-sm" onclick="ProcurementPortal.approvePO(\'' + _esc(po.id) + '\',true)">Approve</button>'
-                : '') +
-              (po.status === 'sent'
-                ? '<button class="btn btn-outline btn-sm" onclick="ProcurementPortal.openGRN(\'' + _esc(po.id) + '\')">Receive</button>'
-                : '') +
-            '</div></td>' +
-          '</tr>').join('')
-        : '<tr><td colspan="7" class="empty">No purchase orders</td></tr>';
-    } catch (e) { _toast('PO load error: ' + e.message); }
+      const page = _poPage(await _call('listPurchaseOrders')(payload));
+      if (seq !== poView.seq) return;           /* a newer load superseded this one */
+      poView.items = page.items;
+      poView.nextCursor = page.nextCursor;
+    } catch (e) {
+      if (seq !== poView.seq) return;
+      poView.error = _errText(e);
+    }
+    poView.loading = false;
+    _renderPOs();
+  };
+
+  const loadMorePOs = async () => {
+    const v = poView;
+    if (!mid || v.loading || v.more || !v.nextCursor) return;
+    const seq = v.seq;
+    v.more = true; v.moreError = null;
+    _renderPOs();
+    const payload = { merchantId: mid, limit: PO_PAGE, cursor: v.nextCursor };
+    if (v.filter !== 'All') payload.status = v.filter;
+    try {
+      const page = _poPage(await _call('listPurchaseOrders')(payload));
+      if (seq !== poView.seq) return;
+      const seen = new Set(v.items.map(r => r.id));
+      v.items = v.items.concat(page.items.filter(r => !seen.has(r.id)));
+      v.nextCursor = page.nextCursor;
+    } catch (e) {
+      if (seq !== poView.seq) return;
+      v.moreError = _errText(e);               /* rows already shown stay shown */
+    }
+    v.more = false;
+    _renderPOs();
   };
 
   const openNewPO = async () => {
@@ -509,12 +716,28 @@ const ProcurementPortal = (() => {
     } catch (e) { _toast('Error: ' + e.message); }
   };
 
+  /* Approve (or reject) a PO. The server decides: approvePurchaseOrder requires a manager
+     claim AND authority over the PO's own merchant, and accepts only draft/pending_approval.
+     Approval is an order decision — it moves no money and sets no payment state. */
   const approvePO = async (poId, approved) => {
+    poId = String(poId == null ? '' : poId);
+    if (!poId) return;
+    const yes = approved === true;
+    const row = poView.items.find(r => r.id === poId);
+    const label = (row && row.poNumber) || poId;
+    const ask = (yes ? 'Approve' : 'Reject') + ' purchase order ' + label + '?' +
+      (yes ? ' Approving the order is not a payment.' : '');
+    if (!(typeof window.confirm === 'function' && window.confirm(ask))) return;
     try {
-      await _call('approvePurchaseOrder')({merchantId: mid, poId, approved});
-      _toast(approved ? 'PO approved' : 'PO rejected');
-      loadPOs(mid, _q('po-filter')?.value || 'All');
-    } catch (e) { _toast('Error: ' + e.message); }
+      const res = await _call('approvePurchaseOrder')({merchantId: mid, poId, approved: yes});
+      const st = res && res.data && res.data.status;
+      /* Success wording only for the state the server says it wrote. */
+      _toast(st === 'approved' ? 'PO approved' : st === 'cancelled' ? 'PO rejected'
+        : 'The server did not confirm the change — reloading');
+    } catch (e) {
+      _toast('Not approved: ' + _errText(e));   /* the server's refusal, verbatim */
+    }
+    await loadPOs(mid, _q('po-filter')?.value || 'All');
   };
 
   /* ── Suppliers ── */

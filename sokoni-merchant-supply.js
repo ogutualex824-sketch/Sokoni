@@ -184,6 +184,40 @@
     { h: 'Verified', f: paymentVerifiedCell },
   ];
 
+  /* ── Purchase-order status (owner decisions O-9..O-12, 2026-10-04) ──
+     listPurchaseOrders returns the raw PO status. 'received' = goods in, awaiting the
+     supplier's invoice. A PO status 'paid' was written by the old typed-reference payer and
+     proves no money moved, so it reads "Recorded – unverified" unless the server itself
+     reports a verified payment on the row. Paid-ness belongs to the invoices. */
+  var PO_LABEL = {
+    draft: 'Draft', pending_approval: 'Awaiting approval', approved: 'Approved', sent: 'Sent',
+    partially_received: 'Partly received', received: 'Awaiting invoice', invoiced: 'Invoiced',
+    paid: 'Recorded – unverified', cancelled: 'Cancelled',
+  };
+  function poStatusCell (r) {
+    var s = r && r.status;
+    if (s === null || s === undefined || s === '') return NEUTRAL;
+    if (s === 'paid' && r.paymentStatus === 'verified_paid' && r.paymentVerified === true) return 'Paid — verified';
+    return esc(Object.prototype.hasOwnProperty.call(PO_LABEL, s) ? PO_LABEL[s] : s);
+  }
+  /* The server's PO total as stated; VAT is never inferred. vatAmount null = the engine did
+     not know the supplier's VAT status, so the total excludes VAT. */
+  function poTotalCell (r) {
+    var v = money(r && r.total);
+    if (v === NEUTRAL) return v;
+    if (r.vatAmount === null || r.vatAmount === undefined) return v + ' · VAT per supplier’s tax invoice';
+    if (r.vatBasis === 'supplier_exempt') return v + ' · VAT-exempt supply';
+    if (r.vatBasis === 'supplier_zero_rated') return v + ' · Zero-rated supply';
+    return v;
+  }
+  var PO_COLS = [
+    { h: 'PO', strong: true, f: function (r) { return text(r.poNumber); } },
+    { h: 'Supplier', f: function (r) { return text(r.supplierName); } },
+    { h: 'Status',   f: poStatusCell },
+    { h: 'Items',    f: function (r) { return count(r.itemCount); } },
+    { h: 'Total',    f: poTotalCell },
+  ];
+
   /* Overview tiles — every value from getProcurementDashboard; money(null) is the dash. */
   function overviewTiles (d) {
     return [
@@ -457,13 +491,7 @@
       pos: { op: 'listPurchaseOrders', title: 'Purchase Orders',
         sub: 'Orders you have raised. Approval and sending happen through their own authorised actions.',
         empty: 'No purchase orders yet.',
-        cols: [
-          { h: 'PO', strong: true, f: function (r) { return text(r.poNumber); } },
-          { h: 'Supplier', f: function (r) { return text(r.supplierName); } },
-          { h: 'Status',   f: function (r) { return text(r.status); } },
-          { h: 'Items',    f: function (r) { return count(r.itemCount); } },
-          { h: 'Total',    f: function (r) { return money(r.total); } },
-        ] },
+        cols: PO_COLS },
       incoming: { op: 'getInboundSupplyOrders', title: 'Incoming Orders',
         sub: 'Orders other businesses have placed WITH you. Supplier-side authority, separate from your buying.',
         empty: 'No business has placed a supply order with you yet.',
@@ -1225,5 +1253,6 @@
   global.SokoniMerchantSupply = { mount: mount, NAV: NAV, UNAVAILABLE: UNAVAILABLE,
     /* Exposed for certification — never for display logic. */
     _invoiceUi: { PAY_LABEL: PAY_LABEL, INVOICE_COLS: INVOICE_COLS, PAYMENT_COLS: PAYMENT_COLS,
-                  overviewTiles: overviewTiles, invoicePaymentLabel: invoicePaymentLabel } };
+                  overviewTiles: overviewTiles, invoicePaymentLabel: invoicePaymentLabel,
+                  PO_LABEL: PO_LABEL, PO_COLS: PO_COLS } };
 })(typeof window !== 'undefined' ? window : this);

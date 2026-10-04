@@ -1,3 +1,72 @@
+## [2026-10-04] - Procurement: the Purchase Orders tab reads listPurchaseOrders; the dashboard shows server errors (hosting only; NOT deployed)
+
+**Why.** The Purchase Orders tab called `getProcurementDashboard({listPOs:true})` and read `res.data.purchaseOrders`.
+No server version reads `listPOs` or returns that list, so the tab always said "No purchase orders". The page also
+expected `id` and `date`, but the list operation returns `poId` and `createdAt`. The canonical list operation is
+`listPurchaseOrders`. It is LIVE: revision 00001-zik, source 49e81a1 (Slice M), a clean ancestor of de9fb9d.
+
+**Serving contract** (read from the serving archive). Input: `{merchantId, status?, supplierId?, limit (1..200, default 50), cursor?}`.
+Authority comes first (`_assertMerchantAuthority`, with the `pos` capability as fallback). The query is `where merchantId ==`
+plus equality filters, ordered by document id, with `startAfter(cursor)`. Output: `{merchantId, items[{poId, poNumber, status, supplierId,
+supplierName, supplierBusinessId, buyerBusinessId, itemCount, subtotal, vatAmount, total, expectedDelivery,
+approvedAt, sentAt, delivery, createdAt}], count (this page only), nextCursor}`. de9fb9d adds only `vatRate`,
+`vatBasis` and `deliveryFee`.
+
+**`procurement.html`, Purchase Orders tab** (owner decisions O-9 to O-12):
+- It reads `listPurchaseOrders({merchantId, limit:50[, status]})`. `poId` maps to the row id, and `createdAt`
+  (`{_seconds}`, Timestamp or ISO) maps to the date. "Load more" follows `nextCursor`. The footer says
+  "N listed · more exist" or "N listed · end of list". A page count is not a total, and no client-side sum is shown.
+- Four states:
+  - loading;
+  - data;
+  - TRUE empty ("No purchase orders yet"), shown only when the operation succeeded with zero items;
+  - error, showing the server's message and a Retry button.
+  A malformed response is an error, never an empty list. Malformed means: the legacy `{purchaseOrders}`, null,
+  non-array items, an item without `poId`, or a bad cursor.
+- Status labels:
+  - Draft;
+  - Awaiting approval;
+  - Approved;
+  - Sent;
+  - Partly received;
+  - `received` shows **Awaiting invoice**;
+  - Invoiced;
+  - `paid` shows **Recorded – unverified** (the legacy typed-reference payer). It shows "Paid — verified" only
+    if the row itself carries `paymentStatus:'verified_paid'` and `paymentVerified:true`. No server sends those
+    on a PO today;
+  - Cancelled.
+- The status filter's `paid` option now reads "Recorded – unverified (status “paid”)". This supersedes the earlier
+  "Paid (verified)" label. Options were added for partly received, invoiced and cancelled.
+- **Approve** appears on `draft` AND `pending_approval`. The live server and de9fb9d both accept either. It asks for
+  confirmation ("not a payment") and shows the server's refusal word for word. The success toast appears only for
+  the status the server returns. Receive appears on `sent` and `partially_received`.
+- PO ids travel in data attributes, and clicks are delegated. Before, they were spliced into inline `onclick`
+  attributes, where an HTML-decoded quote could end the JS string.
+- When `vatAmount` is null, the total is labelled "VAT per supplier’s tax invoice". VAT is never inferred.
+- No PO action sends any payment field.
+
+**`procurement.html`, dashboard:** a failed `getProcurementDashboard` now shows an error state with the server
+message and a Retry button. Every KPI resets to `—`, and the reorder and top-supplier tables show "Not loaded". Before, the failure was only
+a toast, and earlier figures stayed on screen. This matters today because the live 7822b4d vintage needs the
+`(merchantId, status, paidAt)` index on `procSupplierInvoices`, which is confirmed missing, so the call fails with
+FAILED_PRECONDITION.
+
+**`sokoni-merchant-supply.js`:** the Purchase Orders section uses the same status labels (`PO_COLS`). Its Total
+column adds the same VAT wording.
+
+**Tests:**
+- New: `scripts/test-procurement-po-tab.js` passes 12 rows plus 5 deliberate breaks, 17/17. Break B1 maps from
+  `id` instead of `poId`, and P1 fails. B2 and B3 render "Paid" for status `paid`, and P6 fails. B4 renders an
+  error as empty, and P4 fails. B5 swallows a dashboard failure into a toast, and P12 fails.
+- `test-supplier-invoice-ui.js` still passes 17/17. Row L5 was updated for O-12, and its stub gained
+  `setAttribute`/`getAttribute`.
+- `test-mv2-1-sidebar.js` passes 14/14, and `test-procurement.js` passes 22 checks.
+
+**Database:** none. **API:** none (client re-point to an existing live callable). **Security:** removes inline-handler
+id injection on PO actions. **Deployment:** NOT deployed. It ships with the combined release, including the
+de9fb9d functions and the `(merchantId, status, paidAt)` index. The PO list works against the live
+`listPurchaseOrders` on its own.
+
 ## [2026-10-04] - Supplier invoices: payment is a CLAIM until VERIFIED — hosting copy and states (hosting only; NOT deployed)
 
 The owner ruled on 2026-10-04 that a supplier-invoice payment stays a claim until it is verified. The server change is

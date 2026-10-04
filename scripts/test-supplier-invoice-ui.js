@@ -66,7 +66,8 @@ function loadPortal (html) {
   const m = html.match(/<script>\s*(const ProcurementPortal = [\s\S]*?)<\/script>/);
   if (!m) throw new Error('ProcurementPortal script not found');
   const els = {}, calls = [], toasts = [], listeners = {}, claimInputs = [];
-  const el = (id) => els[id] || (els[id] = { id, innerHTML: '', textContent: '', value: '', classList: { add() {}, remove() {}, toggle() {} },
+  const el = (id) => els[id] || (els[id] = { id, innerHTML: '', textContent: '', value: '', attrs: {}, classList: { add() {}, remove() {}, toggle() {} },
+    setAttribute(k, v) { this.attrs[k] = String(v); }, getAttribute(k) { return this.attrs[k]; },
     addEventListener(t, f) { (listeners[id + ':' + t] = listeners[id + ':' + t] || []).push(f); }, appendChild() {} });
   const replies = {};
   const document = {
@@ -129,8 +130,11 @@ async function runRows (supplySrc, html) {
     cell(U.PAYMENT_COLS, 'Payment', INV.recorded) === 'Recorded — not verified' && cell(U.PAYMENT_COLS, 'Verified', INV.verified) === 'Yes',
     { forged: cell(U.INVOICE_COLS, 'Status', forged), statusOnly: cell(U.INVOICE_COLS, 'Status', statusOnly) });
 
-  row('L5  PO filter relabelled "Paid (verified)"; no "Approve & Pay" anywhere',
-    /<option value="paid">Paid \(verified\)<\/option>/.test(html) && !/Approve &amp; Pay|Approve & Pay/.test(html), null);
+  /* L5 superseded 2026-10-04 by owner decision O-12: PO status 'paid' is a legacy typed-reference
+     record, never verified payment, so the filter may not call it "Paid (verified)". */
+  row('L5  PO filter labels status paid "Recorded – unverified" (never "Paid (verified)"); no "Approve & Pay" anywhere',
+    /<option value="paid">Recorded – unverified[^<]*<\/option>/.test(html) && !/Paid \(verified\)/.test(html) &&
+    !/Approve &amp; Pay|Approve & Pay/.test(html), null);
 
   row('L6  escaping: hostile invoice fields never reach the DOM as markup',
     !/<script>alert|<img src=x|<b>/.test(tbody) && tbody.includes('&lt;script&gt;') &&
