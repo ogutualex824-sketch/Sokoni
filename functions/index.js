@@ -7566,6 +7566,30 @@ exports.webhookIntasend = onRequest(
         }
       }
 
+      /* Canonical invoices (owner 2026-10-04 — 2f 549ba7f intent · f3 7bd9c55 allocation · 5b settlement): the VERIFIED
+         amount is allocated to the invoice (applied ≤ balance, excess HELD), 15% from the payment-start snapshot is taken
+         on the APPLIED amount only, the merchant BUSINESS wallet is credited exactly once per payment, and the receipt
+         records received / applied / excess. Anything unresolvable is HELD + flagged (invoicePaymentHolds) — never credited. */
+      {
+        const { settleInvoicePayment } = require("./invoice-payment-settle");
+        const _inv = await settleInvoicePayment(db, admin, {
+          apiRef, intentRef: existing.intentRef, providerMethod, invoiceId: invoice.invoice_id || req.body?.invoice_id || null,
+          grossAmount: (invoice.value !== undefined ? invoice.value : req.body?.value),
+          confirm: async (expectedCents) => {
+            const { intasendCollectionStatus } = require("./shared/intasend-status");
+            const { assessProviderConfirmation } = require("./payment-attribution");
+            const _st = await intasendCollectionStatus(String(invoice.invoice_id || req.body?.invoice_id || ""),
+              { privateKey: INTASEND_PRIVATE_KEY.value(), live: process.env.INTASEND_SANDBOX !== "true" });
+            return assessProviderConfirmation(_st, { apiRef, expectedCents });
+          },
+        });
+        if (_inv) {
+          logger.info("[webhookIntasend] invoice payment", { ref: apiRef, outcome: _inv.outcome, reason: _inv.reason || null,
+            appliedCents: _inv.appliedCents ?? null, excessHeldCents: _inv.excessHeldCents ?? null });
+          res.status(200).send("OK"); return;
+        }
+      }
+
       /* ══ D1 FIX (Q6) — financial attribution, resolved ONCE ═════════════════════════
          Everything below that used to read payData.meta directly for WHO gets
          paid or WHAT resource is finalised now reads `attribution` instead.
