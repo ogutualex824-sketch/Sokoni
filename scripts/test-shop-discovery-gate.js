@@ -94,7 +94,7 @@ const newEnv = () => { const F = makeFakeFirestore({}); ENV = { db: F.db, FieldV
   const stamped = (d) => !!d.business && BCAT.isCategory(d.business.category) && d.business.source === 'application';
   const held = (d) => d.discovery === 'HELD' && d._noIndex === true && d.searchable !== true && d.isPublic !== true;
   ck('A1  approval stamps business.{C1 category, source:application} on shops, sellers, businesses AND holds discovery (approved ≠ discoverable)',
-    stamped(shop) && stamped(seller) && stamped(biz) && held(shop) && held(seller) && held(biz),   /* OPEN (5b→b2/owner 2026-10-04): no code path RELEASES a HELD record, and shopEligibility does not yet read HELD — not asserted until the release rule is decided */
+    stamped(shop) && stamped(seller) && stamped(biz) && held(shop) && held(seller) && held(biz) && !!SE && !SE(shop).eligible && SE(shop).reasons.includes('DISCOVERY_HELD'),   /* no decision record here → the gate keeps it held (release: test-shop-discovery-release) */
     { shop: [shop.business, shop.discovery, shop.searchable, shop._noIndex], seller: [seller.discovery, seller.searchable], biz: [biz.discovery, biz.searchable] });
   ck('A2  no exact category match → retail_store (the C1 seller default), never the free text', !!shop.business && shop.business.category === 'retail_store' && shop.category === 'Shoes & more', shop.business);
 

@@ -1037,8 +1037,10 @@ async function projectSeller(db, app, uid, approved, opts = {}) {
       const prior = {};
       _SUSPENSION_HIDES.forEach((k) => { if (k in d) prior[k] = d[k]; });
       const keep = d.suspendedBy === 'application_lifecycle' && d.preSuspension ? d.preSuspension : prior;
+      /* a shop under the discovery hold is RE-HELD (the release evaluator, not preSuspension, decides its visibility) */
+      const rehold = (d.discovery === 'HELD' || d.discovery === 'ELIGIBLE') ? { discovery: 'HELD', _noIndex: true, discoveryHeldReasons: ['SUSPENDED'] } : {};
       batch.set(ref, Object.assign({ status: 'suspended', searchable: false, isPublic: false, suspendedAt: _ts(),
-        suspendedBy: 'application_lifecycle', preSuspension: keep, updatedAt: _ts() }, extra || {}), { merge: true });
+        suspendedBy: 'application_lifecycle', preSuspension: keep, updatedAt: _ts() }, rehold, extra || {}), { merge: true });
       touched.push(coll);
     };
     const batch = db.batch();
@@ -1074,6 +1076,7 @@ async function projectSeller(db, app, uid, approved, opts = {}) {
     if (!d || d.suspendedBy !== 'application_lifecycle') return {};
     const out = { suspendedBy: FieldValue.delete(), preSuspension: FieldValue.delete(), suspendedAt: FieldValue.delete() };
     const prev = d.preSuspension || {};
+    if (d.discovery === 'HELD' || d.discovery === 'ELIGIBLE') return out;   /* visibility = the release evaluator's call */
     _SUSPENSION_HIDES.forEach((k) => { out[k] = k in prev ? prev[k] : FieldValue.delete(); });
     return out;
   };
@@ -1117,11 +1120,18 @@ async function projectSeller(db, app, uid, approved, opts = {}) {
   }
   await batch.commit();
 
+  /* SHOP DISCOVERY (owner 2026-10-04 — the gate decides): the projection never publishes; the ONE gate's server
+     evaluator releases the hold now if every check passes (decision record, active, C1 category, owner + business). */
+  const disc = await require('./shop-discovery-release').evaluateShopDiscovery(db, shopId, {
+    FieldValue, getUser: (u) => getAuth().getUser(u),
+  });
+
   return {
     collection: 'shops+sellers+businesses', id: shopId,
     action: shop0 ? 'reactivated' : 'created',
     shopId, sellerUid: String(uid), category: business.category, categorySource: business.source,
-    discovery: shop0 ? 'unchanged' : 'HELD',
+    discovery: disc.action === 'released' ? 'ELIGIBLE' : (shop0 && !shop0.discovery ? 'unchanged' : 'HELD'),
+    discoveryEvaluation: { action: disc.action, reasons: disc.reasons },
     shopIdSource: declared ? 'application.shopId' : 'account_shop',
   };
 }
