@@ -198,6 +198,12 @@ _adminH.bizAdminClassifyShop = async (req) => {
     const after = BCAT.shopEligibility(Object.assign({}, shop, { business: { category, source: 'admin' } }));
     out = { shopId, ownerUid: String(owner), previous, category, label: BCAT.label(category), eligible: after.eligible, reasons: after.reasons };
   });
+  /* SHOP DISCOVERY (owner 2026-10-04): a category stamp is a release event — the ONE gate's evaluator decides (after the
+     commit, never inside it). A held shop that now passes every check is released; otherwise it stays held. */
+  const disc = await require('./shop-discovery-release').evaluateShopDiscovery(db, shopId, {
+    FieldValue: admin.firestore.FieldValue, getUser: (u) => admin.auth().getUser(u),
+  });
+  if (out) { out.discovery = disc.action; if (disc.action === 'released') { out.eligible = true; out.reasons = []; } }
   return out;
 };
 

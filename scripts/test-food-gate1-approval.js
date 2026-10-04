@@ -110,8 +110,10 @@ const G = (c, id) => ((S()[c] || {})[id || UID]) || {};
   ck('A-4', [shop, sel, biz].every((d) => d && d.business && d.business.category === 'restaurant' && d.business.source === 'application' && d.business.applicationId === 'APPF1'),
     'the C1 category `restaurant` is stamped by the server on shop, seller and business', [shop, sel, biz].map((d) => d && d.business));
   ck('A-5', !!biz && !('ownerId' in biz), 'businesses/{uid} carries the stamp but NOT ownerId (the POS business stays the one `ownerId == uid` record)', biz);
-  ck('A-6', [shop, sel, biz].every((d) => d && d._noIndex === true && d.discovery === 'HELD' && d.searchable !== true && d.isPublic !== true),
-    'APPROVED ≠ DISCOVERABLE: new records are held from search (no searchable/isPublic true)', [shop, sel, biz].map((d) => d && [d._noIndex, d.discovery, d.searchable, d.isPublic]));
+  /* owner 2026-10-04 (the gate decides): approval HOLDS; the ONE gate's server evaluator releases an approved (decision
+     record), active, categorised shop with a valid owner + business at once — products not required. */
+  ck('A-6', [shop, sel, biz].every((d) => d && d.discovery === 'ELIGIBLE' && d._noIndex === false && d.searchable === true && d.isPublic === true),
+    'the gate evaluator RELEASES the approved, categorised shop (server write; never the projection itself)', [shop, sel, biz].map((d) => d && [d._noIndex, d.discovery, d.searchable, d.isPublic]));
   ck('A-7', app.role === 'seller' && /\+category(:|$)/.test(app.roleResolvedBy || ''), 'the application records the role its decision applied (the workspace judges the approval by app.role)', [app.role, app.roleResolvedBy]);
   ck('A-8', (user.roles || []).includes('seller') && calls.claims[UID] && calls.claims[UID].seller === true, 'the account is granted the seller role and claim', [user.roles, calls.claims[UID]]);
   ck('A-9', calls.pos.length === 1 && calls.pos[0].uid === UID, 'POS business provisioning still runs once (unchanged path)', calls.pos);
@@ -167,9 +169,13 @@ const G = (c, id) => ((S()[c] || {})[id || UID]) || {};
   await LC.applyDecision('APPF1', susp, { decidedBy: ADMIN });
   ck('S-1', ['shops', 'sellers', 'businesses'].every((c) => G(c).status === 'suspended' && G(c).searchable === false && G(c).isPublic === false) && G('sellers').active === false,
     'suspension deactivates shop, seller and business and removes them from discovery (records kept)', ['shops', 'sellers', 'businesses'].map((c) => G(c) && G(c).status));
+  DB._store.applicationDecisions.APPF1 = { status: 'approved', decidedBy: ADMIN };   /* re-approval rewrites the record (applicationDecide) */
   await LC.applyDecision('APPF1', foodApp(), { decidedBy: ADMIN });
-  ck('S-2', G('sellers').searchable === true && !('isPublic' in G('sellers')) && !('searchable' in G('shops')) && G('sellers').status === 'active',
-    'reinstatement restores exactly the visibility the suspension removed — nothing more', [G('sellers'), G('shops')].map((d) => [d.searchable, d.isPublic, d.status]));
+  /* owner 2026-10-04: a shop under the discovery hold is released by the GATE on reinstatement, not by restoring old flags */
+  ck('S-2', ['shops', 'sellers'].every((c) => G(c).status === 'active' && G(c).discovery === 'ELIGIBLE' && G(c)._noIndex === false && G(c).searchable === true)
+    && !('preSuspension' in G('shops')),
+    'reinstatement: the gate re-releases the shop and its search row (the suspension hold is lifted by the evaluator, not by replaying old flags)',
+    [G('sellers'), G('shops')].map((d) => [d.status, d.discovery, d._noIndex, d.searchable]));
   ck('S-3', !((S().users || {})[UID] || {}).roles || (S().users[UID].roles || []).includes('seller'), 'the reinstated account holds the seller role again');
 
   /* ── C: rejection of a never-provisioned applicant writes nothing ── */

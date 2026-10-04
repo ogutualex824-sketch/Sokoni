@@ -96,6 +96,24 @@ function makeEnv({ docs = {}, accounts = {} } = {}) {
           async commit() { ops.forEach(([ref, doc, opts]) => { log.push({ op: 'batch.set', path: ref.__path, doc }); apply(ref.__path, doc, opts && opts.merge); }); },
         };
       },
+      /* stage (c): legal approval now routes to legal-verification (ONE legal authority), which runs a transaction.
+         Reads see committed state; writes buffer and apply on commit — the same contract as Firestore (no retries here). */
+      async runTransaction(fn) {
+        const ops = [];
+        const tx = {
+          get: (ref) => ref.get(),
+          set(ref, doc, opts) { ops.push(['set', ref, doc, opts]); return tx; },
+          update(ref, doc) { ops.push(['update', ref, doc, { merge: true }]); return tx; },
+          create(ref, doc) { if (data[ref.__path]) { const e = new Error('ALREADY_EXISTS'); e.code = 6; throw e; } ops.push(['set', ref, doc, null]); return tx; },
+          delete(ref) { ops.push(['delete', ref]); return tx; },
+        };
+        const out = await fn(tx);
+        for (const [op, ref, doc, opts] of ops) {
+          if (op === 'delete') { log.push({ op: 'tx.delete', path: ref.__path }); delete data[ref.__path]; }
+          else { log.push({ op: 'tx.' + op, path: ref.__path, doc }); apply(ref.__path, doc, opts && opts.merge); }
+        }
+        return out;
+      },
     },
     auth: {
       async getUser(uid) { if (!accounts[uid]) throw new Error('no user record'); return { uid, customClaims: accounts[uid] }; },
@@ -163,6 +181,12 @@ const CLINICIAN = (over = {}) => ({
 
 async function fire(trigger, app, appId) {
   const id = appId || app.applicationId;
+  /* K13-B: an ADMIN decision is only real with the server record applicationDecide writes BEFORE it touches the
+     application (applicationDecisions/{id}). Seed it exactly when the fixture models an ADMIN decision — never for a
+     self-written or undecided status (those must stay refused). Stage (c) 2026-10-04. */
+  if (app.decidedBy === ADMIN && /^(approved|rejected|suspended)$/.test(String(app.status || ''))) {
+    ENV.data[`applicationDecisions/${id}`] = { applicationId: id, status: app.status, decidedBy: ADMIN, decidedAt: '2026-09-01T09:00:00.000Z' };
+  }
   const ref = { async set(patch, opts) { ENV.log.push({ op: 'set', coll: 'applications', id, doc: patch, opts }); ENV.data[`applications/${id}`] = { ...(ENV.data[`applications/${id}`] || {}), ...patch }; } };
   await trigger({ params: { appId: id }, data: { after: { exists: true, ref, data: () => app } } });
 }
@@ -206,8 +230,9 @@ const wroteColl  = (c) => ENV.log.filter(e => (e.coll === c) || (e.path || '').s
   ck('C5  ...keyed to the applicant uid', !!p && p.uid === DOC_A);
   ck('C6  ...carries the application identity, not an invented one',
     !!p && p.name === 'Westlands Family Clinic' && p.city === 'Nairobi');
-  ck('C7  users.roles gains provider (the canonical role field)',
-    !!u && !!u.roles && JSON.stringify(u.roles).includes('provider'), JSON.stringify(u && u.roles));
+  /* Roles Phase 2 (stage (c)): a clinic's canonical role key is 'health'; the legacy provider CLAIM is still minted (C8) */
+  ck('C7  users.roles gains the canonical health role (the canonical role field)',
+    !!u && !!u.roles && JSON.stringify(u.roles).includes('health'), JSON.stringify(u && u.roles));
   ck('C8  the provider claim is minted', minted().some(m => m.uid === DOC_A && m.claims.provider === true),
     JSON.stringify(minted().map(m => m.claims)));
 
@@ -274,8 +299,12 @@ const wroteColl  = (c) => ENV.log.filter(e => (e.coll === c) || (e.path || '').s
     intakeVersion: 1, roleResolvedBy: 'declared',
     status: 'approved', decidedBy: ADMIN,
   });
-  ck('G3  legal is STILL delegated — no providers record (its registry is live elsewhere)',
-    !ENV.data[`providers/${LEGAL}`]);
+  /* Stage (c) 2026-10-04 (b2 ruling): ONE legal authority — legal approval routes to legal-verification, which may hold
+     a providers/{uid} IDENTITY for the advocate but never an active, public or bookable one before LSK verification. */
+  const lp = ENV.data[`providers/${LEGAL}`];
+  ck('G3  legal is NOT activated by this approval — no active / public / bookable providers record before LSK verification',
+    !lp || (lp.status !== 'active' && lp.searchable !== true && lp.isPublic !== true && lp.acceptsBookings !== true),
+    lp && JSON.stringify({ status: lp.status, searchable: lp.searchable }));
   ck('G4  ...and legal still gets its role claim', minted().some(m => m.uid === LEGAL),
     JSON.stringify(minted().map(m => m.uid)));
   ck('G5  ...and the decision actually RAN (guards G3 against passing vacuously)',

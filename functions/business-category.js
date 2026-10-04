@@ -234,7 +234,19 @@ function publicEligibility(providerDoc) {
  * stamped at approval or AdminOS set (`business.source` application | admin); free-text `category` never counts.
  * Search indexing, storefronts, QR/share, category hubs and KASS read shops through this, never a second rule.
  */
+/* SHOP DISCOVERY HOLD (owner 2026-09-28 "approved ≠ discoverable"; release rule owner 2026-10-04). Approval writes a NEW
+   shop with discovery:'HELD'; only the gate's server evaluator (shop-discovery-release.evaluateShopDiscovery) releases it
+   — to 'ELIGIBLE' — once every check below AND the decision record pass, with or without products. A held shop is refused
+   by EVERY reader of this gate: storefront, hubs, QR, KASS and the search index. Legacy shops (no discovery field) keep
+   the visibility they had. */
+const DISCOVERY = Object.freeze({ HELD: 'HELD', ELIGIBLE: 'ELIGIBLE' });
 function shopEligibility(shopDoc) {
+  const r = shopReleaseChecks(shopDoc);
+  if ((shopDoc || {}).discovery === DISCOVERY.HELD) r.reasons.push('DISCOVERY_HELD');
+  return { eligible: r.reasons.length === 0, category: r.category, reasons: r.reasons };
+}
+/** Every shop-document check EXCEPT the hold itself — what the release evaluator asks before lifting it. */
+function shopReleaseChecks(shopDoc) {
   const s = shopDoc || {};
   const base = publicEligibility(s);
   const reasons = base.reasons.slice();
@@ -248,5 +260,5 @@ function shopEligibility(shopDoc) {
   return { eligible: reasons.length === 0, category, reasons };
 }
 
-module.exports = { CATEGORIES, KEYS, HEALTHCARE, SELLER_CATEGORIES, FROM_BUSINESS_ID, FROM_PROFESSION, ROLE_CATEGORY, ADMIN_REVIEW_ONLY,
+module.exports = { DISCOVERY, shopReleaseChecks, CATEGORIES, KEYS, HEALTHCARE, SELLER_CATEGORIES, FROM_BUSINESS_ID, FROM_PROFESSION, ROLE_CATEGORY, ADMIN_REVIEW_ONLY,
   isCategory, categoryFromApplication, categoryOf, publicEligibility, shopEligibility, label: (c) => (isCategory(c) ? CATEGORIES[c].label : 'Unclassified') };
